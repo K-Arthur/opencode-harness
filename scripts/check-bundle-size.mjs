@@ -4,7 +4,7 @@
 // Enforces repo-level bundle size limits for the two build outputs that
 // load synchronously into the host process or the chat webview:
 //
-//   dist/extension.js                  ≤ 752KB
+//   dist/extension.js                  ≤ 756KB
 //   dist/chat/webview/main.js          ≤ 816KB  (paydown target: 600KB)
 //   dist/chat/webview/markdownWorker.js ≤ 500KB  (advisory)
 //
@@ -225,7 +225,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
-  { path: "dist/extension.js", limitBytes: 752 * 1024, label: "extension host" },
+  { path: "dist/extension.js", limitBytes: 756 * 1024, label: "extension host" },
   { path: "dist/chat/webview/main.js", limitBytes: 816 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]

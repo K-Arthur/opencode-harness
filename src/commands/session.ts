@@ -457,19 +457,16 @@ export function registerChooseHistorySessionCommand(
           sessionStore.importServerSessions(serverSessions)
         }
 
-        // Match opencode CLI: limit picker to sessions belonging to the
-        // current workspace. The stored entry remembers which directory it
-        // came from (set during importServerSessions / first prompt).
+        // Show ALL sessions — including those from other workspaces — so the
+        // user can continue a session in the correct workspace even if it was
+        // created elsewhere. Cross-workspace sessions are badged in the detail
+        // line with the workspace folder name for identification.
         const folders = vscode.workspace.workspaceFolders
         const currentDir = folders && folders.length > 0 ? folders[0]!.uri.fsPath : undefined
         const normalizedCurrentDir = currentDir ? path.resolve(currentDir) : undefined
-        const all = sessionStore.list(true).filter((s) => {
-          if (!normalizedCurrentDir) return true
-          if (!s.workspacePath) return true // unknown workspace — keep, do not hide silently
-          return path.resolve(s.workspacePath) === normalizedCurrentDir
-        })
+        const all = sessionStore.list(true)
         if (all.length === 0) {
-          vscode.window.showInformationMessage("No saved sessions for this workspace. Start a new conversation.")
+          vscode.window.showInformationMessage("No saved sessions found. Start a new conversation.")
           return
         }
 
@@ -477,10 +474,15 @@ export function registerChooseHistorySessionCommand(
           const tag = s.needsBackfill ? " [server]" : local.has(s.id) ? "" : " [new]"
           const counts = computeMessageCounts(s.messages)
           const turns = counts.userTurns + counts.assistantTurns
+          // Badge cross-workspace sessions so the user can identify which
+          // workspace a session belongs to before opening it.
+          const isCrossWorkspace = normalizedCurrentDir && s.workspacePath &&
+            path.resolve(s.workspacePath) !== normalizedCurrentDir
+          const wsBadge = isCrossWorkspace ? ` 📁 ${path.basename(s.workspacePath!)}` : ""
           return {
             label: `${SessionStore.displayName(s)}${tag}`,
             description: `${turns} turn${turns === 1 ? "" : "s"}${counts.systemMessages > 0 ? ` (${counts.systemMessages} event${counts.systemMessages === 1 ? "" : "s"})` : ""}`,
-            detail: `${new Date(s.lastActiveAt).toLocaleString()} — ${s.model || "no model"}`,
+            detail: `${new Date(s.lastActiveAt).toLocaleString()} — ${s.model || "no model"}${wsBadge}`,
             id: s.id,
             needsBackfill: s.needsBackfill === true,
           }

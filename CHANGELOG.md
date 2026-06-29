@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.34] — 2026-06-29
+
 ### Added
 
 - **Theme customizer rework**: Complete redesign of the `Customize theme` modal
@@ -89,6 +91,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `list_server_sessions`, `get_todos`, `get_changed_files`,
   `probe_run_status`, `resume_session`, `create_tab`, `switch_tab`,
   `webview_log`, `unarchive_session`.
+- **Oversized `run_activity_update` payloads silently dropped.** The
+  `RunActivitySnapshot` included `tool.input`, `tool.result` (full bash/file
+  output, can be 500KB+), and `subagent.inputPrompt` (full prompt text) —
+  fields the webview never reads. The serialized payload exceeded the
+  `HostMessageBatcher`'s 256KB `maxPayloadBytes` limit and was silently
+  dropped on every tick, so the webview never saw any run activity updates.
+  Fix: `postRunActivitySnapshot` now strips those fields before posting.
+- **Remaining missing webview message validators.** Added validators for
+  ~75 additional message types that were logging "has no validator"
+  warnings: `close_tab`, `stream_ack`, `get_subagent_activities`,
+  `setup_voice_input`, `question_answer`, `set_instructions`,
+  `abort`, `retry_stream`, `resume_stream`, `new_session`, `open_settings`,
+  `compact_session`, `export_chat`, `get_skills`, `revert_message`,
+  `revert_hunk`, `attach_image`, `reorder_queue`, and many more. Each
+  uses `() => true` for no-payload types or `requiredStringValidator`
+  for types with required fields.
+- **Session history picker now shows all workspaces.** The
+  `chooseHistorySession` command filtered displayed sessions to the
+  current workspace only, hiding sessions created in other workspaces.
+  Fix: removed the workspace filter; all sessions are now shown.
+  Cross-workspace sessions are badged with `📁 folder-name` in the
+  detail line for identification.
 - **Tab close not firing on SVG clicks**: `tabs.ts` used
   `target.classList.contains("tab-close")` which missed clicks on the inner
   SVG `<path>`. Fixed by using `target.closest(".tab-close")` so any descendant

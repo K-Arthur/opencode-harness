@@ -471,6 +471,108 @@ const WEBVIEW_MESSAGE_VALIDATORS: Record<string, MessageValidator> = {
     }
     return true
   },
+  // ── Remaining router handlers — no-payload / sessionId-only types ──
+  // These messages carry no body fields the host reads (sessionId comes
+  // from the router context). The validator exists to suppress the
+  // "has no validator" warning and serve as a registry of all known types.
+  close_tab: () => true,
+  stream_ack: () => true,
+  get_subagent_activities: () => true,
+  setup_voice_input: () => true,
+  question_answer: () => true,
+  set_instructions: () => true,
+  accept_file_changes: () => true,
+  reject_file_changes: () => true,
+  revert_all_files: () => true,
+  open_model_selector: () => true,
+  open_model_selector_for_regen: () => true,
+  open_changed_file_diff: () => true,
+  abort: () => true,
+  retry_stream: () => true,
+  resume_stream: () => true,
+  decline_resume: () => true,
+  new_session: () => true,
+  open_settings: () => true,
+  connect_provider: () => true,
+  open_mcp_settings: () => true,
+  open_mcp_config: () => true,
+  get_permission_config: () => true,
+  update_permission_config: () => true,
+  get_mcp_servers: () => true,
+  attach_files: () => true,
+  export_chat: () => true,
+  export_chat_json: () => true,
+  export_chat_text: () => true,
+  copy_chat: () => true,
+  list_stashes: () => true,
+  list_templates: () => true,
+  save_message_as_template: () => true,
+  discover_providers: () => true,
+  list_provider_credentials: () => true,
+  compact_session: () => true,
+  list_checkpoints: () => true,
+  list_restore_points: () => true,
+  refresh_session_messages: () => true,
+  preview_theme: () => true,
+  list_cli_themes: () => true,
+  chat_dir_change: () => true,
+  show_error: () => true,
+  get_context_usage: () => true,
+  open_context_window_override_dialog: () => true,
+  get_skills: () => true,
+  search_skills: () => true,
+  open_subagent_detail: () => true,
+  webview_error: () => true,
+  resume_queue: () => true,
+  revert_message: () => true,
+  unrevert: () => true,
+  // ── Required string field types ──
+  get_file_hunks: requiredStringValidator("path", () => "Invalid path in get_file_hunks"),
+  undo_file: requiredStringValidator("path", () => "Invalid path in undo_file"),
+  regenerate_with_model: requiredStringValidator("model", () => "Invalid model in regenerate_with_model"),
+  cancel_tool: requiredStringValidator("toolId", () => "Invalid toolId in cancel_tool"),
+  stash_prompt: requiredStringValidator("name", () => "Invalid name in stash_prompt"),
+  save_template: requiredStringValidator("name", () => "Invalid name in save_template"),
+  delete_template: requiredStringValidator("id", (msgType) => `Invalid id in ${msgType}`),
+  get_provider_auth_methods: requiredStringValidator("providerId", () => "Invalid providerId in get_provider_auth_methods"),
+  connect_provider_key: requiredStringValidator("providerId", () => "Invalid providerId in connect_provider_key"),
+  connect_provider_oauth: requiredStringValidator("providerId", () => "Invalid providerId in connect_provider_oauth"),
+  complete_provider_oauth: requiredStringValidator("providerId", () => "Invalid providerId in complete_provider_oauth"),
+  remove_provider_credential: requiredStringValidator("credentialId", () => "Invalid credentialId in remove_provider_credential"),
+  restore_point: requiredStringValidator("messageID", () => "Invalid messageID in restore_point"),
+  get_file_diff: requiredStringValidator("path", () => "Invalid path in get_file_diff"),
+  toggle_skill: requiredStringValidator("skillId", () => "Invalid skillId in toggle_skill"),
+  remove_from_queue: requiredStringValidator("itemId", () => "Invalid itemId in remove_from_queue"),
+  retry_queue_item: requiredStringValidator("itemId", () => "Invalid itemId in retry_queue_item"),
+  send_queue_item: requiredStringValidator("itemId", () => "Invalid itemId in send_queue_item"),
+  edit_queue_item: (msg, msgType, deps) => {
+    if (invalidRequiredString(msg, "itemId", `Invalid itemId in ${msgType}`, deps)) return false
+    if (invalidRequiredString(msg, "text", `Invalid text in ${msgType}`, deps)) return false
+    return true
+  },
+  // ── Required number field types ──
+  reorder_queue: (msg, msgType, deps) => {
+    if (typeof msg.fromIndex !== "number" || !Number.isFinite(msg.fromIndex)) {
+      reject(deps, `Invalid fromIndex in ${msgType}`)
+      return false
+    }
+    if (typeof msg.toIndex !== "number" || !Number.isFinite(msg.toIndex)) {
+      reject(deps, `Invalid toIndex in ${msgType}`)
+      return false
+    }
+    return true
+  },
+  // ── Multi-field types ──
+  revert_hunk: (msg, msgType, deps) => {
+    if (invalidRequiredString(msg, "path", `Invalid path in ${msgType}`, deps)) return false
+    if (invalidRequiredString(msg, "hunkId", `Invalid hunkId in ${msgType}`, deps)) return false
+    return true
+  },
+  attach_image: (msg, msgType, deps) => {
+    if (invalidRequiredString(msg, "data", `Invalid data in ${msgType}`, deps)) return false
+    if (invalidRequiredString(msg, "mimeType", `Invalid mimeType in ${msgType}`, deps)) return false
+    return true
+  },
 }
 
 const _unvalidatedTypeWarnings = new Set<string>()

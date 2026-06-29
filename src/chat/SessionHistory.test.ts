@@ -59,9 +59,18 @@ describe("Session history listing — comprehensive", () => {
       )
     })
 
-    it("applies workspace filtering for display only (after import)", () => {
-      const filterBlock = block.indexOf("path.resolve(s.workspacePath)")
-      assert.ok(filterBlock >= 0, "must use path.resolve for workspace comparison in display filter")
+    it("shows ALL sessions regardless of workspace (no display filter)", () => {
+      // The picker no longer filters by workspace — all sessions from all
+      // workspaces are shown so the user can continue a session in the
+      // correct workspace even if it was created elsewhere. Cross-workspace
+      // sessions are badged with the workspace folder name.
+      const listCall = block.indexOf("sessionStore.list(true)")
+      assert.ok(listCall >= 0, "must call sessionStore.list(true)")
+
+      // Must NOT filter the list by workspacePath
+      const afterList = block.slice(listCall)
+      const filterMatch = afterList.match(/\.filter\(\(s\)\s*=>\s*[^)]*workspacePath/)
+      assert.ok(!filterMatch, "must NOT filter by workspacePath — all sessions should be shown")
     })
   })
 

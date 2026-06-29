@@ -560,10 +560,40 @@ export class StreamCoordinator {
     if (!snapshot) return
     const cbs = callbacks || this.stuckStreamHandlers.get(tabId)
     if (!cbs) return
+    // Strip large fields the webview never reads: tool.input, tool.result
+    // (full bash/file output, can be 500KB+), and subagent.inputPrompt
+    // (full subagent prompt text). Without this, the payload exceeds the
+    // HostMessageBatcher's 256KB maxPayloadBytes and is silently dropped,
+    // so the webview never sees any run activity updates at all.
+    const slim = {
+      ...snapshot,
+      tools: snapshot.tools.map((t) => ({
+        id: t.id,
+        name: t.name,
+        status: t.status,
+        startedAt: t.startedAt,
+        updatedAt: t.updatedAt,
+        completedAt: t.completedAt,
+        error: t.error,
+      })),
+      subagents: snapshot.subagents.map((s) => ({
+        id: s.id,
+        agentName: s.agentName,
+        status: s.status,
+        startedAt: s.startedAt,
+        updatedAt: s.updatedAt,
+        completedAt: s.completedAt,
+        currentActivity: s.currentActivity,
+        childSessionId: s.childSessionId,
+        toolCount: s.toolCount,
+        unreadActivityCount: s.unreadActivityCount,
+        error: s.error,
+      })),
+    }
     cbs.postMessage({
       type: "run_activity_update",
       sessionId: tabId,
-      activity: snapshot,
+      activity: slim,
       seq: this.nextSeq(tabId),
     })
   }
