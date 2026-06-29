@@ -2267,7 +2267,7 @@ textarea {
 }
 
 .msg-file-meta {
-  color: var(--color-muted, var(--vscode-descriptionForeground, #888));
+  color: var(--oc-muted, var(--color-muted, var(--vscode-descriptionForeground, #888)));
   font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -4244,7 +4244,7 @@ textarea {
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  color: var(--vscode-descriptionForeground, var(--oc-muted));
+  color: var(--oc-muted, var(--vscode-descriptionForeground, var(--oc-muted)));
   font: 500 var(--text-sm)/1.2 var(--font-sans);
   cursor: pointer;
   transition: color var(--duration-fast) var(--ease-out),
@@ -4252,7 +4252,7 @@ textarea {
 }
 
 .provider-tab:hover {
-  color: var(--vscode-foreground, var(--oc-fg));
+  color: var(--oc-fg, var(--vscode-foreground));
 }
 
 .provider-tab:focus-visible {
@@ -4333,12 +4333,12 @@ textarea {
 
 .provider-name {
   font: 500 var(--text-sm)/1.3 var(--font-sans);
-  color: var(--vscode-foreground, var(--oc-fg));
+  color: var(--oc-fg, var(--vscode-foreground));
 }
 
 .provider-meta {
   font-size: var(--text-xs);
-  color: var(--vscode-descriptionForeground, var(--oc-muted));
+  color: var(--oc-muted, var(--vscode-descriptionForeground));
 }
 
 /* ── Actions + status badges ── */
@@ -4401,7 +4401,7 @@ textarea {
 .provider-empty {
   padding: var(--space-4) var(--space-3);
   text-align: center;
-  color: var(--vscode-descriptionForeground, var(--oc-muted));
+  color: var(--oc-muted, var(--vscode-descriptionForeground));
   font-size: var(--text-sm);
 }
 
@@ -4484,7 +4484,7 @@ textarea {
 
 .provider-key-title {
   font: 600 var(--text-sm)/1.3 var(--font-sans);
-  color: var(--vscode-foreground, var(--oc-fg));
+  color: var(--oc-fg, var(--vscode-foreground));
   margin: 0;
 }
 
@@ -4498,7 +4498,7 @@ textarea {
 .provider-key-label {
   font-size: var(--text-sm);
   font-weight: 500;
-  color: var(--vscode-foreground, var(--oc-fg));
+  color: var(--oc-fg, var(--vscode-foreground));
 }
 
 .provider-key-input {
@@ -4526,7 +4526,7 @@ textarea {
 
 .provider-key-hint {
   font-size: var(--text-xs);
-  color: var(--vscode-descriptionForeground, var(--oc-muted));
+  color: var(--oc-muted, var(--vscode-descriptionForeground));
   margin: 0;
 }
 

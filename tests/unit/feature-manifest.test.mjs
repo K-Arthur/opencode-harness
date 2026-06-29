@@ -99,6 +99,7 @@ const EXPECTED_CONFIG_KEYS = [
   "opencode.chat.fontSize",
   "opencode.chat.fontFamily",
   "opencode.theme",
+  "opencode.theme.switchWorkbenchTheme",
   "opencode.model",
   "opencode.contextWindowOverride",
   "opencode.rateLimits",

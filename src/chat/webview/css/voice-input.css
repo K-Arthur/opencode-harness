@@ -1,7 +1,7 @@
 .voice-input-status {
   min-height: 18px;
   padding: 0 10px;
-  color: var(--vscode-descriptionForeground, var(--muted-fg));
+  color: var(--oc-muted, var(--vscode-descriptionForeground, var(--muted-fg)));
   font-size: var(--text-sm);
   line-height: 18px;
 }

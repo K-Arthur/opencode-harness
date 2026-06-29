@@ -16,7 +16,7 @@
   padding: var(--space-2-5) var(--space-3);
   background: linear-gradient(135deg, var(--oc-accent-subtle), color-mix(in srgb, var(--color-accent) 3%, transparent));
   border: 1px solid var(--oc-accent-border);
-  border-left: 3px solid var(--color-accent, var(--vscode-focusBorder));
+  border-left: 3px solid var(--oc-accent, var(--color-accent, var(--vscode-focusBorder)));
   border-radius: var(--radius-md);
   color: var(--oc-fg, var(--color-fg));
   font-size: var(--text-sm);
@@ -52,13 +52,13 @@
   font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-accent, var(--vscode-focusBorder, #0078d4));
+  color: var(--oc-accent, var(--color-accent, var(--vscode-focusBorder, #0078d4)));
 }
 
 .question-bar-count {
   margin-left: auto;
   font-size: var(--text-xs);
-  color: var(--oc-fg-muted, var(--vscode-descriptionForeground));
+  color: var(--oc-fg-muted, var(--oc-muted, var(--vscode-descriptionForeground)));
 }
 
 .question-bar-count.hidden {
@@ -315,7 +315,7 @@
   background: transparent;
   border: 1px solid var(--oc-glass-border, rgba(255, 255, 255, 0.12));
   border-radius: var(--radius-sm);
-  color: var(--oc-fg-muted, var(--vscode-descriptionForeground));
+  color: var(--oc-fg-muted, var(--oc-muted, var(--vscode-descriptionForeground)));
   cursor: pointer;
   transition: color var(--duration-fast) var(--ease-out),
               border-color var(--duration-fast) var(--ease-out);
@@ -384,7 +384,7 @@
 
 .qbar-carousel-progress {
   font-size: var(--text-2xs);
-  color: var(--oc-fg-muted, var(--vscode-descriptionForeground));
+  color: var(--oc-fg-muted, var(--oc-muted, var(--vscode-descriptionForeground)));
   white-space: nowrap;
 }
 
@@ -508,7 +508,7 @@
 
 .q-answer-summary-item {
   font-size: var(--text-xs);
-  color: var(--oc-fg-muted, var(--vscode-descriptionForeground));
+  color: var(--oc-fg-muted, var(--oc-muted, var(--vscode-descriptionForeground)));
 }
 
 .q-answer-summary-item::before {

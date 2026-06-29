@@ -31,7 +31,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--vscode-foreground, inherit);
+  color: var(--oc-fg, var(--vscode-foreground, inherit));
 }
 
 .terminal-panel-content {
@@ -47,7 +47,7 @@
   padding: 24px 12px;
   text-align: center;
   font-size: var(--text-sm);
-  color: var(--vscode-descriptionForeground, rgba(128, 128, 128, 0.8));
+  color: var(--oc-muted, var(--vscode-descriptionForeground, rgba(128, 128, 128, 0.8)));
 }
 
 /* ── Terminal card ── */
@@ -93,7 +93,7 @@
   font-family: var(--vscode-editor-font-family, monospace);
   font-size: var(--text-xs);
   font-weight: 600;
-  color: var(--vscode-foreground, inherit);
+  color: var(--oc-fg, var(--vscode-foreground, inherit));
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -105,7 +105,7 @@
   font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--vscode-descriptionForeground, rgba(128, 128, 128, 0.8));
+  color: var(--oc-muted, var(--vscode-descriptionForeground, rgba(128, 128, 128, 0.8)));
   flex-shrink: 0;
 }
 
@@ -130,14 +130,14 @@
 .terminal-card-runtime {
   font-family: var(--vscode-editor-font-family, monospace);
   font-size: var(--text-2xs);
-  color: var(--vscode-descriptionForeground, rgba(128, 128, 128, 0.7));
+  color: var(--oc-muted, var(--vscode-descriptionForeground, rgba(128, 128, 128, 0.7)));
   flex-shrink: 0;
 }
 
 .terminal-card-cancel {
   background: transparent;
   border: 1px solid var(--color-border, rgba(128, 128, 128, 0.3));
-  color: var(--vscode-foreground, inherit);
+  color: var(--oc-fg, var(--vscode-foreground, inherit));
   font-size: var(--text-2xs);
   padding: 2px 8px;
   border-radius: 3px;
@@ -160,8 +160,8 @@
   font-family: var(--vscode-terminal-font-family, var(--vscode-editor-font-family, monospace));
   font-size: var(--vscode-terminal-font-size, var(--text-xs));
   line-height: 1.4;
-  color: var(--vscode-terminal-foreground, var(--vscode-foreground, inherit));
-  background: var(--vscode-terminal-background, rgba(0, 0, 0, 0.3));
+  color: var(--oc-fg, var(--vscode-terminal-foreground, var(--vscode-foreground, inherit)));
+  background: var(--oc-editor-bg, var(--vscode-terminal-background, rgba(0, 0, 0, 0.3)));
   max-height: 200px;
   overflow-y: auto;
   white-space: pre-wrap;

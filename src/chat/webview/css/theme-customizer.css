@@ -26,10 +26,29 @@
   --theme-customizer-swatch-gap: 3px;
   --theme-customizer-preview-width: 240px;
   --theme-customizer-picker-size: 40px;
-  --theme-customizer-focus-ring: var(--vscode-focusBorder, var(--oc-focus));
+  --theme-customizer-focus-ring: var(--oc-focus, var(--vscode-focusBorder));
   --theme-customizer-radius: var(--radius-md);
   --theme-customizer-shadow: var(--shadow-xl),
     inset 0 0 0 1px color-mix(in srgb, var(--oc-fg) 6%, transparent);
+}
+
+/* ─── Workbench Toggle ─── */
+.theme-workbench-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  font-size: var(--text-sm);
+  color: var(--theme-customizer-panel-fg);
+  cursor: pointer;
+  user-select: none;
+}
+
+.theme-workbench-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--oc-accent, var(--vscode-button-background));
+  cursor: pointer;
 }
 
 /* ─── Dialog / Backdrop ─── */

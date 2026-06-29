@@ -24,10 +24,16 @@ export interface ListCliThemesMsg {
   type: "list_cli_themes"
 }
 
+export interface UpdateSwitchWorkbenchThemeMsg {
+  type: "update_switch_workbench_theme"
+  enabled: boolean
+}
+
 export type WebviewToHostMsg =
   | GetThemeConfigMsg
   | UpdateThemeConfigMsg
   | ListCliThemesMsg
+  | UpdateSwitchWorkbenchThemeMsg
 
 // ── Host → Webview messages ────────────────────────────────────────────────
 
@@ -83,6 +89,15 @@ export function createUpdateThemeConfigMsg(
  */
 export function createListCliThemesMsg(): ListCliThemesMsg {
   return { type: "list_cli_themes" }
+}
+
+/**
+ * Create an `update_switch_workbench_theme` message to toggle the
+ * `opencode.theme.switchWorkbenchTheme` setting.
+ * @param enabled - Whether the VS Code workbench theme should also switch.
+ */
+export function createUpdateSwitchWorkbenchThemeMsg(enabled: boolean): UpdateSwitchWorkbenchThemeMsg {
+  return { type: "update_switch_workbench_theme", enabled }
 }
 
 // ── Incoming message type guards ───────────────────────────────────────────

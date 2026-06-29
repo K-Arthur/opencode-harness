@@ -16,6 +16,7 @@ import {
   createGetThemeConfigMsg,
   createUpdateThemeConfigMsg,
   createListCliThemesMsg,
+  createUpdateSwitchWorkbenchThemeMsg,
   asThemeConfigMsg,
   asCliThemesListMsg,
   asThemeConfigErrorMsg,
@@ -91,6 +92,22 @@ export function createThemeOrchestrator(deps: ThemeOrchestratorDeps) {
     cliSearchWrap.appendChild(cliList)
     cliSection.appendChild(cliSearchWrap)
     body.appendChild(cliSection)
+
+    // Workbench theme toggle
+    const toggleWrap = document.createElement("label")
+    toggleWrap.className = "theme-workbench-toggle"
+    const toggleInput = document.createElement("input")
+    toggleInput.type = "checkbox"
+    toggleInput.id = "theme-switch-workbench"
+    toggleInput.checked = false
+    toggleInput.addEventListener("change", () => {
+      deps.postMessage(createUpdateSwitchWorkbenchThemeMsg(toggleInput.checked) as unknown as Record<string, unknown>)
+    })
+    const toggleLabel = document.createElement("span")
+    toggleLabel.textContent = "Also switch VS Code theme"
+    toggleWrap.appendChild(toggleInput)
+    toggleWrap.appendChild(toggleLabel)
+    body.appendChild(toggleWrap)
 
     // Hint
     const hint = document.createElement("div")
@@ -211,6 +228,10 @@ export function createThemeOrchestrator(deps: ThemeOrchestratorDeps) {
       presetGrid?.setSelected(state.getPreset())
       colorSections?.setOverrides(state.getOverrides())
       previewStrip?.update(state.getOverrides())
+      const toggle = document.getElementById("theme-switch-workbench") as HTMLInputElement | null
+      if (toggle && typeof msg.switchWorkbenchTheme === "boolean") {
+        toggle.checked = msg.switchWorkbenchTheme
+      }
       return true
     }
 

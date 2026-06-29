@@ -20,9 +20,9 @@
   --oc-accent-fg: var(--vscode-button-foreground);
 
   /* Button Variants (for skip-link, etc.) */
-  --oc-button-bg: var(--vscode-button-background, var(--oc-accent));
-  --oc-button-fg: var(--vscode-button-foreground, #ffffff);
-  --oc-button-hover: var(--vscode-button-hoverBackground, var(--oc-accent-hover));
+  --oc-button-bg: var(--oc-accent, var(--vscode-button-background));
+  --oc-button-fg: var(--oc-accent-fg, var(--vscode-button-foreground, #ffffff));
+  --oc-button-hover: var(--oc-accent-hover, var(--vscode-button-hoverBackground));
 
   /* Skill Badge */
   --oc-skill-badge-bg: var(--oc-accent-subtle);
@@ -31,7 +31,7 @@
   /* Secondary Actions */
   --oc-button-secondary: var(--vscode-button-secondaryBackground, rgba(128, 128, 128, 0.1));
   --oc-button-secondary-hover: var(--vscode-button-secondaryHoverBackground, rgba(128, 128, 128, 0.15));
-  --oc-button-secondary-fg: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+  --oc-button-secondary-fg: var(--vscode-button-secondaryForeground, var(--oc-fg, var(--vscode-foreground)));
   
   /* List & Selection */
   --oc-list-hover: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.1));
@@ -53,8 +53,8 @@
   --oc-accent-alt: #bf7af0; /* Cyber Amethyst (Branding) */
   
   /* Glassmorphism (Mission Control Aesthetic) */
-  --oc-glass-bg: var(--vscode-sideBar-background);
-  --oc-glass-border: var(--vscode-widget-border, rgba(128, 128, 128, 0.2));
+  --oc-glass-bg: var(--oc-bg, var(--vscode-sideBar-background));
+  --oc-glass-border: var(--oc-border-subtle, var(--vscode-widget-border, rgba(128, 128, 128, 0.2)));
   --oc-glass-blur: blur(12px);
 
   /* ─── Streaming state aliases ─── */
@@ -226,7 +226,7 @@
   --oc-status-warning: hsl(38 90% 58%);
   --oc-status-pending: hsl(220 15% 55%);
   --oc-status-cancelled: hsl(220 12% 50%);
-  --oc-status-unknown: var(--vscode-descriptionForeground, #888888);
+  --oc-status-unknown: var(--oc-muted, var(--vscode-descriptionForeground, #888888));
   --oc-status-offline-bg: rgba(244, 67, 54, 0.1);
   --oc-status-offline-fg: var(--vscode-errorForeground, #f44336);
   --oc-status-offline-border: var(--vscode-errorBorder, #f44336);
@@ -319,7 +319,7 @@
   --oc-syn-type: var(--vscode-symbolIcon-typeParameterForeground, #4ec9b0);
   --oc-syn-variable: var(--vscode-symbolIcon-variableForeground, #9cdcfe);
   --oc-syn-operator: var(--vscode-symbolIcon-operatorForeground, #d4d4d4);
-  --oc-syn-punctuation: var(--vscode-editor-foreground, #d4d4d4);
+  --oc-syn-punctuation: var(--oc-editor-fg, var(--vscode-editor-foreground, #d4d4d4));
 
   /* ─── Unified Border Widths ─── */
   --border-width-thin: 1px;
@@ -468,15 +468,15 @@
      that ThemeManager may inject into :root for dark themes. Declaring on body
      (via .vscode-light) ensures descendants inherit the light value, overriding
      any stale dark :root declaration from ThemeManager. */
-  --user-message-bg: var(--vscode-input-background, rgba(0, 0, 0, 0.05));
+  --user-message-bg: var(--oc-user-msg-bg, var(--vscode-input-background, rgba(0, 0, 0, 0.05)));
   --user-message-fg: var(--oc-fg);
-  --oc-user-msg-bg: var(--vscode-input-background, rgba(0, 0, 0, 0.05));
+  --oc-user-msg-bg: var(--oc-user-msg-bg, var(--vscode-input-background, rgba(0, 0, 0, 0.05)));
   --assistant-message-bg: transparent;
   --oc-assistant-msg-bg: transparent;
 
   /* Code block and tool call backgrounds */
-  --bg-code: var(--vscode-textCodeBlock-background, rgba(0, 0, 0, 0.06));
-  --oc-tool-bg: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.04));
+  --bg-code: var(--oc-editor-bg, var(--vscode-textCodeBlock-background, rgba(0, 0, 0, 0.06)));
+  --oc-tool-bg: var(--oc-editor-bg, var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.04)));
 
   /* Diff colours: lighter themes need slightly less saturation than dark
      but still strong enough to be obvious at a glance. */

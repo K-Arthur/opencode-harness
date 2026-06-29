@@ -215,7 +215,7 @@ export class WebviewEventRouter {
     "list_server_sessions", "delete_server_session", "resume_server_session",
     "add_mcp_server", "update_mcp_server", "remove_mcp_server", "toggle_mcp_server", "get_mcp_servers",
     "show_diff", "list_checkpoints", "restore_checkpoint", "list_restore_points", "restore_point",
-    "preview_theme", "get_theme_config", "update_theme_config", "list_cli_themes",
+    "preview_theme", "get_theme_config", "update_theme_config", "list_cli_themes", "update_switch_workbench_theme",
     "request_more_messages", "refresh_session_messages", "stream_ack", "retry_stream", "request_state_sync",
     "set_instructions", "fork_session", "accept_hunk", "reject_hunk", "open_model_selector", "open_model_selector_for_regen", "regenerate_with_model",
     "get_file_hunks", "revert_hunk",
@@ -1753,6 +1753,9 @@ export class WebviewEventRouter {
     }],
     ["update_theme_config", async (msg: Record<string, unknown>) => {
       await this.opts.themeController.handleUpdateThemeConfig(msg.theme)
+    }],
+    ["update_switch_workbench_theme", async (msg: Record<string, unknown>) => {
+      await this.opts.themeController.handleSwitchWorkbenchTheme(msg.enabled === true)
     }],
     ["list_cli_themes", () => {
       const themes = this.opts.themeManager.discoverCliThemes()

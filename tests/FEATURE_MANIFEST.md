@@ -104,6 +104,7 @@
 | FM-CFG-006 | `opencode.chat.fontSize` | integer | `14` | window | stable |
 | FM-CFG-007 | `opencode.chat.fontFamily` | string | `""` | window | stable |
 | FM-CFG-008 | `opencode.theme` | object | `{preset:"cli-default",overrides:{}}` | window | stable |
+| FM-CFG-008a | `opencode.theme.switchWorkbenchTheme` | boolean | `false` | window | stable |
 | FM-CFG-009 | `opencode.model` | string | `""` | window | stable |
 | FM-CFG-010 | `opencode.contextWindowOverride` | number | `0` | window | stable |
 | FM-CFG-011 | `opencode.rateLimits` | object | `{}` | window | stable |

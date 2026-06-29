@@ -2450,7 +2450,7 @@
   font-weight: 600;
   font-size: var(--text-md);
   flex: 1;
-  color: var(--vscode-foreground, #cccccc);
+  color: var(--oc-fg, var(--vscode-foreground, #cccccc));
 }
 
 .plan-card-open-btn {
@@ -2474,7 +2474,7 @@
 
 .plan-card-overview {
   font-size: var(--text-sm);
-  color: var(--vscode-descriptionForeground, #999999);
+  color: var(--oc-muted, var(--vscode-descriptionForeground, #999999));
   margin-bottom: var(--space-2);
   line-height: 1.4;
 }
@@ -2530,12 +2530,12 @@
 
 .plan-card-todo-text {
   flex: 1;
-  color: var(--vscode-foreground, #cccccc);
+  color: var(--oc-fg, var(--vscode-foreground, #cccccc));
 }
 
 .plan-card-todo-status {
   font-size: var(--text-2xs);
-  color: var(--vscode-descriptionForeground, #999999);
+  color: var(--oc-muted, var(--vscode-descriptionForeground, #999999));
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -2549,7 +2549,7 @@
 }
 
 .plan-card-todo-status--pending {
-  color: var(--vscode-descriptionForeground, #999999);
+  color: var(--oc-muted, var(--vscode-descriptionForeground, #999999));
 }
 
 .plan-card-actions {
@@ -3468,7 +3468,7 @@
   padding: var(--oc-space-xs, 6px) var(--oc-space-sm, 10px);
   border: 1px solid var(--vscode-inputValidation-infoBorder, transparent);
   background: var(--vscode-inputValidation-infoBackground, transparent);
-  color: var(--vscode-foreground, inherit);
+  color: var(--oc-fg, var(--vscode-foreground, inherit));
   font-size: var(--vscode-font-size, 12px);
   line-height: 1.4;
 }
@@ -3536,7 +3536,7 @@
 .tier-a-anchor__btn {
   border: 1px solid var(--vscode-button-border, transparent);
   background: var(--vscode-button-secondaryBackground, transparent);
-  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground, inherit));
+  color: var(--oc-button-secondary-fg, var(--vscode-button-secondaryForeground, var(--oc-fg, var(--vscode-foreground, inherit))));
   padding: 2px 10px;
   border-radius: 2px;
   font-size: var(--vscode-font-size, 12px);
@@ -3551,8 +3551,8 @@
 .tier-b-banner__btn--primary,
 .tier-a-anchor__btn--primary {
   background: var(--vscode-button-background, transparent);
-  color: var(--vscode-button-foreground, var(--vscode-foreground, inherit));
-  border-color: var(--vscode-button-background, transparent);
+  color: var(--oc-accent-fg, var(--vscode-button-foreground, var(--oc-fg, var(--vscode-foreground, inherit))));
+  border-color: var(--oc-accent, var(--vscode-button-background, transparent));
 }
 
 .tier-b-banner__btn--primary:hover,

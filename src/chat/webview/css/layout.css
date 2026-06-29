@@ -2175,11 +2175,11 @@ body.chat-rtl #prompt-input {
 }
 .session-workspace-badge.other {
   background: transparent;
-  border: 1.5px solid var(--vscode-descriptionForeground);
+  border: 1.5px solid var(--oc-muted, var(--vscode-descriptionForeground));
   opacity: 0.6;
 }
 .session-workspace-badge.local {
-  background: var(--vscode-descriptionForeground);
+  background: var(--oc-muted, var(--vscode-descriptionForeground));
   opacity: 0.4;
 }
 
@@ -3104,8 +3104,8 @@ button.modal-session-item:focus {
 }
 
 .model-manager-provider-delete:hover {
-  color: var(--vscode-errorForeground, #f14c4c);
-  background: color-mix(in srgb, var(--vscode-errorForeground, #f14c4c) 12%, transparent);
+  color: var(--oc-error, var(--vscode-errorForeground, #f14c4c));
+  background: color-mix(in srgb, var(--oc-error, var(--vscode-errorForeground, #f14c4c)) 12%, transparent);
 }
 
 .model-manager-provider-delete:focus-visible {
@@ -3661,7 +3661,7 @@ button.modal-session-item:focus {
   background: transparent;
   border: none;
   border-radius: var(--radius-md);
-  color: var(--vscode-menu-foreground, var(--color-fg));
+  color: var(--oc-fg, var(--vscode-menu-foreground, var(--color-fg)));
   font-size: var(--text-sm);
   cursor: pointer;
   text-align: left;
@@ -3669,8 +3669,8 @@ button.modal-session-item:focus {
 }
 
 .settings-menu-item:hover {
-  background: var(--vscode-menu-selectionBackground, var(--oc-list-hover));
-  color: var(--vscode-menu-selectionForeground, var(--color-fg));
+  background: var(--oc-list-hover, var(--vscode-menu-selectionBackground, var(--oc-list-hover)));
+  color: var(--oc-fg, var(--vscode-menu-selectionForeground, var(--color-fg)));
 }
 
 .settings-menu-item:focus-visible {
@@ -3692,7 +3692,7 @@ button.modal-session-item:focus {
 
 .settings-menu-group + .settings-menu-group {
   margin-top: var(--space-1);
-  border-top: 1px solid var(--vscode-menu-separatorBackground, var(--color-border));
+  border-top: 1px solid var(--oc-border, var(--vscode-menu-separatorBackground, var(--color-border)));
   padding-top: var(--space-1);
 }
 

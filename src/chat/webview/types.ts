@@ -982,6 +982,7 @@ export type WebviewMessage =
   | { type: "get_theme_config" }
   | { type: "update_theme_config"; theme: unknown }
   | { type: "list_cli_themes" }
+  | { type: "update_switch_workbench_theme"; enabled: boolean }
   | { type: "request_more_messages"; sessionId: string; beforeIndex: number; limit?: number }
   | { type: "stream_ack"; sessionId: string; seq?: number; lastRenderedChunkSeq?: number }
   | { type: "retry_stream"; sessionId: string }

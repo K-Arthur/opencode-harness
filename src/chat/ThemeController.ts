@@ -18,6 +18,7 @@ export class ThemeController {
     this.postMessage({
       type: "theme_config",
       theme: this.getThemeConfig(),
+      switchWorkbenchTheme: vscode.workspace.getConfiguration("opencode").get<boolean>("theme.switchWorkbenchTheme", false),
     })
   }
 
@@ -30,7 +31,18 @@ export class ThemeController {
     try {
       const nextTheme = this.normalizeThemeConfig(theme)
       const target = vscode.workspace.workspaceFolders ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global
-      await vscode.workspace.getConfiguration("opencode").update("theme", nextTheme, target)
+      const switchWorkbench = vscode.workspace.getConfiguration("opencode").get<boolean>("theme.switchWorkbenchTheme", false)
+
+      if (switchWorkbench && nextTheme.preset !== "cli-default") {
+        await this.themeManager.activateTheme({ preset: nextTheme.preset })
+        if (Object.keys(nextTheme.overrides).length > 0) {
+          await vscode.workspace.getConfiguration("opencode").update("theme", nextTheme, target)
+        }
+      } else {
+        await vscode.workspace.getConfiguration("opencode").update("theme", nextTheme, target)
+      }
+
+      this.themeManager.loadConfig()
       this.themeManager.emitUpdate()
       this.pushThemeToWebview()
       this.pushThemeConfigToWebview()
@@ -40,6 +52,15 @@ export class ThemeController {
         type: "theme_config_error", 
         error: error instanceof Error ? error.message : "Unknown error" 
       })
+    }
+  }
+
+  async handleSwitchWorkbenchTheme(enabled: boolean): Promise<void> {
+    try {
+      const target = vscode.workspace.workspaceFolders ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global
+      await vscode.workspace.getConfiguration("opencode").update("theme.switchWorkbenchTheme", enabled, target)
+    } catch (error) {
+      log.error("Failed to update switchWorkbenchTheme setting", error)
     }
   }
 

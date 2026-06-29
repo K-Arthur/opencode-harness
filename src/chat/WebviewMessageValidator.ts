@@ -132,6 +132,13 @@ function validateThemeConfig(msg: Record<string, unknown>, _msgType: string, dep
   return true
 }
 
+function validateBooleanFlag(msg: Record<string, unknown>, key: string, msgType: string, deps: WebviewMessageValidatorDeps): boolean {
+  if (typeof msg[key] !== "boolean") {
+    return reject(deps, `Invalid ${key} in ${msgType}`)
+  }
+  return true
+}
+
 function validateModelVariant(msg: Record<string, unknown>, _msgType: string, deps: WebviewMessageValidatorDeps): boolean {
   if (invalidOptionalString(msg, "model", "Invalid model type", deps)) return false
   if (invalidOptionalString(msg, "variant", "Invalid variant type", deps)) return false
@@ -377,6 +384,7 @@ const WEBVIEW_MESSAGE_VALIDATORS: Record<string, MessageValidator> = {
   plan_complete: validatePlanComplete,
   mode_switch_request: validateModeSwitchRequest,
   update_theme_config: validateThemeConfig,
+  update_switch_workbench_theme: (msg, msgType, deps) => validateBooleanFlag(msg, "enabled", msgType, deps),
   set_model: validateModelVariant,
   set_variant: validateModelVariant,
   model_favorite: validateModelFavorite,

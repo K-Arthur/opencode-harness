@@ -48,9 +48,9 @@
   gap: var(--space-1-5);
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-full);
-  border: 1px solid var(--vscode-button-border, transparent);
-  background: var(--vscode-button-secondaryBackground, var(--vscode-editorWidget-background));
-  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+  border: 1px solid var(--oc-border, var(--vscode-button-border, transparent));
+  background: var(--oc-button-secondary, var(--vscode-button-secondaryBackground, var(--oc-editor-bg, var(--vscode-editorWidget-background))));
+  color: var(--oc-button-secondary-fg, var(--vscode-button-secondaryForeground, var(--oc-fg, var(--vscode-foreground))));
   font-size: var(--text-2xs);
   font-family: inherit;
   cursor: pointer;
@@ -694,7 +694,7 @@
 
 .message-fork-btn:hover {
   opacity: 1 !important;
-  color: var(--vscode-focusBorder, #007acc);
+  color: var(--oc-accent, var(--vscode-focusBorder, #007acc));
   background: var(--oc-info-subtle, rgba(0,122,204,0.1));
   border-color: var(--oc-info-border, rgba(0,122,204,0.3));
 }

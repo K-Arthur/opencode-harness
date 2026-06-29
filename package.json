@@ -614,7 +614,7 @@
             "preset": "cli-default",
             "overrides": {}
           },
-          "description": "Theme for the OpenCode chat panel. Pick a preset (cli-default, light, dark, high-contrast) and optionally override individual colors. Changes only affect the chat panel — your VS Code editor theme is never modified.",
+          "description": "Theme for the OpenCode chat panel. Pick a preset (cli-default, light, dark, high-contrast) and optionally override individual colors. By default changes only affect the chat panel. Enable opencode.theme.switchWorkbenchTheme to also switch the VS Code editor theme.",
           "properties": {
             "preset": {
               "type": "string",
@@ -892,6 +892,12 @@
           "default": 0,
           "scope": "window",
           "description": "Override the context window limit for the active model. Set to 0 to use the server-reported value. Use this when the server doesn't report limit.context for your model."
+        },
+        "opencode.theme.switchWorkbenchTheme": {
+          "type": "boolean",
+          "scope": "window",
+          "default": false,
+          "description": "Also switch the VS Code editor color theme when selecting an OpenCode preset. This is the only way to recolor the native 'OpenCode: Chat' panel title bar. When disabled (default), theming is scoped to the chat panel only."
         },
         "opencode.rateLimits": {
           "type": "object",

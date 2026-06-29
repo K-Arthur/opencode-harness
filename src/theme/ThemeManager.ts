@@ -54,6 +54,13 @@ export interface OpencodeTheme {
   borderSubtle?: string
   mutedFg?: string
 
+  listHoverBg?: string
+  buttonSecondaryBg?: string
+  buttonSecondaryHoverBg?: string
+  buttonSecondaryFg?: string
+  listActiveBg?: string
+  listActiveFg?: string
+
   infoColor?: string
   diffContext?: string
   diffHunkHeader?: string
@@ -102,6 +109,12 @@ const BUILT_IN_PRESETS: Record<ThemePreset, OpencodeTheme> = {
     editorFg: "var(--vscode-editor-foreground)",
     borderColor: "var(--vscode-sideBar-border, var(--vscode-widget-border, rgba(128, 128, 128, 0.2)))",
     mutedFg: "var(--vscode-descriptionForeground)",
+    listHoverBg: "var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.1))",
+    buttonSecondaryBg: "var(--vscode-button-secondaryBackground, rgba(128, 128, 128, 0.1))",
+    buttonSecondaryHoverBg: "var(--vscode-button-secondaryHoverBackground, rgba(128, 128, 128, 0.15))",
+    buttonSecondaryFg: "var(--vscode-button-secondaryForeground, var(--vscode-foreground))",
+    listActiveBg: "var(--vscode-list-activeSelectionBackground)",
+    listActiveFg: "var(--vscode-list-activeSelectionForeground)",
     userMessageBg: "var(--vscode-editor-background)",
     userMessageFg: "var(--vscode-editor-foreground)",
     assistantMessageBg: "transparent",
@@ -145,6 +158,12 @@ const BUILT_IN_PRESETS: Record<ThemePreset, OpencodeTheme> = {
     borderActive: "#58a6ff",
     borderSubtle: "#d0d7de",
     mutedFg: "#656d76",
+    listHoverBg: "rgba(0, 0, 0, 0.04)",
+    buttonSecondaryBg: "rgba(0, 0, 0, 0.05)",
+    buttonSecondaryHoverBg: "rgba(0, 0, 0, 0.08)",
+    buttonSecondaryFg: "#24292f",
+    listActiveBg: "#0969da",
+    listActiveFg: "#ffffff",
     userMessageBg: "#f3f3f3",
     userMessageFg: "#333333",
     assistantMessageBg: "rgba(255, 255, 255, 0.8)",
@@ -209,6 +228,12 @@ const BUILT_IN_PRESETS: Record<ThemePreset, OpencodeTheme> = {
     borderActive: "#58a6ff",
     borderSubtle: "#21262d",
     mutedFg: "#8b949e",
+    listHoverBg: "rgba(255, 255, 255, 0.06)",
+    buttonSecondaryBg: "rgba(255, 255, 255, 0.08)",
+    buttonSecondaryHoverBg: "rgba(255, 255, 255, 0.12)",
+    buttonSecondaryFg: "#c9d1d9",
+    listActiveBg: "#58a6ff",
+    listActiveFg: "#0d1117",
     userMessageBg: "#2d2d2d",
     userMessageFg: "#e0e0e0",
     assistantMessageBg: "rgba(30, 30, 30, 0.6)",
@@ -273,6 +298,12 @@ const BUILT_IN_PRESETS: Record<ThemePreset, OpencodeTheme> = {
     borderActive: "#ffff00",
     borderSubtle: "#888888",
     mutedFg: "#cccccc",
+    listHoverBg: "rgba(255, 255, 255, 0.1)",
+    buttonSecondaryBg: "rgba(255, 255, 255, 0.1)",
+    buttonSecondaryHoverBg: "rgba(255, 255, 255, 0.15)",
+    buttonSecondaryFg: "#ffffff",
+    listActiveBg: "#ffff00",
+    listActiveFg: "#000000",
     userMessageBg: "#1a1a1a",
     userMessageFg: "#ffffff",
     assistantMessageBg: "transparent",
@@ -337,6 +368,12 @@ const BUILT_IN_PRESETS: Record<ThemePreset, OpencodeTheme> = {
     borderActive: "#cc0000",
     borderSubtle: "#888888",
     mutedFg: "#555555",
+    listHoverBg: "rgba(0, 0, 0, 0.1)",
+    buttonSecondaryBg: "rgba(0, 0, 0, 0.1)",
+    buttonSecondaryHoverBg: "rgba(0, 0, 0, 0.15)",
+    buttonSecondaryFg: "#000000",
+    listActiveBg: "#0000cc",
+    listActiveFg: "#ffffff",
     userMessageBg: "#f0f0f0",
     userMessageFg: "#000000",
     assistantMessageBg: "transparent",
@@ -398,6 +435,12 @@ const BUILT_IN_PRESETS: Record<ThemePreset, OpencodeTheme> = {
     editorFg: "var(--vscode-editor-foreground, #ffffff)",
     borderColor: "var(--vscode-contrastBorder, var(--vscode-focusBorder, #ffffff))",
     mutedFg: "var(--vscode-descriptionForeground, #ffffff)",
+    listHoverBg: "var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.1))",
+    buttonSecondaryBg: "var(--vscode-button-secondaryBackground, rgba(128, 128, 128, 0.1))",
+    buttonSecondaryHoverBg: "var(--vscode-button-secondaryHoverBackground, rgba(128, 128, 128, 0.15))",
+    buttonSecondaryFg: "var(--vscode-button-secondaryForeground, var(--vscode-foreground, #ffffff))",
+    listActiveBg: "var(--vscode-list-activeSelectionBackground)",
+    listActiveFg: "var(--vscode-list-activeSelectionForeground)",
     userMessageBg: "var(--vscode-input-background, var(--vscode-editor-background, #000000))",
     userMessageFg: "var(--vscode-input-foreground, var(--vscode-editor-foreground, #ffffff))",
     assistantMessageBg: "transparent",
@@ -997,6 +1040,14 @@ export class ThemeManager {
     ["--oc-muted", "mutedFg"],
     ["--color-muted", "mutedFg"],
     ["--oc-description", "mutedFg"],
+    ["--oc-focus", "borderActive"],
+    ["--oc-glass-border", "borderSubtle"],
+    ["--oc-list-hover", "listHoverBg"],
+    ["--oc-button-secondary", "buttonSecondaryBg"],
+    ["--oc-button-secondary-hover", "buttonSecondaryHoverBg"],
+    ["--oc-button-secondary-fg", "buttonSecondaryFg"],
+    ["--oc-list-active", "listActiveBg"],
+    ["--oc-list-active-fg", "listActiveFg"],
     ["--oc-user-msg-bg", "userMessageBg"],
     ["--oc-user-msg-fg", "userMessageFg"],
     ["--oc-assistant-msg-bg", "assistantMessageBg"],
