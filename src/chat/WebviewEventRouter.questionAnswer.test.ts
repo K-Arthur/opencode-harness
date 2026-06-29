@@ -119,6 +119,39 @@ describe("WebviewEventRouter — question_answer routing", () => {
     )
   })
 
+  // ── Personal (custom / free-text) answers ───────────────────────────────
+  // When the user types their own answer instead of picking an option, the
+  // webview now folds that text INTO the relevant group's slot (so
+  // structuredAnswers stays 1:1 with the question groups) and tags the message
+  // source="freetext". The host must (a) carry the source through to the
+  // SessionStore record so the transcript renders "Your answer:" not
+  // "Selected:", and (b) reply with the same structuredAnswers wire shape it
+  // uses for option answers — no special-casing that would drop the text.
+  it("preserves a freetext source through to the answerSource record", () => {
+    assert.ok(
+      handler.includes(`source === "freetext"`),
+      "handler must recognize the freetext source",
+    )
+    assert.ok(
+      /answerSource[\s\S]*source === "freetext"[\s\S]*source === "skip"[\s\S]*source === "response"[\s\S]*: "option"/.test(handler),
+      "answerSource must map freetext/skip/response through and default the rest to option",
+    )
+  })
+
+  it("routes a personal answer through the same structuredAnswers v2 reply path (no text dropped)", () => {
+    // The custom text rides in structuredAnswers exactly like option labels,
+    // so the single wire path covers both — a freetext answer must not bypass
+    // replyToQuestion or get flattened away.
+    assert.ok(
+      handler.includes("this.opts.sessionManager.replyToQuestion(replySessionId, requestID, wireAnswers)"),
+      "freetext answers reply via the same wireAnswers path as option answers",
+    )
+    assert.ok(
+      handler.includes("const wireAnswers = structured && structured.length > 0 ? structured : [[value]]"),
+      "wireAnswers is built once from structuredAnswers for every answer source",
+    )
+  })
+
   // ── Resume-after-reply: continue generation on the v2 happy path ─────────
   // opencode's `question` tool ENDS the assistant turn, so the local stream
   // finalizes the instant the answer is recorded (streamCoordinator.
