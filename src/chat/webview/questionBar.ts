@@ -14,7 +14,13 @@ export interface QuestionBarItem {
   questionText: string
   allowFreeText: boolean
   selections: Map<number, Set<string>>
-  freeTextValue: string
+  /** Per-group custom/free-text answers, keyed by group index. The server's
+   *  `question.reply` contract is one answer array per question group, so a
+   *  group's custom text must land in THAT group's slot — not appended as a
+   *  phantom extra group (which inflates answers.length past questions.length
+   *  and makes the server drop/degrade the reply). A single-group/zero-group
+   *  question keeps its text at key 0. */
+  freeTextValues: Map<number, string>
   answered: boolean
   /** Snapshot of the value posted to the host — shown in the answered state so
    *  the user can confirm what was sent before the bar dismisses. */
@@ -71,6 +77,83 @@ const STALE_THRESHOLD_MS = 5 * 60 * 1000 // 5 minutes
 
 let _activeSessionId = ""
 
+/**
+ * IDs (toolCallId / id / requestID) of questions the user has already dealt
+ * with (answered or dismissed). A late re-emit — server replay, a resume
+ * stream backfilling its blocks, or the dual tool_start/question.asked feed
+ * arriving out of order — must NOT resurrect a fresh interactive card for a
+ * question that is already retired. Without this guard, every recovery resend
+ * could re-stack the same question, which is exactly the "duplicates piling
+ * up" failure mode. Bounded so it can't grow without limit in a long session.
+ */
+const _retiredIds = new Set<string>()
+const RETIRED_CAP = 200
+
+function retire(...ids: Array<string | undefined>): void {
+  for (const id of ids) {
+    if (typeof id === "string" && id.length > 0) _retiredIds.add(id)
+  }
+  if (_retiredIds.size > RETIRED_CAP) {
+    const excess = _retiredIds.size - RETIRED_CAP
+    let i = 0
+    for (const id of _retiredIds) {
+      if (i++ >= excess) break
+      _retiredIds.delete(id)
+    }
+  }
+}
+
+function unretire(...ids: Array<string | undefined>): void {
+  for (const id of ids) {
+    if (typeof id === "string" && id.length > 0) _retiredIds.delete(id)
+  }
+}
+
+function blockIds(block: QuestionBlock): string[] {
+  return [block.toolCallId, block.id, block.requestID].filter(
+    (x): x is string => typeof x === "string" && x.length > 0,
+  )
+}
+
+function isRetiredBlock(block: QuestionBlock): boolean {
+  return blockIds(block).some((id) => _retiredIds.has(id))
+}
+
+/**
+ * Resolve the existing bar item a freshly-arrived question block belongs to,
+ * if any. Two independent feeds describe the SAME question with DIFFERENT ids:
+ * the live-stream `tool_start` (part-scoped id, no requestID) and the
+ * `question.asked` SSE event (call id + requestID). Keying only on toolCallId
+ * (the old behaviour) stacked a duplicate card whenever the two ids differed.
+ * This resolver merges by any shared id in either direction, and — when one
+ * side still lacks a requestID — adopts the single pending card for the
+ * session so the two feeds collapse into one regardless of arrival order.
+ */
+function findMergeTarget(block: QuestionBlock, envelopeSessionId?: string): QuestionBarItem | undefined {
+  const ids = blockIds(block)
+  const sid = block.sessionId || envelopeSessionId || _activeSessionId
+  // Merges are always within one session — a server requestID/callID is unique
+  // per session, and two distinct tabs must never collapse into one card. An
+  // empty item.sessionId is treated as a wildcard (legacy/streaming items that
+  // get their session repaired by a later block).
+  const inSession = (i: QuestionBarItem) => !sid || i.sessionId === sid || i.sessionId === ""
+  for (const item of state.items.values()) {
+    if (!inSession(item)) continue
+    if (ids.includes(item.toolCallId)) return item
+    if (item.requestID && ids.includes(item.requestID)) return item
+  }
+  // Dual-feed collision: collapse into the single pending card for this
+  // session when either side is missing the requestID (i.e. the streaming
+  // placeholder ↔ SSE event pairing). Two genuinely-distinct questions each
+  // carry their own requestID, so neither condition fires and both survive.
+  const pending = Array.from(state.items.values()).filter((i) => !i.answered && inSession(i))
+  if (pending.length === 1) {
+    const cand = pending[0]!
+    if (!block.requestID || !cand.requestID) return cand
+  }
+  return undefined
+}
+
 let els: QuestionBarElements | null = null
 
 // An item belongs to the active session when the ids match. Items or an
@@ -114,6 +197,7 @@ export function initQuestionBar(postMessage: (msg: Record<string, unknown>) => v
   els = { bar, items: items as HTMLDivElement, count: count as HTMLSpanElement, submitBtn: submitBtn as HTMLButtonElement }
   state.postMessage = postMessage
   state.items.clear()
+  _retiredIds.clear()
   _activeSessionId = ""
   _submitting = false
   els.items.innerHTML = ""
@@ -142,8 +226,20 @@ export function addQuestion(block: QuestionBlock, messageId: string, envelopeSes
     toolCallId = `q-${crypto.randomUUID()}`
     diag(`addQuestion: synthesized toolCallId=${toolCallId}`)
   }
-  if (state.items.has(toolCallId)) {
-    updateQuestion(toolCallId, block)
+  // A late re-emit of a question the user already answered/dismissed must not
+  // spawn OR mutate a card — checked BEFORE the merge resolver so a retired
+  // replay can't be adopted into an unrelated pending card. Answered blocks
+  // (transcript records) pass through so reload/repopulate can still render the
+  // answered state.
+  if (isRetiredBlock(block) && block.answered !== true) {
+    diag(`addQuestion: skipped retired question ${toolCallId}`)
+    return
+  }
+  // Merge into the existing card this block belongs to (handles the
+  // tool_start ↔ question.asked id mismatch) instead of stacking a duplicate.
+  const mergeTarget = findMergeTarget(block, envelopeSessionId)
+  if (mergeTarget) {
+    updateQuestion(mergeTarget.toolCallId, block)
     return
   }
 
@@ -171,7 +267,7 @@ export function addQuestion(block: QuestionBlock, messageId: string, envelopeSes
       || "",
     allowFreeText: block.allowFreeText !== false,
     selections: new Map(),
-    freeTextValue: "",
+    freeTextValues: new Map(),
     answered: block.answered === true,
     submittedValue: block.answered === true ? (block as Record<string, unknown>).answer as string | undefined : undefined,
     cardReady: new Set(),
@@ -205,14 +301,22 @@ export function updateQuestion(toolCallId: string, block: QuestionBlock): void {
   }
 
   const oldGroupCount = item.groups.length
-  item.groups = block.groups ?? []
+  const incomingGroups = block.groups ?? []
+  // Never let a partial/empty refresh wipe content we already hold. The
+  // streaming `tool_start` feed and the `question.asked` SSE feed describe one
+  // question; whichever lands second may carry empty groups (the placeholder
+  // before its args finished streaming). Merging that in must not blank a
+  // fuller card — mirrors StreamCoordinator.applyQuestionArgs' same guard.
+  if (incomingGroups.length > 0) item.groups = incomingGroups
   item.questionText = (block as Record<string, unknown>).text as string
     || (block as Record<string, unknown>).question as string
     || item.questionText
   // A refreshed block copy may omit requestID (e.g. server echo without the
   // v2 field) — never wipe one we already hold, the reply path needs it.
   item.requestID = block.requestID ?? item.requestID
-  item.allowFreeText = block.allowFreeText !== false
+  // Only let an incoming block flip allowFreeText when it actually carries
+  // question content; a bare placeholder must not toggle it off the default.
+  if (incomingGroups.length > 0) item.allowFreeText = block.allowFreeText !== false
   // If the second-arrival block (e.g. from streaming path) carries a
   // sessionId, repair the first write's empty value. Fixes RC-3/RC-4.
   if (block.sessionId) item.sessionId = block.sessionId
@@ -249,7 +353,9 @@ export function removeQuestion(toolCallIdOrRequestId: string): void {
       }
     }
   }
+  const removed = state.items.get(key)
   state.items.delete(key)
+  if (removed) retire(removed.toolCallId, removed.requestID)
   clearStalenessTimer(key)
   const el = els.items.querySelector(`[data-question-id="${key}"]`)
   if (el) el.remove()
@@ -274,6 +380,10 @@ export function markQuestionAnswered(toolCallId: string, submittedValue?: string
   const item = state.items.get(resolvedId)
   if (item) {
     item.answered = true
+    // Retire the question so a late re-emit can't resurrect an interactive
+    // card after the user has answered it (the "won't dismiss" / "piles up"
+    // failure mode). Cleared again only by an explicit unmark (retry).
+    retire(item.toolCallId, item.requestID)
     if (submittedValue !== undefined) {
       item.submittedValue = submittedValue
     }
@@ -312,6 +422,9 @@ export function unmarkQuestionAnswered(toolCallId: string): void {
   const item = state.items.get(resolvedId)
   if (!item) return
   item.answered = false
+  // The optimistic answer was rolled back (transient reply failure → user may
+  // retry), so the question is live again: un-retire it.
+  unretire(item.toolCallId, item.requestID)
   delete item.answeredAt
   delete item.submittedValue
   const old = els.items.querySelector(`[data-question-id="${resolvedId}"]`)
@@ -584,7 +697,8 @@ function updateSubmitState(): void {
     if (item.answered || !isActiveItem(item)) return false
     if (item.cardReady.size > 0) return true
     const hasSelection = Array.from(item.selections.values()).some((s) => s.size > 0)
-    return hasSelection || item.freeTextValue.trim().length > 0
+    const hasFreeText = Array.from(item.freeTextValues.values()).some((v) => v.trim().length > 0)
+    return hasSelection || hasFreeText
   })
   els.submitBtn.disabled = !hasAnySelection
 }
@@ -814,9 +928,9 @@ function buildCardElement(item: QuestionBarItem, gi: number, onAdvance?: () => v
     ta.maxLength = 10000
     ta.placeholder = "Type a custom answer\u2026"
     ta.setAttribute("aria-label", "Type a custom answer")
-    ta.value = item.freeTextValue
+    ta.value = item.freeTextValues.get(gi) ?? ""
     ta.addEventListener("input", () => {
-      item.freeTextValue = ta.value
+      item.freeTextValues.set(gi, ta.value)
       updateSubmitState()
     })
     if (item.answered || isReady) ta.disabled = true
@@ -935,57 +1049,65 @@ function submitAllAnswers(): void {
     for (const item of state.items.values()) {
       if (item.answered || !isActiveItem(item)) continue
 
-    const parts: string[] = []
-    const structuredAnswers: string[][] = []
-    let hasSelection = false
+      const parts: string[] = []
+      const structuredAnswers: string[][] = []
+      let hasSelection = false
 
-    // When per-card Ready was used, only submit groups the user explicitly
-    // marked as ready. Otherwise submit all groups with selections.
-    const useReady = item.cardReady.size > 0
+      // When per-card Ready was used, only submit groups the user explicitly
+      // marked as ready. Otherwise submit all groups with selections/text.
+      const useReady = item.cardReady.size > 0
 
-    item.groups.forEach((group, gi) => {
-      if (useReady && !item.cardReady.has(gi)) {
-        structuredAnswers.push([])
-        return
-      }
-      const chosen = Array.from(item.selections.get(gi) ?? [])
-      if (chosen.length > 0) {
-        hasSelection = true
-        const heading = group.header || group.question || `Answer ${gi + 1}`
-        parts.push(`${heading}: ${chosen.join(", ")}`)
-        structuredAnswers.push(chosen)
+      if (item.groups.length === 0) {
+        // Free-text-only question (no option groups): the single implicit
+        // group's answer IS the typed text. Keyed at index 0 by the renderer.
+        const free = (item.freeTextValues.get(0) ?? "").trim()
+        if (free) {
+          parts.push(free)
+          structuredAnswers.push([free])
+        }
       } else {
-        structuredAnswers.push([])
+        item.groups.forEach((group, gi) => {
+          if (useReady && !item.cardReady.has(gi)) {
+            structuredAnswers.push([])
+            return
+          }
+          const chosen = Array.from(item.selections.get(gi) ?? [])
+          const free = (item.freeTextValues.get(gi) ?? "").trim()
+          // Merge selected labels AND this group's custom text into ONE slot,
+          // so structuredAnswers[gi] maps 1:1 to questions[gi] — the server's
+          // `answers` contract. Appending free text as a phantom extra group
+          // (the old behaviour) made answers.length exceed questions.length,
+          // which the server could not map back → custom answers were dropped.
+          const slot = free ? [...chosen, free] : [...chosen]
+          if (chosen.length > 0) {
+            hasSelection = true
+            const heading = group.header || group.question || `Answer ${gi + 1}`
+            parts.push(`${heading}: ${chosen.join(", ")}${free ? ` — ${free}` : ""}`)
+          } else if (free) {
+            parts.push(free)
+          }
+          structuredAnswers.push(slot)
+        })
       }
-    })
 
-    // Free-text is stored per item; append it as a final group whenever it
-    // has content. This is the user's custom/personal answer and must be
-    // captured even when Ready was used to advance.
-    const free = item.freeTextValue.trim()
-    if (free) {
-      parts.push(free)
-      structuredAnswers.push([free])
+      const value = parts.join("\n")
+      if (!value) continue
+
+      state.postMessage({
+        type: "question_answer",
+        sessionId: item.sessionId,
+        toolCallId: item.toolCallId,
+        requestID: item.requestID,
+        originSessionId: item.originSessionId,
+        messageId: item.messageId,
+        value,
+        structuredAnswers,
+        source: hasSelection ? "option" : "freetext",
+      })
+
+      diag(`submitAllAnswers: posting question_answer for ${item.toolCallId} source=${hasSelection ? "option" : "freetext"} valueLen=${value.length}`)
+      markQuestionAnswered(item.toolCallId, value)
     }
-
-    const value = parts.join("\n")
-    if (!value) continue
-
-    state.postMessage({
-      type: "question_answer",
-      sessionId: item.sessionId,
-      toolCallId: item.toolCallId,
-      requestID: item.requestID,
-      originSessionId: item.originSessionId,
-      messageId: item.messageId,
-      value,
-      structuredAnswers,
-      source: hasSelection ? "option" : "freetext",
-    })
-
-    diag(`submitAllAnswers: posting question_answer for ${item.toolCallId} source=${hasSelection ? "option" : "freetext"} valueLen=${value.length}`)
-    markQuestionAnswered(item.toolCallId, value)
-  }
   } finally {
     _submitting = false
   }

@@ -314,4 +314,52 @@ describe("renderQuestionBlock", () => {
     assert.equal(answer!.source, "option")
     assert.ok((answer!.value as string).includes("Postgres"), "value contains selected option")
   })
+
+  it("RC-2: inline fallback posts per-group structuredAnswers (one slot per group, custom text merged in)", async () => {
+    const posted: Array<Record<string, unknown>> = []
+    const { renderBlock } = await import("./renderer")
+    const block = {
+      type: "question",
+      sessionId: "sess-A",
+      toolCallId: "tool-q-struct",
+      requestID: "req-q-struct",
+      groups: [{ question: "Which DB?", options: ["Postgres", "Mongo"], multiSelect: false }],
+      text: "Which DB?",
+      options: ["Postgres", "Mongo"],
+      allowFreeText: true,
+    }
+    const el = renderBlock(block, { postMessage: (m) => posted.push(m), hasQuestionInBar: () => false })
+    ;(el!.querySelectorAll(".question-block-question-item")[0] as HTMLButtonElement).click() // Postgres
+    const ta = el!.querySelector(".question-freetext") as HTMLTextAreaElement
+    ta.value = "and read replicas"
+    ta.dispatchEvent(new dom.window.Event("input", { bubbles: true }))
+    ;(el!.querySelector(".question-submit") as HTMLButtonElement).click()
+    const answer = posted.find((m) => m.type === "question_answer")!
+    // One slot per question group, with the typed custom text merged into the
+    // same slot as the selected label — not appended as a phantom extra group.
+    assert.deepEqual(answer.structuredAnswers, [["Postgres", "and read replicas"]])
+  })
+
+  it("RC-2: inline fallback custom-only answer occupies the group slot (issue #3)", async () => {
+    const posted: Array<Record<string, unknown>> = []
+    const { renderBlock } = await import("./renderer")
+    const block = {
+      type: "question",
+      sessionId: "sess-A",
+      toolCallId: "tool-q-custom-inline",
+      requestID: "req-q-custom-inline",
+      groups: [{ question: "Which DB?", options: ["Postgres", "Mongo"], multiSelect: false }],
+      text: "Which DB?",
+      options: ["Postgres", "Mongo"],
+      allowFreeText: true,
+    }
+    const el = renderBlock(block, { postMessage: (m) => posted.push(m), hasQuestionInBar: () => false })
+    const ta = el!.querySelector(".question-freetext") as HTMLTextAreaElement
+    ta.value = "SQLite, actually"
+    ta.dispatchEvent(new dom.window.Event("input", { bubbles: true }))
+    ;(el!.querySelector(".question-submit") as HTMLButtonElement).click()
+    const answer = posted.find((m) => m.type === "question_answer")!
+    assert.equal(answer.source, "freetext")
+    assert.deepEqual(answer.structuredAnswers, [["SQLite, actually"]])
+  })
 })

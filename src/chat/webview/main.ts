@@ -4321,17 +4321,20 @@ function setupTodoSkillAndSubagentPanels(): void {
           els.promptInput.focus()
           // Defer auto-send to let the stream_end handler clear streaming
           // state first, then auto-fire the send — no manual Enter needed.
-          // Use a 5-second guard window: the host can send multiple
-          // recovery messages within this window, and we must deduplicate
-          // all of them. The guard is cleared after the window expires.
+          // The host fires expired_question_recovery_failed from several paths
+          // (expired fallback, resume-in-flight, resume-failed, hard
+          // watchdog), 400-900ms apart. The guard key must survive the WHOLE
+          // window so those duplicates are dropped — deleting it here (before
+          // the window closes) was the bug that let each one paste + auto-send
+          // again, queuing duplicate prompts. Keep the key until the 5s window
+          // expires; do NOT clear it in the send timer.
           setTimeout(() => {
-            recoverySendInFlight.delete(recoveryKey)
             if (els.promptInput.value.trim().length > 0) {
               sendMessage()
             }
           }, 100)
-          // Secondary guard: clear the key after 5s even if the timeout
-          // above was somehow prevented from firing (tab switch, reload).
+          // Single owner of key cleanup: release the guard only after the full
+          // dedup window so no late duplicate slips through.
           setTimeout(() => { recoverySendInFlight.delete(recoveryKey) }, 5000)
         }
       }],

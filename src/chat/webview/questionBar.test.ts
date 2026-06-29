@@ -189,10 +189,13 @@ describe("questionBar", () => {
     assert.deepEqual(answer.structuredAnswers, [["Auth", "UI"]], "all selected labels included per group")
   })
 
-  it("multi-group question: freeText is appended as a separate group entry in structuredAnswers", () => {
-    // Free text (typed in the input) is conceptually a single implicit group
-    // appended after the structured groups. The SDK doesn't distinguish, but
-    // pushing it as its own inner-array keeps the wire shape consistent.
+  it("single-group question: a group's custom text merges INTO that group's slot (not a phantom extra group)", () => {
+    // The server's question.reply contract is one answer array per question
+    // group, in order: answers.length must equal questions.length. The old
+    // behaviour appended free text as its own trailing array ([["A"],["..."]])
+    // which made answers.length exceed questions.length, so the server could
+    // not map it back and dropped the custom answer. The selected labels and
+    // the typed custom text for a group must share that group's single slot.
     const posted: Array<Record<string, unknown>> = []
     initQuestionBar((m) => posted.push(m))
     addQuestion(makeBlock({
@@ -210,7 +213,69 @@ describe("questionBar", () => {
     freeTextEl.dispatchEvent(new dom.window.Event("input", { bubbles: true }))
     ;(document.getElementById("question-bar-submit") as HTMLButtonElement).click()
     const answer = posted.find((m) => m.type === "question_answer")!
-    assert.deepEqual(answer.structuredAnswers, [["A"], ["extra notes"]], "free text appended as separate group")
+    assert.deepEqual(
+      answer.structuredAnswers,
+      [["A", "extra notes"]],
+      "selected label + custom text share the group's single slot (one slot per group)",
+    )
+  })
+
+  it("custom-only answer (no selection): typed text is the group's slot, source=freetext", () => {
+    // Issue #3 core: when the user ONLY types a custom answer for a question
+    // with options, the wire must carry the text in the group's slot — not an
+    // empty group 0 + a phantom group 1 ([[],["..."]]) the server rejects.
+    const posted: Array<Record<string, unknown>> = []
+    initQuestionBar((m) => posted.push(m))
+    addQuestion(makeBlock({
+      id: "q-custom",
+      toolCallId: "q-custom",
+      requestID: "req-custom",
+      groups: [{ question: "Pick", options: ["A", "B"], multiSelect: false }],
+      text: "Pick",
+      options: ["A", "B"],
+    }), "msg-custom")
+    const freeTextEl = document.querySelector(".question-bar-freetext") as HTMLTextAreaElement
+    freeTextEl.value = "my own answer"
+    freeTextEl.dispatchEvent(new dom.window.Event("input", { bubbles: true }))
+    const submitBtn = document.getElementById("question-bar-submit") as HTMLButtonElement
+    assert.ok(!submitBtn.disabled, "custom text alone enables submit")
+    submitBtn.click()
+    const answer = posted.find((m) => m.type === "question_answer")!
+    assert.deepEqual(answer.structuredAnswers, [["my own answer"]], "single slot carrying the custom text")
+    assert.equal(answer.value, "my own answer")
+    assert.equal(answer.source, "freetext")
+  })
+
+  it("multi-group question: each group's custom text lands in its own slot", () => {
+    const posted: Array<Record<string, unknown>> = []
+    initQuestionBar((m) => posted.push(m))
+    addQuestion(makeBlock({
+      id: "q-mg",
+      toolCallId: "q-mg",
+      requestID: "req-mg",
+      groups: [
+        { question: "DB?", header: "Database", options: ["PG", "MySQL"], multiSelect: false },
+        { question: "Auth?", header: "Auth", options: ["Yes", "No"], multiSelect: false },
+      ],
+      text: "DB?",
+      options: ["PG", "MySQL"],
+    }), "msg-mg")
+    // Card 1 (group 0): select PG, mark ready.
+    ;(document.querySelectorAll(".qbar-carousel-card .question-bar-option")[0] as HTMLButtonElement).click()
+    ;(document.querySelector(".qbar-card-ready-btn") as HTMLButtonElement).click()
+    // Card 2 (group 1): type a custom answer instead of selecting, mark ready.
+    ;(document.querySelector(".qbar-carousel-next") as HTMLButtonElement).click()
+    const card2Free = document.querySelector(".qbar-carousel-card .question-bar-freetext") as HTMLTextAreaElement
+    card2Free.value = "OAuth only"
+    card2Free.dispatchEvent(new dom.window.Event("input", { bubbles: true }))
+    ;(document.querySelector(".qbar-card-ready-btn") as HTMLButtonElement).click()
+    ;(document.getElementById("question-bar-submit") as HTMLButtonElement).click()
+    const answer = posted.find((m) => m.type === "question_answer")!
+    assert.deepEqual(
+      answer.structuredAnswers,
+      [["PG"], ["OAuth only"]],
+      "group 0 = selected label, group 1 = its custom text — one slot per group, in order",
+    )
   })
 
   it("clearAllQuestions hides the bar", () => {
@@ -829,6 +894,104 @@ describe("questionBar", () => {
       const { getQuestionItem } = require("./questionBar")
       const item = getQuestionItem("call_full")
       assert.ok(item?.answered, "question answered despite ID mismatch")
+    })
+  })
+
+  // ── Duplicate-pileup prevention: dual-feed merge + retire guard ──────────
+  // One question reaches the bar through TWO feeds with different ids: the
+  // live-stream tool_start (part-scoped id, no requestID) and the
+  // question.asked SSE event (call id + requestID). Keying only on toolCallId
+  // stacked a duplicate card whenever the ids differed. And after a question
+  // is answered/dismissed, a late server replay or resume-stream backfill must
+  // not resurrect it. These are the "questions queued multiple times /
+  // duplicates piling up" failure modes.
+  describe("dedup and retire", () => {
+    it("collapses the streaming placeholder + SSE event into ONE card (placeholder first), adopting the requestID", () => {
+      const posted: Array<Record<string, unknown>> = []
+      initQuestionBar((m) => posted.push(m))
+      // 1) tool_start (live stream): part-scoped id, no requestID.
+      addQuestion(makeBlock({ id: "prt_1", toolCallId: "prt_1", requestID: undefined, sessionId: "sess-1" }), "msg-1", "sess-1")
+      // 2) question.asked (SSE): a DIFFERENT call id plus the real requestID.
+      addQuestion(makeBlock({ id: "call_1", toolCallId: "call_1", requestID: "que_1", sessionId: "sess-1" }), "msg-1", "sess-1")
+      const bar = document.getElementById("question-bar")!
+      assert.equal(bar.querySelectorAll(".question-bar-item").length, 1, "collapsed to a single card")
+      ;(document.querySelector(".question-bar-option") as HTMLButtonElement).click()
+      ;(document.getElementById("question-bar-submit") as HTMLButtonElement).click()
+      const answer = posted.find((m) => m.type === "question_answer")!
+      assert.equal(answer.requestID, "que_1", "card adopted the SSE requestID for the v2 reply")
+    })
+
+    it("collapses the SSE event + late streaming placeholder into ONE card (SSE first), keeping content", () => {
+      initQuestionBar(() => {})
+      addQuestion(makeBlock({ id: "call_2", toolCallId: "call_2", requestID: "que_2", sessionId: "sess-1" }), "msg-2", "sess-1")
+      // Late streaming placeholder arrives with empty groups — must neither
+      // duplicate the card nor blank its options.
+      addQuestion(makeBlock({ id: "prt_2", toolCallId: "prt_2", requestID: undefined, sessionId: "sess-1", groups: [], options: [], text: "" }), "msg-2", "sess-1")
+      const bar = document.getElementById("question-bar")!
+      assert.equal(bar.querySelectorAll(".question-bar-item").length, 1, "no duplicate from the late placeholder")
+      assert.equal(bar.querySelectorAll(".question-bar-option").length, 2, "the fuller card's options were not wiped")
+    })
+
+    it("does NOT merge two genuinely distinct questions (both carry a requestID)", () => {
+      initQuestionBar(() => {})
+      addQuestion(makeBlock({ id: "call_a", toolCallId: "call_a", requestID: "que_a", sessionId: "sess-1" }), "msg-a", "sess-1")
+      addQuestion(makeBlock({ id: "call_b", toolCallId: "call_b", requestID: "que_b", sessionId: "sess-1" }), "msg-b", "sess-1")
+      const bar = document.getElementById("question-bar")!
+      assert.equal(bar.querySelectorAll(".question-bar-item").length, 2, "two distinct questions, two cards")
+    })
+
+    it("a re-emitted question after the user answered does NOT resurrect an interactive card", () => {
+      initQuestionBar(() => {})
+      addQuestion(makeBlock({ id: "call_3", toolCallId: "call_3", requestID: "que_3" }), "msg-3")
+      markQuestionAnswered("call_3", "A")
+      removeQuestion("call_3") // host question_acknowledged clears it
+      // A late replay (server re-emit / resume-stream backfill) for the SAME question.
+      addQuestion(makeBlock({ id: "call_3", toolCallId: "call_3", requestID: "que_3" }), "msg-3")
+      const bar = document.getElementById("question-bar")!
+      assert.equal(bar.querySelectorAll(".question-bar-item").length, 0, "retired question was not re-added")
+    })
+
+    it("a dismissed (un-answered) question stays dismissed when the server replays it", () => {
+      initQuestionBar(() => {})
+      addQuestion(makeBlock({ id: "call_4", toolCallId: "call_4", requestID: "que_4" }), "msg-4")
+      removeQuestion("call_4")
+      addQuestion(makeBlock({ id: "call_4", toolCallId: "call_4", requestID: "que_4" }), "msg-4")
+      const bar = document.getElementById("question-bar")!
+      assert.equal(bar.querySelectorAll(".question-bar-item").length, 0, "replayed dismissed question not re-shown")
+    })
+
+    it("a retired replay matched only by requestID is also skipped (no resurrection via que_*)", () => {
+      initQuestionBar(() => {})
+      addQuestion(makeBlock({ id: "prt_5", toolCallId: "prt_5", requestID: "que_5" }), "msg-5")
+      markQuestionAnswered("prt_5", "A")
+      removeQuestion("prt_5")
+      // Replay carries only the requestID under a different call id.
+      addQuestion(makeBlock({ id: "call_5", toolCallId: "call_5", requestID: "que_5" }), "msg-5")
+      const bar = document.getElementById("question-bar")!
+      assert.equal(bar.querySelectorAll(".question-bar-item").length, 0, "retired by requestID stays retired")
+    })
+
+    it("an ANSWERED transcript block (block.answered=true) still repopulates after the question was retired", () => {
+      initQuestionBar(() => {})
+      addQuestion(makeBlock({ id: "call_6", toolCallId: "call_6", requestID: "que_6" }), "msg-6")
+      markQuestionAnswered("call_6", "A")
+      removeQuestion("call_6")
+      // Reload/repopulate path: the answered transcript record bypasses retire.
+      addQuestion(makeBlock({ id: "call_6", toolCallId: "call_6", requestID: "que_6", answered: true, answer: "A" }), "msg-6")
+      const bar = document.getElementById("question-bar")!
+      assert.equal(bar.querySelectorAll(".question-bar-item").length, 1, "answered record renders despite retire")
+    })
+
+    it("initQuestionBar clears the retire ledger (re-init starts fresh)", () => {
+      initQuestionBar(() => {})
+      addQuestion(makeBlock(), "msg-1")
+      markQuestionAnswered("q-1", "A")
+      removeQuestion("q-1")
+      // A fresh webview init must NOT treat the same ids as retired.
+      initQuestionBar(() => {})
+      addQuestion(makeBlock(), "msg-1")
+      const bar = document.getElementById("question-bar")!
+      assert.equal(bar.querySelectorAll(".question-bar-item").length, 1, "retire ledger reset on re-init")
     })
   })
 })

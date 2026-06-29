@@ -2294,20 +2294,31 @@ function renderQuestionBlock(block: Block, opts: RenderOptions): HTMLElement | n
     answerBtn.textContent = "Answer"
     answerBtn.addEventListener("click", () => {
       const parts: string[] = []
+      const structuredAnswers: string[][] = []
       let hasSelection = false
+      const free = inlineFreeText.trim()
       inlineGroups.forEach((g, gi) => {
         const chosen = Array.from(inlineSelections.get(gi) ?? [])
+        // The inline fallback shares a single free-text box across the block,
+        // so attach it to the first group's slot (single-group is the common
+        // inline case). Keep one slot per group so structuredAnswers[gi] maps
+        // 1:1 to questions[gi] — the server's `answers` contract.
+        const groupFree = gi === 0 ? free : ""
+        const slot = groupFree ? [...chosen, groupFree] : [...chosen]
         if (chosen.length > 0) {
           hasSelection = true
           const heading = g.header || g.question || `Answer ${gi + 1}`
           parts.push(`${heading}: ${chosen.join(", ")}`)
         }
+        structuredAnswers.push(slot)
       })
-      const free = inlineFreeText.trim()
       if (free) parts.push(free)
       const value = parts.join("\n")
       if (!value && !hasSelection && !free) return
       const finalValue = value || "(answered)"
+      // When the block had no option groups at all, the free text is the whole
+      // answer and belongs in a single slot.
+      const wireAnswers = structuredAnswers.length > 0 ? structuredAnswers : (free ? [[free]] : [])
       opts.postMessage?.({
         type: "question_answer",
         sessionId,
@@ -2315,6 +2326,7 @@ function renderQuestionBlock(block: Block, opts: RenderOptions): HTMLElement | n
         requestID,
         messageId: opts.messageId,
         value: finalValue,
+        structuredAnswers: wireAnswers,
         source: hasSelection ? "option" : "freetext",
       })
       answerBtn.disabled = true
