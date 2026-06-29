@@ -138,6 +138,7 @@ void describe("VirtualMessageList.pruneOffScreen layout cost", () => {
         d.dataset.messageId = m.id
         return d as HTMLDivElement
       },
+      () => {},
     )
     vl.start()
 

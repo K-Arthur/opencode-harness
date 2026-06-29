@@ -32,6 +32,7 @@ export class VirtualMessageList {
   private getMessageData: (id: string) => ChatMessage | undefined
   private getSession: () => SessionState | undefined
   private renderMessage: (msg: ChatMessage, opts: any) => HTMLDivElement
+  private postMessage: (msg: Record<string, unknown>) => void
 
   constructor(
     sessionId: string,
@@ -39,12 +40,14 @@ export class VirtualMessageList {
     getMessageData: (id: string) => ChatMessage | undefined,
     getSession: () => SessionState | undefined,
     renderMessage: (msg: ChatMessage, opts: any) => HTMLDivElement,
+    postMessage: (msg: Record<string, unknown>) => void,
   ) {
     this.sessionId = sessionId
     this.container = container
     this.getMessageData = getMessageData
     this.getSession = getSession
     this.renderMessage = renderMessage
+    this.postMessage = postMessage
   }
 
   start(): void {
@@ -267,12 +270,27 @@ export class VirtualMessageList {
     if (!msgData) return
 
     const session = this.getSession()
-    const opts = session ? { mode: session.mode, postMessage: (m: Record<string, unknown>) => {}, skipHeader: true } : undefined
+    const opts = session ? { mode: session.mode, postMessage: this.postMessage, skipHeader: true } : undefined
 
     try {
       const newEl = this.renderMessage(msgData, opts)
       this.observer?.unobserve(entry.placeholder)
+      // Measure placeholder height before replacement, then compensate
+      // scrollTop if the restored element differs — prevents scroll jumps
+      // when a pruned message is scrolled back into view.
+      const placeholderHeight = entry.placeholder.offsetHeight
       entry.placeholder.replaceWith(newEl)
+      const newHeight = newEl.offsetHeight
+      const heightDiff = newHeight - placeholderHeight
+      if (heightDiff !== 0) {
+        // Only compensate if the restored element is ABOVE the viewport
+        // (content below the viewport doesn't affect scroll position).
+        const msgTop = newEl.offsetTop
+        const viewportTop = this.container.scrollTop
+        if (msgTop < viewportTop) {
+          this.container.scrollTop = viewportTop + heightDiff
+        }
+      }
       entry.detached = false
       this.entries.delete(msgId)
       this.observer?.observe(newEl)
@@ -288,7 +306,7 @@ export class VirtualMessageList {
         if (!msgData) continue
 
         const session = this.getSession()
-        const opts = session ? { mode: session.mode, postMessage: (m: Record<string, unknown>) => {}, skipHeader: true } : undefined
+        const opts = session ? { mode: session.mode, postMessage: this.postMessage, skipHeader: true } : undefined
         try {
           const newEl = this.renderMessage(msgData, opts)
           entry.placeholder.replaceWith(newEl)
@@ -332,9 +350,10 @@ export function createVirtualList(
   getMessageData: (id: string) => ChatMessage | undefined,
   getSession: () => SessionState | undefined,
   renderMessage: (msg: ChatMessage, opts: any) => HTMLDivElement,
+  postMessage: (msg: Record<string, unknown>) => void,
 ): VirtualMessageList {
   disposeVirtualList(sessionId)
-  const vl = new VirtualMessageList(sessionId, container, getMessageData, getSession, renderMessage)
+  const vl = new VirtualMessageList(sessionId, container, getMessageData, getSession, renderMessage, postMessage)
   virtualLists.set(sessionId, vl)
   return vl
 }

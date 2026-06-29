@@ -2574,6 +2574,7 @@ function setupTodoSkillAndSubagentPanels(): void {
                 (id: string) => stateManager.getSession(session.id)?.messages.find((m: ChatMessage) => m.id === id),
                 () => stateManager.getSession(session.id),
                 (m: ChatMessage, opts: Parameters<typeof renderMessage>[1]) => renderMessage(m, opts),
+                (m: Record<string, unknown>) => vscode.postMessage(m),
               )
               vl.start()
             }
@@ -3499,6 +3500,7 @@ function setupTodoSkillAndSubagentPanels(): void {
                   (id: string) => stateManager.getSession(s.id)?.messages.find((m: ChatMessage) => m.id === id),
                   () => stateManager.getSession(s.id),
                   (m: ChatMessage, opts: Parameters<typeof renderMessage>[1]) => renderMessage(m, opts),
+                  (m: Record<string, unknown>) => vscode.postMessage(m),
                 )
                 vl.start()
               }

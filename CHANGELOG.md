@@ -40,6 +40,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the view to jump when switching tabs. Both handlers now only set
   `anchored=true` when at the bottom; the `onWheel`/`onTouchMove` handlers
   remain responsible for detecting user-initiated scroll-up.
+- **Edit card "Open file" button broken after scroll**: The
+  `VirtualMessageList` prune/restore cycle passed a no-op `postMessage` to
+  `renderMessage` when restoring pruned messages from placeholders. After
+  scrolling caused a message with an edit card to be pruned and then
+  restored, the "Open file" button's click handler was bound to the no-op
+  instead of the real `vscode.postMessage`. The real `postMessage` is now
+  threaded through the `VirtualMessageList` constructor and used during
+  restoration.
+- **Scroll jumps on virtual list restore**: When a pruned message was
+  restored from a placeholder, the restored element's height often differed
+  from the placeholder's fixed height, causing the viewport to jump. The
+  `restoreOne` method now measures the height difference and adjusts
+  `scrollTop` to keep the user's viewport stable.
 
 - **Oversized `workspace_files` payload drop**: Large workspaces (>256KB file
   list) were silently dropped by the `HostMessageBatcher` size guard. Added
