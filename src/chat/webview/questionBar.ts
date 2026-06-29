@@ -1,5 +1,5 @@
 import type { QuestionBlock, QuestionGroup } from "./types"
-import { REMOVE_SVG, CHECK_SVG } from "./icons"
+import { REMOVE_SVG, CHECK_SVG, WARNING_SVG } from "./icons"
 
 const log = typeof console !== "undefined" ? console : null
 const diag = (msg: string) => log?.info(`[questionBar] ${msg}`)
@@ -573,7 +573,8 @@ export function markStale(toolCallId: string): void {
 
   const icon = document.createElement("span")
   icon.className = "question-bar-stale-icon"
-  icon.textContent = "\u26A0\uFE0F "
+  // Zero-emoji policy (CONVENTIONS.md): SVG icon, not the \u26A0\uFE0F emoji.
+  icon.innerHTML = WARNING_SVG
   warning.appendChild(icon)
 
   const text = document.createElement("span")
