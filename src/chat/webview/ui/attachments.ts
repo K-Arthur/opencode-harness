@@ -2,17 +2,15 @@ import { REMOVE_SVG, DOC_TEXT_SVG, DOC_MARKDOWN_SVG, DOC_CSV_SVG, DOC_PDF_SVG, D
 import type { AttachedContextItem, ContextTraySummary } from "../types"
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+// NOTE: Must stay in sync with WebviewEventRouter.ATTACHMENT_MIME_ALLOWLIST.
+// SVG, BMP, TIFF, AVIF, HEIC/HEIF are intentionally excluded — the server's image
+// decoder (Image.normalize) only supports PNG, JPEG, GIF, and WebP. SVG is XML, not
+// raster; the others are not universally decoded by the opencode server.
 const ALLOWED_IMAGE_MIMES = [
   "image/png",
   "image/jpeg",
   "image/gif",
   "image/webp",
-  "image/svg+xml",
-  "image/bmp",
-  "image/tiff",
-  "image/avif",
-  "image/heic",
-  "image/heif",
 ] as const
 
 const ALLOWED_DOCUMENT_MIMES = [
@@ -142,11 +140,15 @@ export function createAttachmentManager(deps: AttachmentDeps): AttachmentManager
   const dismissedActiveFiles = new Set<string>()
   let nextContextId = 0
 
+  /** Tracks base64 data of images the browser could not decode (via <img> onerror). */
+  const invalidImageData = new Set<string>()
+
   function getAttachments(): Attachment[] {
     // Return a shallow copy — clearAttachments() mutates the internal array
     // in place, so callers that capture the reference before clearing would
     // see an empty array by the time they read it.
-    return [...pendingAttachments]
+    // Filter out images that the browser could not decode (onerror pre-validation).
+    return pendingAttachments.filter(a => !invalidImageData.has(a.data))
   }
 
   function attachImageBlob(blob: Blob): void {
@@ -286,6 +288,20 @@ export function createAttachmentManager(deps: AttachmentDeps): AttachmentManager
         const thumbnail = document.createElement("img")
         thumbnail.src = `data:${att.mimeType};base64,${att.data}`
         thumbnail.alt = `Attached image: ${filename}`
+        // Pre-validate that the browser can decode this image data URL. If the
+        // browser fails, the server will likely fail too (ImageDecodeError).
+        // Mark the attachment as invalid so it is excluded from the send payload.
+        thumbnail.onerror = () => {
+          invalidImageData.add(att.data)
+          chip.classList.add("attachment-chip--invalid")
+          chip.title = `Unable to decode image — ${filename}`
+          thumbnail.alt = "Undecodable image"
+          deps.postMessage({
+            type: "show_error",
+            message: `One or more pasted images could not be decoded. They will not be sent.`,
+          })
+          updatePromptContextChips()
+        }
         chip.appendChild(thumbnail)
       } else {
         chip.classList.add("attachment-chip--document")
@@ -429,6 +445,7 @@ export function createAttachmentManager(deps: AttachmentDeps): AttachmentManager
 
   function clearAttachments(): void {
     pendingAttachments.length = 0
+    invalidImageData.clear()
     renderAttachmentChips()
   }
 

@@ -34,8 +34,6 @@ const MIME_TO_EXT: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/gif": "gif",
   "image/webp": "webp",
-  "image/svg+xml": "svg",
-  "image/bmp": "bmp",
 }
 
 export interface MaterializeInput {
@@ -145,7 +143,50 @@ export function createAttachmentStorage(opts: AttachmentStorageOptions = {}): At
   const rootDir = freshRootDir(opts.rootDir)
   const livePaths = new Set<string>()
 
-  function decodeBase64(data: string): Buffer {
+  /** Magic byte prefixes for image formats supported by the opencode server. */
+  const IMAGE_MAGIC_BYTES: Record<string, [number, ReadonlyArray<number>]> = {
+    "image/png":  [0, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]],
+    "image/jpeg": [0, [0xFF, 0xD8, 0xFF]],
+    "image/gif":  [0, [0x47, 0x49, 0x46]],
+    "image/webp": [0, [0x52, 0x49, 0x46, 0x46]], // RIFF header — the WEBP chunk marker at offset 8 is checked separately
+  }
+
+  /** Check that the decoded buffer starts with the expected magic bytes for the MIME type. */
+  function validateMagicBytes(buf: Buffer, mimeType: string): void {
+    // Only validate image types that we have magic byte entries for.
+    const entry = IMAGE_MAGIC_BYTES[mimeType]
+    if (!entry) return // unknown/unsupported format — skip magic check
+    const [offset, expected] = entry
+    if (buf.length < offset + expected.length) {
+      throw new AttachmentValidationError(
+        `Attachment data too short (${buf.length} bytes) for ${mimeType} — expected at least ${offset + expected.length} bytes`,
+      )
+    }
+    for (let i = 0; i < expected.length; i++) {
+      if (buf[offset + i] !== expected[i]) {
+        throw new AttachmentValidationError(
+          `Attachment data has invalid magic bytes for ${mimeType} — file may be corrupted or mislabeled`,
+        )
+      }
+    }
+    // WebP: additionally verify the WEBP chunk marker at offset 8.
+    if (mimeType === "image/webp") {
+      if (buf.length < 12 || buf[8] !== 0x57 || buf[9] !== 0x45 || buf[10] !== 0x42 || buf[11] !== 0x50) {
+        throw new AttachmentValidationError(
+          "Attachment data has invalid WebP chunk marker — file may be corrupted",
+        )
+      }
+      // Verify RIFF chunk size matches buffer length.
+      const riffSize = buf.readUInt32LE(4)
+      if (riffSize + 8 !== buf.length) {
+        throw new AttachmentValidationError(
+          `Attachment RIFF size mismatch: expected ${riffSize + 8} bytes, got ${buf.length}`,
+        )
+      }
+    }
+  }
+
+  function decodeBase64(data: string, mimeType?: string): Buffer {
     if (typeof data !== "string" || data.length === 0) {
       throw new AttachmentValidationError("Attachment base64 payload is empty")
     }
@@ -163,6 +204,10 @@ export function createAttachmentStorage(opts: AttachmentStorageOptions = {}): At
     if (buf.length === 0) {
       throw new AttachmentValidationError("Attachment base64 payload decoded to 0 bytes")
     }
+    // Validate that the decoded bytes match the expected image format header.
+    // This catches corrupted clipboard data and MIME-vs-content mismatches before
+    // they reach the server and cause ImageDecodeError.
+    if (mimeType) validateMagicBytes(buf, mimeType)
     return buf
   }
 
@@ -191,7 +236,7 @@ export function createAttachmentStorage(opts: AttachmentStorageOptions = {}): At
   return {
     async materialize(input: MaterializeInput): Promise<MaterializedAttachment> {
       try {
-        const bytes = decodeBase64(input.data)
+        const bytes = decodeBase64(input.data, input.mimeType)
         if (bytes.length > maxBytes) {
           throw new AttachmentValidationError(
             `Attachment decoded to ${bytes.length} bytes which exceeds the ${maxBytes}-byte per-item cap`,

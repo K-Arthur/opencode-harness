@@ -83,6 +83,23 @@ describe("mapOpencodeError — grounded in actual @opencode-ai/sdk error types",
     assert.match(ctx.userMessage, /localhost:4096/)
   })
 
+  // ── ImageDecodeError ────────────────────────────────────────────────────
+  it("ImageDecodeError → IMAGE_DECODE_FAILED, severity MEDIUM, not retryable", () => {
+    const ctx = mapOpencodeError({ name: "ImageDecodeError", message: "Image could not be decoded" })
+    assert.equal(ctx.code, "IMAGE_DECODE_FAILED")
+    assert.equal(ctx.category, ErrorCategory.GENERATION)
+    assert.equal(ctx.severity, ErrorSeverity.MEDIUM)
+    assert.equal(ctx.retryable, false)
+    assert.match(ctx.userMessage, /image/i)
+    assert.ok(ctx.suggestedActions.some(a => a.action === "edit"))
+  })
+
+  it("'image could not be decoded' message → IMAGE_DECODE_FAILED without explicit name", () => {
+    const ctx = mapOpencodeError({ message: "image could not be decoded" })
+    assert.equal(ctx.code, "IMAGE_DECODE_FAILED")
+    assert.equal(ctx.retryable, false)
+  })
+
   // ── UnknownError / fallback ──────────────────────────────────────────────
   it("UnknownError → SYSTEM/medium, preserves original message", () => {
     const ctx = mapOpencodeError({ name: "UnknownError", message: "something exploded" })

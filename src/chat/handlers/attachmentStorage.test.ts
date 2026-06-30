@@ -203,6 +203,42 @@ describe("attachmentStorage — failure modes (must not break the prompt path)",
       /base64|invalid|malformed/i,
     )
   })
+
+  it("rejects PNG attachment with JPEG magic bytes (MIME-vs-content mismatch)", async () => {
+    const storage = createAttachmentStorage({ rootDir: root, platform: "linux" })
+    // Embed a tiny JPEG image into a payload typed as image/png.
+    const jpegB64 = "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AKwA="
+    await assert.rejects(
+      () => storage.materialize({ data: jpegB64, mimeType: "image/png" }),
+      /magic bytes|corrupted|mislabeled/i,
+    )
+  })
+
+  it("rejects JPEG attachment with PNG magic bytes (format mismatch)", async () => {
+    const storage = createAttachmentStorage({ rootDir: root, platform: "linux" })
+    // A valid PNG base64 typed as image/jpeg
+    const pngB64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+    await assert.rejects(
+      () => storage.materialize({ data: pngB64, mimeType: "image/jpeg" }),
+      /magic bytes|corrupted|mislabeled/i,
+    )
+  })
+
+  it("accepts valid PNG with correct MIME type (magic bytes match)", async () => {
+    const storage = createAttachmentStorage({ rootDir: root, platform: "linux" })
+    const result = await storage.materialize({ data: makeTinyPng(), mimeType: "image/png" })
+    assert.ok(result.url.startsWith("file://"))
+    assert.equal(result.fellBackToDataUrl, false)
+  })
+
+  it("accepts valid JPEG with correct MIME type (magic bytes match)", async () => {
+    const storage = createAttachmentStorage({ rootDir: root, platform: "linux" })
+    // Minimal valid JPEG (1x1 pixel)
+    const jpegB64 = "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AKwA="
+    const result = await storage.materialize({ data: jpegB64, mimeType: "image/jpeg" })
+    assert.ok(result.url.startsWith("file://"))
+    assert.equal(result.fellBackToDataUrl, false)
+  })
 })
 
 // Small helper used by the tests above to convert file:// URLs back to paths.

@@ -140,6 +140,25 @@ export function mapOpencodeError(err: OpencodeError | undefined | null): ErrorCo
     })
   }
 
+  // ── 3b. Image decode failure (ImageDecodeError) ───────────────────────────
+  // Server-side: the Image.normalize step in SessionPrompt.createUserMessage
+  // throws when it cannot decode a file part as an image. The image may be
+  // corrupted, in an unsupported format, or have a MIME-vs-content mismatch.
+  if (name === "ImageDecodeError" || /image (could not be decoded|decoding failed|decode error)/i.test(message)) {
+    return makeContext({
+      code: "IMAGE_DECODE_FAILED",
+      category: ErrorCategory.GENERATION,
+      severity: ErrorSeverity.MEDIUM,
+      message,
+      userMessage: "One or more attached images could not be decoded. Try a different image format (PNG, JPEG, GIF, WebP) or re-capture the image.",
+      actions: [
+        { label: "Edit prompt", action: "edit", primary: true },
+      ],
+      retryable: false,
+      technical,
+    })
+  }
+
   // ── 4. APIError (HTTP-level) ──────────────────────────────────────────────
   if (name === "APIError" || typeof statusCode === "number") {
     return mapApiError(statusCode ?? 0, message, isRetryable, technical)

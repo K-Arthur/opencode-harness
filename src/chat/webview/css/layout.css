@@ -2408,6 +2408,26 @@ button.modal-session-item:focus {
   object-fit: cover;
 }
 
+.attachment-chip--invalid {
+  border-color: var(--vscode-inputValidation-errorBorder, var(--oc-error, #f14c4c));
+  outline: 1px solid var(--vscode-inputValidation-errorBorder, var(--oc-error, #f14c4c));
+  opacity: 0.6;
+}
+
+.attachment-chip--invalid::before {
+  content: "!";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: var(--oc-font-size-xl, 20px);
+  font-weight: bold;
+  color: var(--vscode-inputValidation-errorForeground, var(--oc-error, #f14c4c));
+  z-index: 1;
+  pointer-events: none;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+}
+
 /* SVG attachment indicator (replaces emoji ::after) — shown on image chips
    on hover. Uses a data-URI paperclip icon matching the icons.ts style. */
 .attachment-chip--image::after {
