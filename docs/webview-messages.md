@@ -317,9 +317,16 @@ search queries) via a `Set<string>` of command names.
 - `push_all_state` / `push_visible_state`: Legacy host message types retained as a
   defensive webview fallback. Normal restoration must not route through these messages,
   because host → webview → `request_state_sync` ping-pong can delay or repeat restore.
-- `mode_change_result`: Host acknowledgement for a `change_mode` request. When
+- `mode_change_result`: Host acknowledgement for a `change_mode` request. Also fires as a
+  backstop from `ChatProvider.onModeChanged` whenever any code path calls `tabManager.setMode`
+  (e.g. `ensureLocalTab` reconciling an existing tab with `SessionStore`), ensuring the
+  webview is always notified even when the caller forgets the explicit `postMessage`. When
   `accepted` is false, the payload carries the previous mode so the webview can keep the
   visible selector in sync after invalid payloads or cancelled Auto-mode confirmation.
+- `fork_created`: Host notification that a session has been forked (from `fork_session`).
+  The webview creates a local tab for the forked session. Includes `mode` so the fork
+  inherits the source session's mode instead of defaulting to `"build"`.
+  Payload: `{ type, sessionId, name, mode, parentSessionId?, forkedAtTurn? }`.
 - `open_model_manager`: Host message to open the model manager panel. Optional
   `forRegeneration` flag indicates the panel was opened for model selection during
   regeneration; optional `messageId` identifies the message being regenerated.
