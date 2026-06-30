@@ -1518,13 +1518,22 @@ export function handleStreamError(
   // (stream retries, repeated server "error" statuses for one fault). If the
   // most recent message is already an identical error card, refresh it in place
   // instead of stacking another out-of-flow copy for the same thing.
+  // Match on correlationId first (more precise), fall back to userMessage.
   const lastMsg = messages[messages.length - 1]
   const lastBlock = lastMsg?.role === "system" ? lastMsg.blocks?.[0] : undefined
   const lastErrMessage = lastBlock?.type === "error" ? (lastBlock as { message?: string }).message : undefined
-  if (lastMsg && lastErrMessage !== undefined && lastErrMessage === errorContext.userMessage) {
-    lastMsg.timestamp = Date.now()
-    saveState()
-    return
+  const lastErrCorrelation = lastBlock?.type === "error" ? (lastBlock as { correlationId?: string }).correlationId : undefined
+  if (lastMsg) {
+    if (errorContext.correlationId && lastErrCorrelation && lastErrCorrelation === errorContext.correlationId) {
+      lastMsg.timestamp = Date.now()
+      saveState()
+      return
+    }
+    if (lastErrMessage !== undefined && lastErrMessage === errorContext.userMessage) {
+      lastMsg.timestamp = Date.now()
+      saveState()
+      return
+    }
   }
 
   const errorDisplay = getErrorDisplay()
@@ -1545,7 +1554,7 @@ export function handleStreamError(
    const errMsg: ChatMessage = {
      role: "system",
      id: `error-${crypto.randomUUID()}`,
-     blocks: [createErrorBlock("stream_error", errorContext.userMessage, errorContext.retryable ?? false, errorContext.technicalDetails, actionButtons)],
+     blocks: [createErrorBlock("stream_error", errorContext.userMessage, errorContext.retryable ?? false, errorContext.technicalDetails, actionButtons, errorContext.correlationId)],
      timestamp: Date.now(),
    }
   messages.push(errMsg)

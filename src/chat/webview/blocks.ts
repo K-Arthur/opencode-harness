@@ -35,8 +35,10 @@ export function createThinkingBlock(content: string, streaming: boolean, tokenCo
   return { type: "thinking", content, streaming, tokenCount }
 }
 
-export function createErrorBlock(code: string, message: string, retryable: boolean, detail?: string, actionButtons?: ErrorActionButton[]): Block {
-  return { type: "error", code, message, retryable, detail, actionButtons }
+export function createErrorBlock(code: string, message: string, retryable: boolean, detail?: string, actionButtons?: ErrorActionButton[], correlationId?: string): Block {
+  const block: Block = { type: "error", code, message, retryable, detail, actionButtons }
+  if (correlationId) block.correlationId = correlationId
+  return block
 }
 
 export function createImageBlock(data: string, mimeType: string): Block {

@@ -3689,7 +3689,8 @@ function setupTodoSkillAndSubagentPanels(): void {
         const errText = typeof raw.error === "string" ? raw.error as string : "Provider configuration error."
         const pId = typeof raw.providerId === "string" ? raw.providerId as string : undefined
         if (pId) onProviderKeyResult(pId, false, errText)
-        handleRequestError(stateManager.getState().activeSessionId ?? undefined, `Provider error: ${errText}`)
+        const errorContext = pId ? { providerID: pId, code: "PROVIDER_ERROR", category: "auth" as const, severity: "medium" as const } : undefined
+        handleRequestError(stateManager.getState().activeSessionId ?? undefined, `Provider error: ${errText}`, errorContext)
       }],
       ["provider_list", (msg) => {
         const providers = (msg as Record<string, unknown>).providers as ProviderConfig[] | undefined
