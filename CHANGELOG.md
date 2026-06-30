@@ -15,10 +15,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > move items from `[Unreleased]` to the new version section and update the date.
 > Never leave features marked as "unreleased" after they are shipped.
 
-## [Unreleased]
+## [0.4.40] — 2026-06-30
+
+### Added
+
+- **Automatic provider switching on quota exhaustion**: When a provider's quota
+  is exhausted (HTTP 402) and the user clicks "Switch Provider", the webview
+  now auto-selects a fallback model from a different provider, updates the
+  session model, and triggers a seamless retry via `regenerate_with_model`.
+  A system notification shows "Auto-switched from {provider} to {model}."
+  Fallback selection prioritizes favorites, then enabled models from non-exhausted
+  providers (alphabetical by provider then model ID).
+  ([`f552db9`](https://github.com/K-Arthur/opencode-harness/commit/f552db9))
+- **Clickable markdown file-path links**: File paths rendered in markdown code
+  fences (e.g. `` `src/foo.ts` ``) are now clickable — clicking opens the file
+  in the VS Code editor via `opencode-diff://` content provider.
+  ([`896c5bb`](https://github.com/K-Arthur/opencode-harness/commit/896c5bb))
 
 ### Fixed
 
+- **Provider errors carry structured context**: `provider_error` messages now
+  include the provider ID in their error context, enabling richer action
+  suggestions and integration with the auto-provider-switching feature.
+  Previously they passed only a bare string and lost the provider identity.
+  ([`bf602e8`](https://github.com/K-Arthur/opencode-harness/commit/bf602e8))
+- **Error dedup uses `correlationId`**: Duplicate error cards are now coalesced
+  using `correlationId` (more precise) in addition to user-message text,
+  preventing two distinct errors with the same display text from being
+  incorrectly suppressed. `createErrorBlock` now accepts and stores
+  `correlationId`.
+  ([`bf602e8`](https://github.com/K-Arthur/opencode-harness/commit/bf602e8))
+- **Tier A/B error banner CTAs reach the host**: "Switch Provider", "Retry",
+  and "Upgrade Plan" buttons on hard-block (Tier A) and infrastructure (Tier B)
+  error banners were silently dropped as "Unknown webview message type:
+  error_action". Added a handler in `WebviewEventRouter` that dispatches
+  retry/switch_model/upgrade_plan to the existing host flows.
+  ([`361b119`](https://github.com/K-Arthur/opencode-harness/commit/361b119))
+- **Provider ID threaded through error wire boundary**: The provider ID
+  (e.g. `"openai"`) is now carried through the entire error pipeline —
+  `ErrorContext` → `BaseErrorPayload` → `toWebviewErrorPayload` →
+  `normalizeIncomingError` → `toErrorContext` — so the webview can identify
+  which provider caused the error. Previously it was lost during serialization.
+  ([`361b119`](https://github.com/K-Arthur/opencode-harness/commit/361b119))
+- **`ImageDecodeError` mapping and pre-validation**: Images attached to prompts
+  are now pre-validated on the client side with magic-byte checks. SVG files
+  are detected and excluded from image processing. Proper error mapping with
+  user-facing messages for unsupported or corrupted image formats.
+  ([`33b8923`](https://github.com/K-Arthur/opencode-harness/commit/33b8923))
+- **SVG restored as document attachment**: `image/svg+xml` files are now
+  treated as document attachments (injected as XML text) instead of being
+  rejected as unsupported images. This restores the ability to attach SVG icons
+  and diagrams to prompts.
+  ([`c2e1639`](https://github.com/K-Arthur/opencode-harness/commit/c2e1639))
+- **Queued/interrupted prompts no longer vanish**: Prompts queued via the steer
+  queue, or interrupted mid-stream before any output arrived, were silently
+  removed from the conversation history. They now remain in the conversation as
+  user messages so the user can re-send or edit them.
+  ([`8bf74eb`](https://github.com/K-Arthur/opencode-harness/commit/8bf74eb))
+- **Mode persistence: five root causes fixed**:
+  1. `SessionState.pendingMode` was not persisted on tab switch; now stored via
+     `setSessionMode` before switching.
+  2. `init_state` for resumed sessions used `model` or `"build"` hardcoded;
+     now reads `pendingMode` for the correct mode.
+  3. `onModeChanged` backstop added to `SessionStore` — fires when the server
+     pushes a mode update, ensuring the webview stays in sync.
+  4. `fork_created` session messages now carry the parent session's `mode`
+     field, so forked conversations inherit the correct mode.
+  5. `streamOrchestrator`'s auto-created fallback sessions used hardcoded
+     `"build"`; now reads `tab.mode` or `stateManager.getPendingMode()`.
+  ([`000f2e5`](https://github.com/K-Arthur/opencode-harness/commit/000f2e5),
+  [`c432142`](https://github.com/K-Arthur/opencode-harness/commit/c432142),
+  [`8d55f30`](https://github.com/K-Arthur/opencode-harness/commit/8d55f30))
 - **Oversized `workspace_files` payload drop**: Large workspaces (>256KB file
   list) were silently dropped by the `HostMessageBatcher` size guard. Added
   `workspace_files` to `IMMEDIATE_TYPES` so it bypasses the guard — the webview
@@ -34,20 +101,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fingerprint dirty-check to skip posting when the slim snapshot hasn't changed.
 - **Question bar resurrection on tab switch**: Answered questions were re-added
   to the question bar by `repopulateFromMessages` on every tab switch, causing
-  the bar to pop back up when the user closed it and returned to the tab.
-  Answered questions are already visible in the chat transcript — the bar now
-  only shows interactive (unanswered) questions.
+  the bar to pop back up when the user closed it. Answered questions are already
+  visible in the transcript — the bar now only shows interactive (unanswered)
+  questions.
 - **Sessionless `file_edited` cross-session contamination**: When multiple
   sessions were streaming, sessionless `file_edited` events were dropped
   unconditionally. Now the active tab is preferred if it's one of the streaming
   tabs. If the active tab isn't streaming, the event is dropped rather than
-  guessed — attributing to a random streaming tab causes file changes from
-  session A to appear in session B's dropdown.
-- **Stuck `maybeFinalizeStream` after grace timeout**: `markUnresolvedPendingToolCalls`
-  marked tools as "unresolved" in the tracker but didn't remove them from
-  `activeToolCallIds`, so `getFinalizeDeferReason` kept seeing them as "still
-  running" and the stream never finalized. Now unresolved tool IDs are removed
-  from `activeToolCallIds` after being marked.
+  guessed.
+- **Stuck `maybeFinalizeStream` after grace timeout**:
+  `markUnresolvedPendingToolCalls` marked tools as unresolved but didn't remove
+  them from `activeToolCallIds`, so the stream never finalized. Unresolved tool
+  IDs are now removed from `activeToolCallIds`.
+- **Live-stream replay deduplication**: Concurrent `handleStreamStart` calls
+  or repeated `streaming_state` pushes could replay the same live stream
+  multiple times, duplicating output and corrupting tool state. Added
+  `replayDedup` Map keyed by message ID — replays for an already-seen message
+  are skipped. The dedup is cleared on `webview_ready` and on visibility
+  changes so a genuine reconnection replays correctly.
+  ([`2622a9a`](https://github.com/K-Arthur/opencode-harness/commit/2622a9a),
+  [`f85299a`](https://github.com/K-Arthur/opencode-harness/commit/f85299a),
+  [`fce2830`](https://github.com/K-Arthur/opencode-harness/commit/fce2830))
+- **`init_state` no longer follows host active session when prior tab is lost**:
+  When the webview reloaded and the host pushed its active session, the
+  `init_state` handler would auto-switch to it even if the user was viewing a
+  different session before the reload. Now it preserves the user's last tab
+  from local state.
+  ([`74aba19`](https://github.com/K-Arthur/opencode-harness/commit/74aba19))
+- **Question-bar session attribution hardened**: The question bar's
+  `getQuestionItem` now correctly maps questions to sessions by server
+  session ID, preventing questions from one session appearing in another.
+  The "stop recovery auto-switch" guard prevents a background session's
+  recovery from stealing focus.
+  ([`93ded58`](https://github.com/K-Arthur/opencode-harness/commit/93ded58))
+
+## [Unreleased]
 
 ## [0.4.36] — 2026-06-29
 
