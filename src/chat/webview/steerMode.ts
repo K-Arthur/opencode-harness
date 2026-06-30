@@ -1,5 +1,7 @@
 import type { ElementRefs } from "./dom"
 import type { SendLogicDeps } from "./sendTypes"
+import type { ChatMessage } from "./types"
+import { generateUserMessageId } from "../../session/messageId"
 
 export function getCurrentSteerMode(
   stateManager: SendLogicDeps["stateManager"],
@@ -59,6 +61,7 @@ export function sendSteerPrompt(
     attachmentManager,
     renderAttachmentChips,
     autoResizeTextarea,
+    addMessage,
   } = deps
 
   const active = stateManager.getActiveSession()
@@ -88,6 +91,23 @@ export function sendSteerPrompt(
     }
   }
 
+  // Build and persist the user message optimistically in the webview's local state,
+  // matching the normal send path (sendMessage.ts:237-254). The same id is sent to
+  // the host so the host-side SessionStore entry (added by SteerPromptHandler) uses
+  // the same id, preventing duplicates on drain.
+  const userMessageId = generateUserMessageId()
+  const msgObj: ChatMessage = {
+    role: "user",
+    id: userMessageId,
+    blocks: [
+      ...(sendText ? [{ type: "text" as const, text: sendText }] : []),
+      ...imageAttachments.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType })),
+    ],
+    timestamp: Date.now(),
+    sessionId: active.id,
+  }
+  addMessage(active.id, msgObj)
+
   attachmentManager.clearAttachments()
   renderAttachmentChips()
   // modeOverride is a one-shot (Cmd/Ctrl+Enter → interrupt) and must NOT mutate the
@@ -97,6 +117,7 @@ export function sendSteerPrompt(
     text: sendText,
     sessionId: active.id,
     mode: modeOverride ?? getCurrentSteerModeFn(),
+    userMessageId,
     ...(imageAttachments.length > 0 ? { attachments: imageAttachments } : {}),
   })
   els.promptInput.value = ""

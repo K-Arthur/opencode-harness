@@ -152,4 +152,5 @@ export interface SteerPrompt {
   mode: 'interrupt' | 'queue'
   timestamp: number
   sessionId: string
+  userMessageId?: string
 }

@@ -1,8 +1,9 @@
 import { StreamCoordinator } from "./StreamCoordinator"
 import { SessionStore } from "../../session/SessionStore"
-import type { SteerPrompt } from "../webview/types"
+import type { SteerPrompt, ChatMessage, Block } from "../types"
 import type { HostPromptQueue } from "../HostPromptQueue"
 import { log } from "../../utils/outputChannel"
+import { generateUserMessageId } from "../../session/messageId"
 
 export interface StreamCallbacks {
   postMessage: (msg: Record<string, unknown>) => void | boolean | Thenable<boolean | void>
@@ -84,6 +85,7 @@ export class SteerPromptHandler {
 
   /**
    * Interrupt mode: Abort current stream and send steer prompt immediately.
+   * Persists the user message to SessionStore at submit time (same as normal path).
    */
   private async handleInterrupt(
     sessionId: string,
@@ -93,18 +95,32 @@ export class SteerPromptHandler {
     log.info(`[SteerPromptHandler] Interrupt mode: aborting stream for ${sessionId}`)
     
     try {
+      // Build and persist the user message BEFORE abort, so it's in history
+      // even if the abort or subsequent startPrompt fails.
+      const userMessageId = steerPrompt.userMessageId || generateUserMessageId()
+      const textBlocks: Block[] = steerPrompt.text.trim() ? [{ type: "text", text: steerPrompt.text }] : []
+      const imageBlocks: Block[] = (steerPrompt.attachments || []).map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType }))
+      const userMsg: ChatMessage = {
+        role: "user",
+        id: userMessageId,
+        blocks: [...textBlocks, ...imageBlocks],
+        timestamp: Date.now(),
+        sessionId,
+      }
+      this.sessionStore.appendMessage(sessionId, userMsg)
+      callbacks.postMessage({ type: "add_message", sessionId, message: userMsg })
+
       // Abort current stream
       await this.streamCoordinator.abort(sessionId, callbacks)
       
-      // Send steer prompt immediately
+      // Send steer prompt immediately, reusing the same user message id
       await this.streamCoordinator.startPrompt({
         tabId: sessionId,
         text: steerPrompt.text,
         callbacks,
         attachments: steerPrompt.attachments,
+        identity: { userMessageId },
       })
-      
-      // Track the steer prompt for history
     } catch (error) {
       log.error(`[SteerPromptHandler] Error in interrupt mode: ${error}`)
       throw error
@@ -114,7 +130,9 @@ export class SteerPromptHandler {
   /**
    * Queue mode: Add to HostPromptQueue.
    * The queue is drained by StreamCoordinator.onQueueDrain after stream end.
-   * A queue_state message is pushed to the webview so it can update the UI.
+   * Persists the user message to SessionStore AT QUEUE TIME so it survives
+   * reloads even if the queue never drains. drainQueuedPrompt reuses the same
+   * id for the actual send.
    */
   private async handleQueue(
     sessionId: string,
@@ -124,12 +142,28 @@ export class SteerPromptHandler {
     log.info(`[SteerPromptHandler] Queue mode: enqueuing for ${sessionId}`)
     
     try {
+      // Build and persist the user message immediately at queue-time,
+      // so it appears in history even if the queue never drains.
+      const userMessageId = steerPrompt.userMessageId || generateUserMessageId()
+      const textBlocks: Block[] = steerPrompt.text.trim() ? [{ type: "text", text: steerPrompt.text }] : []
+      const imageBlocks: Block[] = (steerPrompt.attachments || []).map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType }))
+      const userMsg: ChatMessage = {
+        role: "user",
+        id: userMessageId,
+        blocks: [...textBlocks, ...imageBlocks],
+        timestamp: Date.now(),
+        sessionId,
+      }
+      this.sessionStore.appendMessage(sessionId, userMsg)
+      callbacks.postMessage({ type: "add_message", sessionId, message: userMsg })
+
       const id = this.hostQueue.enqueue(sessionId, {
         text: steerPrompt.text,
         sessionId,
         attachments: steerPrompt.attachments || [],
         mode: "queue",
         isSteerPrompt: true,
+        userMessageId,
       })
       
       if (id) {

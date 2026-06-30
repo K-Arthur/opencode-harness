@@ -1815,6 +1815,32 @@ export class StreamCoordinator {
     return this.abortRegistry.wasIntentional(tabId, serverMessageId, Date.now())
   }
 
+  /**
+   * Build partial assistant blocks from the tab's live buffers at abort time.
+   * Mirrors mergeFinalBlocks logic but without server blocks.
+   */
+  private buildAbortBlocks(tabId: string): Block[] {
+    const tab = this.tabManager.getTab(tabId)
+    if (!tab) return []
+    const blocks: Block[] = []
+
+    if (tab.blocksBuffer && tab.blocksBuffer.length > 0) {
+      blocks.push(...tab.blocksBuffer)
+    } else if (tab.streamingBuffer) {
+      const cleanedText = this.stripContextWrapper(tab.streamingBuffer)
+      if (cleanedText.trim()) {
+        blocks.push({ type: "text", text: cleanedText })
+      }
+    }
+
+    // Append interruption marker if there was any partial content
+    if (blocks.length > 0) {
+      blocks.push({ type: "text", text: "\n\n*[Response interrupted by user]*" })
+    }
+
+    return blocks
+  }
+
   async abort(tabId: string, callbacks: StreamCallbacks): Promise<void> {
     const tab = this.tabManager.getTab(tabId)
     if (!tab || !tab.cliSessionId || !this.getSm(tabId).isRunning) return
@@ -1833,13 +1859,23 @@ export class StreamCoordinator {
     try {
       const streamMessageId = this.ensureStreamMessageId(tabId, tab.cliSessionId || tabId)
       await this.getSm(tabId).abortSession(tab.cliSessionId)
+
+      // Capture partial assistant content from live buffers and persist it
+      // before posting stream_end. This ensures the partial text/tool blocks
+      // survive in SessionStore (and are rendered by the webview) instead of
+      // being dropped as they were before.
+      const abortBlocks = this.buildAbortBlocks(tabId)
+      if (abortBlocks.length > 0) {
+        this.storeAssistantMessage(tabId, streamMessageId, abortBlocks, undefined)
+      }
+
       const snapshot = this.activityTracker.markRunCancelled(tabId, "User cancelled the run")
       this.postRunActivitySnapshot(tabId, snapshot, callbacks)
       callbacks.postMessage({
         type: "stream_end",
         sessionId: tabId,
         messageId: streamMessageId,
-        blocks: [],
+        blocks: abortBlocks,
         reason: "aborted",
         seq: this.nextSeq(tabId),
       })
@@ -2475,6 +2511,7 @@ export class StreamCoordinator {
     this.tabManager.setWaitingForCompletion(tabId, false)
     this.tabManager.clearCompletionTimeout(tabId)
     this.tabManager.clearBuffer(tabId)
+    this.tabManager.clearBlocksBuffer(tabId)
     this.stuckStreamHandlers.delete(tabId)
     this.toolCallCounts.delete(tabId)
     this.activeToolCallIds.delete(tabId)

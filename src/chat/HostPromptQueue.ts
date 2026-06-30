@@ -15,6 +15,8 @@ export interface QueuedPrompt {
   state: QueuedPromptState
   createdAt: number
   error?: string
+  /** ID of the user message in SessionStore, set at queue-time for dedup at drain-time. */
+  userMessageId?: string
 }
 
 /**
@@ -150,6 +152,19 @@ export class HostPromptQueue {
     const queue = this.queues.get(sessionId)
     if (!queue) return false
     return queue.some(i => i.state === "queued")
+  }
+
+  /**
+   * Return all session IDs that have items in the queue.
+   */
+  getActiveSessionIds(): string[] {
+    const ids: string[] = []
+    for (const [sid, queue] of this.queues.entries()) {
+      if (queue.some(i => i.state === "queued" || i.state === "sending")) {
+        ids.push(sid)
+      }
+    }
+    return ids
   }
 
   /**

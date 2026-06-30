@@ -733,6 +733,7 @@ export type HostMessage =
   | { type: "variant_update"; variant: string }
   | { type: "open_model_manager"; forRegeneration?: boolean; messageId?: string }
   | { type: "mode_change_result"; sessionId: string; mode: "plan" | "build" | "auto"; accepted: boolean; reason?: string }
+  | { type: "suggest_mode_switch"; sessionId: string; targetMode: "build" | "auto" }
   | { type: "model_list"; items: ModelInfo[] }
   | { type: "mention_results"; items: MentionItem[]; query: string }
   | { type: "active_file"; path: string | null; languageId?: string; lineCount?: number; selection?: { startLine: number; endLine: number; text: string } | null }
@@ -877,6 +878,7 @@ export interface SteerPrompt {
   mode: 'interrupt' | 'queue'
   timestamp: number
   sessionId: string
+  userMessageId?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -888,7 +890,7 @@ export type WebviewMessage =
   | { type: "init_ack" }
   | { type: "create_tab" }
   | { type: "send_prompt"; sessionId: string; text: string; messageId: string; clientRequestId?: string; model: string; mode?: string; variant?: string; attachments?: Attachment[]; isSteerPrompt?: boolean; contextItems?: AttachedContextItem[] }
-  | { type: "send_steer_prompt"; id: string; text: string; attachments: Attachment[]; mode: "interrupt" | "queue"; sessionId: string }
+  | { type: "send_steer_prompt"; id: string; text: string; attachments: Attachment[]; mode: "interrupt" | "queue"; sessionId: string; userMessageId?: string }
   | { type: "change_mode"; mode: string; sessionId: string }
   | { type: "set_model"; model: string; sessionId?: string }
   | { type: "set_variant"; variant: string; sessionId: string }
@@ -1043,6 +1045,9 @@ export type WebviewMessage =
   | { type: "revert_all_files"; sessionId: string }
   /** Toggle chat text direction (LTR/RTL); host persists to globalState */
   | { type: "chat_dir_change"; direction: "ltr" | "rtl" }
+  /** User response to a suggest_mode_switch prompt. persist=true means "always
+   *  switch for this session without asking." */
+  | { type: "plan_complete_preference"; sessionId: string; targetMode: "build" | "auto"; persist: boolean }
 
 // Backward-compatible alias
 export type LegacyWebviewMessage = WebviewMessage & Record<string, unknown>

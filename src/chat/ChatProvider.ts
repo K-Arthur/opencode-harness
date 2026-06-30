@@ -99,6 +99,7 @@ const STEP_FINISH_BACKSTOP_DELAY_MS = 500
 export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   static readonly PERSISTED_PANEL_STATE_KEY = "opencode.panelVisibility"
   static readonly CHAT_DIRECTION_KEY = "opencode-harness.chatDirection"
+  static readonly MODE_SWITCH_PREF_KEY = "opencode-harness.modeSwitchPreference"
   private _view?: vscode.WebviewView
   /** Optional hook invoked when the chat view is first resolved, used to lazily
    *  spawn the opencode server (idempotent; safe to call on every re-resolve). */
@@ -295,7 +296,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       refreshModels: () => this.modelManager.refreshModels(this.sessionManager.currentPort, this.sessionManager.authHeader),
     })
     this.modelManager.setProviderConfigManager(this.providerConfigManager)
-    this.hostQueue = new HostPromptQueue(this.context.globalState, false)
+    this.hostQueue = new HostPromptQueue(this.context.workspaceState, false)
     this.steerPromptHandler = new SteerPromptHandler(
       this.streamCoordinator,
       this.sessionStore,
@@ -456,6 +457,8 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       persistChatDirection: (direction) => this.persistChatDirection(direction),
       openSubagentDetailPanel: (parentSessionId, subagentId) => this.openSubagentDetailPanel(parentSessionId, subagentId),
       postSubagentDetailToPopouts: (detail, subagentId) => this.postSubagentDetailToPopouts(detail, subagentId),
+      applySessionMode: (sessionId, mode) => this.applySessionMode(sessionId, mode),
+      handlePlanCompletePreference: (sessionId, targetMode, persist) => this.handlePlanCompletePreference(sessionId, targetMode, persist),
     })
     this.eventRouter.initialize()
 
@@ -841,6 +844,66 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
     if (activeTab) {
       this.postMessage({ type: "set_mode", mode, sessionId: activeTab.id })
     }
+  }
+
+  /** Canonical mode-application: mutates both TabManager (in-memory) and
+   *  SessionStore (persistent), then acks to the webview via mode_change_result.
+   *  Extracted from the WebviewEventRouter change_mode handler so both the
+   *  user-driven path and the programmatic "plan complete" suggestion converge. */
+  applySessionMode(sessionId: string, mode: string): boolean {
+    const normalized = normalizeSessionMode(mode)
+    if (!normalized) {
+      const previous = this.tabManager.getTab(sessionId)?.mode ?? this.sessionStore.get(sessionId)?.mode ?? "build"
+      this.postMessage({ type: "mode_change_result", accepted: false, sessionId, mode: previous, reason: "invalid_mode" })
+      return false
+    }
+    if (!this.tabManager.setMode(sessionId, normalized)) {
+      const previous = this.tabManager.getTab(sessionId)?.mode ?? this.sessionStore.get(sessionId)?.mode ?? "build"
+      this.postMessage({ type: "mode_change_result", accepted: false, sessionId, mode: previous, reason: "tab_not_found" })
+      return false
+    }
+    this.sessionStore.updateMode(sessionId, normalized)
+    this.postMessage({ type: "mode_change_result", accepted: true, sessionId, mode: normalized })
+    return true
+  }
+
+  /** Persist a "don't ask again" mode-switch preference for a session. */
+  handlePlanCompletePreference(sessionId: string, targetMode: string, persist: boolean): void {
+    if (!persist) return
+    const prefs: Record<string, { targetMode: string }> = this.context.globalState.get(ChatProvider.MODE_SWITCH_PREF_KEY) ?? {}
+    prefs[sessionId] = { targetMode }
+    void this.context.globalState.update(ChatProvider.MODE_SWITCH_PREF_KEY, prefs)
+  }
+
+  /** Check whether the user has a stored "always switch" preference for a session. */
+  private readModeSwitchPreference(sessionId: string): "build" | "auto" | null {
+    const prefs: Record<string, { targetMode: string }> | undefined = this.context.globalState.get(ChatProvider.MODE_SWITCH_PREF_KEY)
+    if (!prefs?.[sessionId]) return null
+    const mode = prefs[sessionId].targetMode
+    return mode === "build" || mode === "auto" ? mode : null
+  }
+
+  /** After a plan-mode stream completes normally, suggest switching out of plan
+   *  mode. Checks the config gate, avoids re-asking if already decided. */
+  private maybeSuggestModeSwitch(sessionId: string): void {
+    // Config gate
+    const config = vscode.workspace.getConfiguration("opencode.planMode")
+    if (!config.get<boolean>("suggestOnComplete", true)) return
+
+    // Session must still be in plan mode (user may have already switched manually)
+    const tab = this.tabManager.getTab(sessionId)
+    if (!tab || tab.mode !== "plan") return
+
+    // Check for a persistent "always" preference
+    const preferred = this.readModeSwitchPreference(sessionId)
+    if (preferred) {
+      // Auto-switch without asking (user previously selected "Always")
+      this.applySessionMode(sessionId, preferred)
+      return
+    }
+
+    const targetMode = config.get<"build" | "auto">("suggestTarget", "build")
+    this.postMessage({ type: "suggest_mode_switch", sessionId, targetMode })
   }
 
   async setupVoiceInput(): Promise<void> {
@@ -2536,6 +2599,12 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     // F15: Notify when turn completes and webview is not visible
     if (msg.type === "stream_end") {
       this.notifyTurnComplete()
+      // Plan-mode completion detection: offer to switch to build/auto mode
+      const sessionId = typeof msg.sessionId === "string" ? msg.sessionId : undefined
+      const reason = typeof msg.reason === "string" ? msg.reason : undefined
+      if (sessionId && reason !== "aborted" && reason !== "error" && reason !== "ttfb_timeout" && reason !== "hard_timeout") {
+        this.maybeSuggestModeSwitch(sessionId)
+      }
     }
   }
 

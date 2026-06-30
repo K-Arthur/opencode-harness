@@ -324,19 +324,36 @@ export class WebviewEventRouter {
     ["send_prompt", async (msg: Record<string, unknown>, sessionId?: string) => {
       if (sessionId && this.hasPromptContent(msg)) {
         if (this.promptsInFlight.has(sessionId)) {
-          // Queue at host layer instead of silently dropping
+          // Queue at host layer instead of silently dropping.
+          // Persist the user message to SessionStore immediately so it's not lost
+          // even if the queue never drains (tab close, stream timeout, etc.).
           const text = this.getPromptText(msg)
           const validatedAttachments = this.validateAttachments(msg.attachments)
           if (validatedAttachments === null) {
             this.opts.postMessage({ type: "prompt_rejected", sessionId, reason: "invalid_attachments" })
             return
           }
+          const userMessageId = (msg.messageId as string) || generateUserMessageId()
+          const textBlocks: Block[] = text.trim() ? [{ type: "text", text }] : []
+          const imageBlocks: Block[] = (validatedAttachments || []).map((a: { data: string; mimeType: string }) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType }))
+          const currentTabForMode = this.opts.tabManager.getTab(sessionId)
+          const userMsg: ChatMessage = {
+            role: "user",
+            id: userMessageId,
+            blocks: [...textBlocks, ...imageBlocks],
+            timestamp: Date.now(),
+            sessionId,
+            mode: currentTabForMode?.mode,
+          }
+          this.opts.sessionStore.appendMessage(sessionId, userMsg)
+          this.opts.postMessage({ type: "add_message", sessionId, message: userMsg })
           const id = this.opts.hostQueue.enqueue(sessionId, {
             text,
             sessionId,
             attachments: validatedAttachments,
             mode: "queue",
             isSteerPrompt: false,
+            userMessageId,
           })
           if (id) {
             log.info(`send_prompt queued (in-flight): ${sessionId}, item=${id}`)
@@ -1070,6 +1087,8 @@ export class WebviewEventRouter {
         const tab = this.opts.tabManager.getTab(sessionId)
         const wasActive = this.opts.tabManager.getActiveId() === sessionId || this.opts.sessionStore.activeId === sessionId
         if (tab?.isStreaming) void this.opts.streamCoordinator.abort(sessionId, { postMessage: (m) => this.opts.postMessage(m), postRequestError: (m) => this.opts.postRequestError(m) }).catch(err => log.warn("Abort on close failed", err))
+        // Clear the host queue for the closed session to prevent orphaned chips
+        this.opts.hostQueue.clear(sessionId)
         this.opts.tabManager.closeTab(sessionId)
         this.opts.sessionStore.deleteIfEmpty(sessionId)
         if (wasActive) {
@@ -2438,10 +2457,14 @@ export class WebviewEventRouter {
       if (sessionId) {
         this.postQueueState(sessionId)
       } else {
-        // Send state for all sessions via the existing per-session handler
         const requestedSid = msg.sessionId as string | undefined
         if (requestedSid) {
           this.postQueueState(requestedSid)
+        } else {
+          // No session specified — push state for every session with queue items
+          for (const sid of this.opts.hostQueue.getActiveSessionIds()) {
+            this.postQueueState(sid)
+          }
         }
       }
     }],
@@ -2470,6 +2493,7 @@ export class WebviewEventRouter {
           mode: steerMode,
           timestamp: Date.now(),
           sessionId,
+          userMessageId: msg.userMessageId as string | undefined,
         }
         await this.opts.steerPromptHandler.sendSteerPrompt(sessionId, steerPrompt, {
           postMessage: (m) => this.opts.postMessage(m),
@@ -2546,15 +2570,18 @@ export class WebviewEventRouter {
   /**
    * Send a queued prompt directly via StreamCoordinator, bypassing the promptsInFlight guard.
    * Records the user message in SessionStore so it survives reloads.
+   * Reuses the userMessageId stored on the QueuedPrompt at queue-time if available,
+   * so the message already appended by handleQueue is updated in-place, not duplicated.
    */
   private async drainQueuedPrompt(sessionId: string, item: {
     id: string
     text: string
     attachments: import("./webview/types").Attachment[]
     isSteerPrompt?: boolean
+    userMessageId?: string
   }): Promise<void> {
     try {
-      const userMessageId = generateUserMessageId()
+      const userMessageId = item.userMessageId || generateUserMessageId()
       const clientRequestId = `queued-${item.id}`
       const textBlocks: Block[] = item.text.trim() ? [{ type: "text", text: item.text }] : []
       const imageBlocks: Block[] = (item.attachments || []).map((a: { data: string; mimeType: string }) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType }))
