@@ -106,6 +106,7 @@ export function mapOpencodeError(err: OpencodeError | undefined | null): ErrorCo
       ],
       retryable: false,
       technical,
+      providerID,
     })
   }
 
@@ -123,6 +124,7 @@ export function mapOpencodeError(err: OpencodeError | undefined | null): ErrorCo
       ],
       retryable: true,
       technical,
+      providerID,
     })
   }
 
@@ -137,6 +139,7 @@ export function mapOpencodeError(err: OpencodeError | undefined | null): ErrorCo
       actions: [{ label: "Retry", action: "retry", primary: true }],
       retryable: true,
       technical,
+      providerID,
     })
   }
 
@@ -156,6 +159,7 @@ export function mapOpencodeError(err: OpencodeError | undefined | null): ErrorCo
       ],
       retryable: false,
       technical,
+      providerID,
     })
   }
 
@@ -178,6 +182,7 @@ export function mapOpencodeError(err: OpencodeError | undefined | null): ErrorCo
       ],
       retryable: false,
       technical,
+      providerID,
     })
   }
 
@@ -192,6 +197,7 @@ export function mapOpencodeError(err: OpencodeError | undefined | null): ErrorCo
       actions: [{ label: "Retry", action: "retry", primary: true }],
       retryable: true,
       technical,
+      providerID,
     })
   }
 
@@ -208,7 +214,7 @@ export function mapOpencodeError(err: OpencodeError | undefined | null): ErrorCo
   })
 }
 
-function mapApiError(status: number, rawMessage: string, isRetryable: boolean | undefined, technical: string): ErrorContext {
+function mapApiError(status: number, rawMessage: string, isRetryable: boolean | undefined, technical: string, providerID?: string): ErrorContext {
   const message = rawMessage || `HTTP ${status}`
   const retryable = isRetryable ?? (status >= 500 || status === 429 || status === 0)
 
@@ -223,6 +229,7 @@ function mapApiError(status: number, rawMessage: string, isRetryable: boolean | 
       actions: [{ label: "Open auth settings", action: "edit", primary: true }],
       retryable: false,
       technical,
+      providerID,
     })
   }
 
@@ -240,6 +247,7 @@ function mapApiError(status: number, rawMessage: string, isRetryable: boolean | 
       ],
       retryable: false,
       technical,
+      providerID,
     })
   }
 
@@ -257,6 +265,7 @@ function mapApiError(status: number, rawMessage: string, isRetryable: boolean | 
       ],
       retryable: true,
       technical,
+      providerID,
     })
   }
 
@@ -273,6 +282,7 @@ function mapApiError(status: number, rawMessage: string, isRetryable: boolean | 
       actions: [{ label: "Retry", action: "retry", primary: true }],
       retryable,
       technical,
+      providerID,
     })
   }
 
@@ -299,6 +309,7 @@ function makeContext(p: {
   retryable: boolean
   /** Raw technical detail for the disclosure panel; omitted when it would duplicate userMessage. */
   technical?: string
+  providerID?: string
 }): ErrorContext {
   const technicalDetails = p.technical && p.technical !== p.userMessage ? p.technical : undefined
   return {
@@ -311,5 +322,6 @@ function makeContext(p: {
     suggestedActions: p.actions,
     retryable: p.retryable,
     timestamp: Date.now(),
+    providerID: p.providerID,
   } as ErrorContext
 }

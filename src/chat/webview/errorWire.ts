@@ -258,6 +258,7 @@ function hydrateLegacyContext(input: ErrorContext, sessionId?: string): ErrorCon
     timestamp: typeof input.timestamp === "number" ? input.timestamp : Date.now(),
     sessionId: input.sessionId ?? sessionId,
     correlationId: input.correlationId,
+    providerID: input.providerID,
   }
 }
 

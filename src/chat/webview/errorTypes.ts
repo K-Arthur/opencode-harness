@@ -84,6 +84,7 @@ export interface ErrorContext {
   sessionId?: string;        // Associated session ID if applicable
   messageId?: string;        // Associated message ID if applicable
   correlationId?: string;    // For error tracking and debugging
+  providerID?: string;       // Provider that caused the error (e.g. "openai")
 }
 
 /**
@@ -551,6 +552,7 @@ export interface BaseErrorPayload {
   userMessage: string;
   technicalDetails?: string;
   retryable: boolean;
+  providerID?: string;       // Provider that caused the error
 }
 
 export interface AuthErrorPayload extends BaseErrorPayload {
@@ -599,7 +601,8 @@ export function toWebviewErrorPayload(error: ErrorContext): WebviewErrorPayload 
     code: error.code,
     userMessage: error.userMessage,
     technicalDetails: error.technicalDetails,
-    retryable: error.retryable
+    retryable: error.retryable,
+    providerID: error.providerID,
   };
 
   if (error.category === ErrorCategory.AUTH) {
@@ -697,7 +700,8 @@ export function toErrorContext(payload: WebviewErrorPayload): ErrorContext {
     retryable: payload.retryable,
     timestamp: payload.timestamp,
     sessionId: payload.sessionId,
-    correlationId: payload.correlationId
+    correlationId: payload.correlationId,
+    providerID: payload.providerID,
   };
 
   if (payload.type === 'quota_error' && payload.resetAtMs) {
