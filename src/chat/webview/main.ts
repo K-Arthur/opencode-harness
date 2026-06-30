@@ -19,6 +19,7 @@ import { setErrorActionHandler as setCompsErrorActionHandler } from "./errorComp
 import { setErrorActionHandler as setRendererErrorActionHandler } from "./renderer"
 import { setMaxConcurrentStreams } from "./sendLogic"
 import { setupModelManager } from "./model-manager"
+import { findFallbackModel, getExhaustedProvider } from "./autoSwitcher"
 import type { ProviderConfig } from "../../model/ProviderConfigManager"
 import { setupVariantSelector } from "./variant-selector"
 import { setupMcpConfig } from "./mcp-config"
@@ -62,6 +63,7 @@ import { setupInstructionsEditor } from "./ui/instructionsEditor"
 import { setupSessionModal as setupSessionModalModule, openSessionModal as openSessionModalModule, closeSessionModal as closeSessionModalModule, trapModalFocus } from "./ui/sessionModal"
 import { setupKeyboardShortcutsModal, openKeyboardShortcutsModal, closeKeyboardShortcutsModal } from "./ui/keyboardShortcutsModal"
 import { setupGlobalKeyboardShortcutsImpl } from "./ui/keyboardShortcuts"
+import { setupMarkdownFileLinksImpl } from "./ui/markdownFileLinks"
 import { setupTodoSubagentPanelsImpl } from "./todoSubagentSetup"
 import { switchTabImpl } from "./tabSwitcher"
 import { setupProviderPanel, openProviderPanel, closeProviderPanel, renderProviderDiscoveryList, renderProviderCredentialList, handleOAuthStarted, handleOAuthCompleted, onProviderKeyResult } from "./ui/providerPanel"
@@ -290,7 +292,34 @@ function getVsCodeApi() {
         if (sid) vscode.postMessage({ type: "retry_stream", sessionId: sid })
         break
       }
-      case "switch_model":
+      case "switch_model": {
+        const sid = stateManager.getState().activeSessionId
+        if (sid) {
+          const activeSession = stateManager.getActiveSession()
+          const exhaustedProvider = getExhaustedProvider(activeSession)
+          if (exhaustedProvider && activeSession?.model) {
+            const allModels = modelManager.getEnabledModels()
+            const fallback = findFallbackModel(exhaustedProvider, activeSession.model, allModels)
+            if (fallback) {
+              stateManager.setSessionModel(sid, fallback)
+              stateManager.setGlobalModel(fallback)
+              modelDropdown.setCurrentModel(fallback)
+              syncModelViews?.()
+              const modelInfo = allModels.find(m => `${m.provider}/${m.id}` === fallback)
+              const displayName = modelInfo?.displayName || fallback
+              showSystemMessage(sid, `Auto-switched from ${exhaustedProvider} to ${displayName}.`, false)
+              vscode.postMessage({
+                type: "regenerate_with_model",
+                sessionId: sid,
+                model: fallback,
+              })
+              break
+            }
+          }
+        }
+        vscode.postMessage({ type: "get_models" })
+        break
+      }
       case "pick_model":
         vscode.postMessage({ type: "get_models" })
         break
@@ -724,6 +753,12 @@ function getVsCodeApi() {
     })
   }
 
+  function setupMarkdownFileLinks(): void {
+    setupMarkdownFileLinksImpl({
+      vscode: { postMessage: (msg) => vscode.postMessage(msg) },
+    })
+  }
+
   /* ─── ESCAPE COORDINATOR ───
    * One Escape press affects exactly one surface (topmost first); Escape only
    * stops the active stream when nothing is open. Replaces the host-level
@@ -909,6 +944,7 @@ function getVsCodeApi() {
       setDefaultMode: (mode) => stateManager.setPendingMode(mode),
     })
     setupGlobalKeyboardShortcuts()
+    setupMarkdownFileLinks()
     new TimestampUpdater().startTicking(60_000)
     wireComposer()
     composer.setupInput()
@@ -1491,6 +1527,64 @@ function setupTodoSkillAndSubagentPanels(): void {
     if (pattern) permActions.appendChild(alwaysBtn)
     permActions.appendChild(denyBtn)
     permBar.classList.remove("hidden")
+  }
+
+  /** Track which sessions have been asked about mode switching to avoid repeat prompts. */
+  const modeSwitchAskedForSession = new Set<string>()
+
+  function hideModeSwitchBar(): void {
+    const bar = document.getElementById("mode-switch-bar")
+    const actions = document.getElementById("mode-switch-bar-actions")
+    bar?.classList.add("hidden")
+    if (actions) actions.innerHTML = ""
+  }
+
+  function renderModeSwitchBar(sid: string, targetMode: "build" | "auto"): void {
+    // Never ask twice for the same session
+    if (modeSwitchAskedForSession.has(sid)) return
+    modeSwitchAskedForSession.add(sid)
+
+    const bar = document.getElementById("mode-switch-bar")
+    const text = document.getElementById("mode-switch-bar-text")
+    const actions = document.getElementById("mode-switch-bar-actions")
+    if (!bar || !text || !actions) return
+
+    const modeLabel = targetMode === "build" ? "Build" : "Auto"
+    text.textContent = `Planning appears complete. Switch to ${modeLabel} mode?`
+    actions.innerHTML = ""
+
+    const respond = (decision: "switch" | "always" | "dismiss") => {
+      if (decision === "switch" || decision === "always") {
+        vscode.postMessage({ type: "change_mode", mode: targetMode, sessionId: sid })
+      }
+      if (decision === "always") {
+        vscode.postMessage({ type: "plan_complete_preference", sessionId: sid, targetMode, persist: true })
+      }
+      hideModeSwitchBar()
+    }
+
+    const switchBtn = document.createElement("button")
+    switchBtn.className = "ms-bar-btn ms-bar-btn--primary"
+    switchBtn.textContent = `Switch to ${modeLabel}`
+    switchBtn.type = "button"
+    switchBtn.addEventListener("click", () => respond("switch"))
+
+    const alwaysBtn = document.createElement("button")
+    alwaysBtn.className = "ms-bar-btn ms-bar-btn--always"
+    alwaysBtn.textContent = `Always switch to ${modeLabel}`
+    alwaysBtn.type = "button"
+    alwaysBtn.addEventListener("click", () => respond("always"))
+
+    const dismissBtn = document.createElement("button")
+    dismissBtn.className = "ms-bar-btn ms-bar-btn--secondary"
+    dismissBtn.textContent = "Not now"
+    dismissBtn.type = "button"
+    dismissBtn.addEventListener("click", () => respond("dismiss"))
+
+    actions.appendChild(switchBtn)
+    actions.appendChild(alwaysBtn)
+    actions.appendChild(dismissBtn)
+    bar.classList.remove("hidden")
   }
 
   /**
@@ -2300,6 +2394,16 @@ function setupTodoSkillAndSubagentPanels(): void {
         const activeSid = stateManager.getState().activeSessionId
         if (activeSid) {
           vscode.postMessage({ type: "get_todos", sessionId: activeSid })
+        }
+      }],
+      ["suggest_mode_switch", (msg, sid) => {
+        const sessionId = typeof msg.sessionId === "string" ? msg.sessionId : sid
+        const targetMode = msg.targetMode === "build" || msg.targetMode === "auto" ? msg.targetMode : undefined
+        if (sessionId && targetMode) {
+          // Only show the bar if this session is the currently active one
+          if (stateManager.getState().activeSessionId === sessionId) {
+            renderModeSwitchBar(sessionId, targetMode)
+          }
         }
       }],
       ["stream_interrupted", (_msg, sid) => {
