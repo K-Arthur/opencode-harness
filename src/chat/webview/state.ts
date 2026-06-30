@@ -472,6 +472,7 @@ export function createState(vscode: VsCodeApi) {
       if (existing && existing.isStreaming) {
         state.sessions[s.id] = {
           ...s,
+          mode: existing.mode,
           messages: existing.messages,
           draftText: existing.draftText,
           isStreaming: existing.isStreaming,
@@ -482,6 +483,7 @@ export function createState(vscode: VsCodeApi) {
       } else if (existing) {
         state.sessions[s.id] = {
           ...s,
+          mode: existing.mode,
           messages: existing.messages !== s.messages ? (() => { existing.messages.length = 0; existing.messages.push(...s.messages); return existing.messages })() : s.messages,
           draftText: existing.draftText || s.draftText,
           isStreaming: existing.isStreaming,

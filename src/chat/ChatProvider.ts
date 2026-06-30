@@ -665,6 +665,13 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       this.tabManager.onInstructionsChanged(({ tabId, instructions }) => {
         this.postMessage({ type: "instructions_changed", sessionId: tabId, instructions })
       }),
+      // Backstop: any TabManager.setMode call propagates to the webview even
+      // if the caller didn't explicitly post mode_change_result. The canonical
+      // applySessionMode path also posts mode_change_result (duplicate is
+      // harmless — webview handler is idempotent).
+      this.tabManager.onModeChanged(({ tabId, mode }) => {
+        this.postMessage({ type: "mode_change_result", accepted: true, sessionId: tabId, mode })
+      }),
       this.tabManager.onCliSessionIdRegistered(({ tabId, cliSessionId }) => {
         const buffered = this.pendingEventBuffer.drain(cliSessionId)
         if (buffered.length === 0) return
@@ -1038,7 +1045,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       sessionId,
       name?.trim() || "",
       model,
-      mode || "normal"
+      mode
     )
     const tab = this.tabManager.getTab(sessionId)
     const nextModel = storeSession.model || model

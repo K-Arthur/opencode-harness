@@ -37,7 +37,7 @@ export class SessionLifecycleService {
       sessionId,
       name?.trim() || "",
       model,
-      mode || "normal"
+      mode
     )
     const tab = this.opts.tabManager.getTab(sessionId)
     const nextModel = storeSession.model || model

@@ -951,7 +951,7 @@ export class WebviewEventRouter {
                 this.opts.sessionStore.persist()
                 this.opts.ensureLocalTab(localForked.id, localForked.name, localForked.model, localForked.mode)
                 this.opts.tabManager.switchTab(localForked.id)
-                this.opts.postMessage({ type: "fork_created", sessionId: localForked.id, name: localForked.name, parentSessionId: sourceId, forkedAtTurn: turnIndex })
+                this.opts.postMessage({ type: "fork_created", sessionId: localForked.id, name: localForked.name, mode: localForked.mode, parentSessionId: sourceId, forkedAtTurn: turnIndex })
                 log.info(`Forked session using SDK: ${sourceId} → ${localForked.id}`)
                 return
               }
@@ -967,7 +967,7 @@ export class WebviewEventRouter {
       if (!forked) return
       this.opts.ensureLocalTab(forked.id, forked.name, forked.model, forked.mode)
       this.opts.tabManager.switchTab(forked.id)
-      this.opts.postMessage({ type: "fork_created", sessionId: forked.id, name: forked.name, parentSessionId: sourceId, forkedAtTurn: turnIndex })
+      this.opts.postMessage({ type: "fork_created", sessionId: forked.id, name: forked.name, mode: forked.mode, parentSessionId: sourceId, forkedAtTurn: turnIndex })
     }],
     ["open_model_selector", () => {
       // Plain "switch model" affordance (e.g. the context-usage dropdown action).

@@ -1411,7 +1411,7 @@ function setupTodoSkillAndSubagentPanels(): void {
         id: tabId,
         name: tabName || "",
         model: stateManager.getState().globalModel || "",
-        mode: "build",
+        mode: stateManager.getPendingMode() || "build",
         messages: [],
         isStreaming: false,
       })
@@ -2107,7 +2107,7 @@ function setupTodoSkillAndSubagentPanels(): void {
         id: sessionId,
         name: "",
         model: stateManager.getState().globalModel || "",
-        mode: "build",
+        mode: stateManager.getPendingMode() || "build",
         messages: [],
         isStreaming: false,
       })
@@ -3038,9 +3038,10 @@ function setupTodoSkillAndSubagentPanels(): void {
         const forkId = typeof msg.sessionId === "string" ? msg.sessionId : undefined
         const name = typeof msg.name === "string" ? msg.name : "Fork"
         const model = stateManager.getState().globalModel
+        const mode = normalizeSessionMode(msg.mode) || "build"
         if (!forkId) return
         if (!stateManager.getSession(forkId)) {
-          stateManager.ensureSession({ id: forkId, name, model, mode: "build", messages: [], isStreaming: false })
+          stateManager.ensureSession({ id: forkId, name, model, mode, messages: [], isStreaming: false })
         }
         createTabUI(forkId, name)
         stateManager.setActiveSession(forkId)
