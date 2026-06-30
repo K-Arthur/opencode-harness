@@ -2706,11 +2706,12 @@ export class WebviewEventRouter {
    * (text/markdown, text/plain, etc.) are decoded and injected into the prompt text
    * by the webview before sending, so they never reach this validation path.
    */
-  // NOTE: SVG (image/svg+xml) is intentionally excluded — SVG is an XML vector format,
-  // not a raster image. The server's Image.normalize uses a raster image decoder that
-  // cannot decode SVG, producing ImageDecodeError.
+  // NOTE: SVG (image/svg+xml) is kept in the allowlist for consistency, but the
+  // webview treats it as a document attachment (decoded & injected as text) so it
+  // never reaches the server as a file part — the server's Image.normalize cannot
+  // decode SVG with a raster decoder.
   private static readonly ATTACHMENT_MIME_ALLOWLIST = new Set([
-    "image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp",
+    "image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp", "image/svg+xml",
   ])
   private static readonly ATTACHMENT_MAX_BYTES_PER_ITEM = 8 * 1024 * 1024   // 8 MB per attachment
   private static readonly ATTACHMENT_MAX_TOTAL_BYTES = 24 * 1024 * 1024     // 24 MB aggregate

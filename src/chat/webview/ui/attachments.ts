@@ -3,14 +3,16 @@ import type { AttachedContextItem, ContextTraySummary } from "../types"
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 // NOTE: Must stay in sync with WebviewEventRouter.ATTACHMENT_MIME_ALLOWLIST.
-// SVG, BMP, TIFF, AVIF, HEIC/HEIF are intentionally excluded — the server's image
-// decoder (Image.normalize) only supports PNG, JPEG, GIF, and WebP. SVG is XML, not
-// raster; the others are not universally decoded by the opencode server.
+// SVG (image/svg+xml) is accepted at the webview level but treated as a document
+// attachment in sendMessage.ts — decoded and injected as XML text rather than sent
+// as a binary file part, because the server's Image.normalize cannot decode SVG.
+// BMP, TIFF, AVIF, HEIC/HEIF are excluded (server only supports PNG/JPEG/GIF/WebP).
 const ALLOWED_IMAGE_MIMES = [
   "image/png",
   "image/jpeg",
   "image/gif",
   "image/webp",
+  "image/svg+xml",
 ] as const
 
 const ALLOWED_DOCUMENT_MIMES = [

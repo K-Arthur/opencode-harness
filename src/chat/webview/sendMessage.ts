@@ -199,8 +199,11 @@ export function sendMessage(deps: SendMessageDeps): void {
   // server only supports image/* media types as file attachments — sending
   // text/markdown or text/plain as a file part produces
   // "'media type: text/markdown' functionality not supported" errors.
-  const imageAttachments = attachments.filter((a) => a.mimeType.startsWith("image/"))
-  const documentAttachments = attachments.filter((a) => !a.mimeType.startsWith("image/"))
+  // SVG (image/svg+xml) is treated as a document: the server's raster decoder
+  // (Image.normalize) cannot decode SVG, so we inject the XML text instead.
+  const isSvg = (a: { mimeType: string }) => a.mimeType === "image/svg+xml"
+  const imageAttachments = attachments.filter((a) => a.mimeType.startsWith("image/") && !isSvg(a))
+  const documentAttachments = attachments.filter((a) => !a.mimeType.startsWith("image/") || isSvg(a))
 
   // Inject active file @file: mention into the prompt text so the backend
   // knows which file to read. The contextItems array carries metadata but

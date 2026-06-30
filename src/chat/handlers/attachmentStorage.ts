@@ -34,6 +34,7 @@ const MIME_TO_EXT: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/gif": "gif",
   "image/webp": "webp",
+  "image/svg+xml": "svg",
 }
 
 export interface MaterializeInput {
@@ -153,6 +154,8 @@ export function createAttachmentStorage(opts: AttachmentStorageOptions = {}): At
 
   /** Check that the decoded buffer starts with the expected magic bytes for the MIME type. */
   function validateMagicBytes(buf: Buffer, mimeType: string): void {
+    // SVG is XML text, not a binary image format — skip magic-byte validation.
+    if (mimeType === "image/svg+xml") return
     // Only validate image types that we have magic byte entries for.
     const entry = IMAGE_MAGIC_BYTES[mimeType]
     if (!entry) return // unknown/unsupported format — skip magic check

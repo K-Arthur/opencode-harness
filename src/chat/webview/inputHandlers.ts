@@ -114,7 +114,7 @@ export function createInputHandlers(deps: InputHandlerDeps): InputHandlers {
       const files = e.dataTransfer?.files
       if (files && files.length > 0) {
         const fileMentions: string[] = []
-        const imageMimes = ["image/png", "image/jpeg", "image/webp", "image/gif", "image/bmp", "image/tiff", "image/svg+xml", "image/avif", "image/heic", "image/heif"] as const
+        const imageMimes = ["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"] as const
         const docMimes = ["text/plain", "text/markdown", "text/csv", "text/html", "text/css", "text/javascript", "application/json", "application/xml", "application/pdf", "application/x-yaml", "application/x-sh"] as const
         for (const f of Array.from(files)) {
           if (imageMimes.includes(f.type as typeof imageMimes[number])) {

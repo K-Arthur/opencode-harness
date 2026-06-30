@@ -70,8 +70,11 @@ export function sendSteerPrompt(
   // Only image attachments are sent to the server as base64. Document
   // attachments are decoded and injected into the prompt text to avoid
   // "media type not supported" errors from the opencode server.
-  const imageAttachments = attachments.filter((a) => a.mimeType.startsWith("image/"))
-  const documentAttachments = attachments.filter((a) => !a.mimeType.startsWith("image/"))
+  // SVG (image/svg+xml) is treated as a document: the server's raster decoder
+  // (Image.normalize) cannot decode SVG, so we inject the XML text instead.
+  const isSvg = (a: { mimeType: string }) => a.mimeType === "image/svg+xml"
+  const imageAttachments = attachments.filter((a) => a.mimeType.startsWith("image/") && !isSvg(a))
+  const documentAttachments = attachments.filter((a) => !a.mimeType.startsWith("image/") || isSvg(a))
 
   let sendText = text
   for (const doc of documentAttachments) {
