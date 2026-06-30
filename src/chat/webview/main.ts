@@ -497,6 +497,7 @@ function getVsCodeApi() {
       streamHandlers,
       /* eslint-disable @typescript-eslint/no-explicit-any */
       getState: () => stateManager.getState() as any,
+      getPendingMode: () => stateManager.getPendingMode(),
       getSession: (id) => stateManager.getSession(id) as any,
       getAllSessions: () => stateManager.getAllSessions() as any,
       ensureSession: (init) => stateManager.ensureSession(init) as any,

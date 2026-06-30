@@ -375,6 +375,7 @@ interface EnsureStreamUiDeps {
   getSession: (id: string) => { name: string } | undefined
   ensureSession: (init: { id: string; name: string; model: string; mode: string; messages: ChatMessage[]; isStreaming: boolean }) => { name: string }
   getState: () => { globalModel: string }
+  getPendingMode: () => string
   getMessageList: (tabId: string) => HTMLDivElement | null
   createTabUI: (tabId: string, tabName: string) => void
   streamHandlers: Map<string, StreamHandlers>
@@ -397,7 +398,7 @@ function ensureStreamUiReady(sessionId: string, deps: EnsureStreamUiDeps): Strea
       id: sessionId,
       name: "New Session",
       model: deps.getState().globalModel || "",
-      mode: "build",
+      mode: deps.getPendingMode() || "build",
       messages: [],
       isStreaming: false,
     })
@@ -448,6 +449,7 @@ export interface StreamOrchestratorDeps {
   els: ElementRefs
   streamHandlers: Map<string, StreamHandlers>
   getState: () => { activeSessionId: string | null; globalModel: string }
+  getPendingMode: () => string
   getSession: (id: string) => { id: string; name: string; model: string; mode: string; messages: ChatMessage[]; isStreaming: boolean; changedFiles?: string[]; [k: string]: unknown } | undefined
   getAllSessions: () => Array<{ id: string; name: string; model: string; mode: string; messages: ChatMessage[]; isStreaming: boolean; [k: string]: unknown }>
   ensureSession: (init: { id: string; name: string; model: string; mode: string; messages: ChatMessage[]; isStreaming: boolean }) => { id: string; name: string; model: string; mode: string; messages: ChatMessage[]; isStreaming: boolean; [k: string]: unknown }
@@ -506,6 +508,7 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
     els,
     streamHandlers,
     getState,
+    getPendingMode,
     getSession,
     getAllSessions,
     ensureSession,
@@ -584,6 +587,7 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
       getSession,
       ensureSession,
       getState,
+      getPendingMode,
       getMessageList,
       createTabUI,
       streamHandlers,
@@ -620,7 +624,7 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
         id: sessionId,
         name: "New Session",
         model: getState().globalModel || "",
-        mode: "build",
+        mode: getPendingMode() || "build",
         messages: [],
         isStreaming: false,
       })
