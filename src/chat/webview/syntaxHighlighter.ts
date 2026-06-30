@@ -20,7 +20,7 @@ const PURIFY_CONFIG: PurifyConfig = {
   ALLOWED_ATTR: [
     "href", "src", "alt", "title", "target", "rel", "class", "language", "width", "height",
     "aria-label", "role", "tabindex", "data-kind", "data-tab-id", "data-message-id",
-    "data-block-id", "data-code", "data-lang", "type", "checked", "disabled", "id", "for"
+    "data-block-id", "data-code", "data-lang", "data-file-path", "type", "checked", "disabled", "id", "for"
   ],
   ALLOWED_URI_REGEXP: /^(?:(?:https?|ftp):|\/)/i,
   FORBID_CONTENTS: ["script", "style", "iframe", "frame", "object", "embed"],

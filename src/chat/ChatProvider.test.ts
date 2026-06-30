@@ -494,15 +494,22 @@ void it("change_mode handler reads mode from msg.mode", () => {
   )
 })
 
-void it("change_mode passes msg.mode to tabManager.setMode and sessionStore.updateMode", () => {
+void it("change_mode delegates to applySessionMode", () => {
   const block = findChangeModeBlock(source.indexOf('["change_mode"') >= 0 ? source : eventRouterSource)
   assert.ok(
-    /tabManager\.setMode\(sessionId,\s*mode\)/.test(block),
-    "must call tabManager.setMode(sessionId, mode)"
+    /applySessionMode\(sessionId,\s*mode\)/.test(block),
+    "change_mode handler must delegate to applySessionMode (extracted to ChatProvider)"
+  )
+})
+
+void it("applySessionMode calls tabManager.setMode and sessionStore.updateMode", () => {
+  assert.ok(
+    /tabManager\.setMode\(sessionId,\s*normalized\)/.test(source),
+    "applySessionMode must call tabManager.setMode(sessionId, normalized)"
   )
   assert.ok(
-    /sessionStore\.updateMode\(sessionId,\s*mode\)/.test(block),
-    "must call sessionStore.updateMode(sessionId, mode)"
+    /sessionStore\.updateMode\(sessionId,\s*normalized\)/.test(source),
+    "applySessionMode must call sessionStore.updateMode(sessionId, normalized)"
   )
 })
 
@@ -513,8 +520,8 @@ void it("change_mode switches to auto without a confirmation gate", () => {
     "switching to auto must not be gated behind a confirmation modal (consent model)"
   )
   assert.ok(
-    /tabManager\.setMode\(sessionId,\s*mode\)/.test(block),
-    "auto switch must still apply the mode via tabManager.setMode"
+    /applySessionMode\(sessionId,\s*mode\)/.test(block),
+    "auto switch must still apply the mode via applySessionMode"
   )
 })
 
@@ -815,9 +822,15 @@ void it("open_file resolves through the centralized session-aware opener", () =>
     "open_file handler must use the shared resolver with the active session id"
   )
   assert.ok(
-    eventRouterSource.includes("parseOpenFileTarget") && eventRouterSource.includes('fragment.match(/^L(\\d+)/i)'),
-    "shared opener must parse #L12 line fragments"
+    eventRouterSource.includes("parseOpenFileTarget"),
+    "shared opener must exist"
   )
+  const hasLineFragment = eventRouterSource.includes('fragment.match(/^L(\\d+)')
+  const hasColumnFragment = eventRouterSource.includes('fragment.match(/^L(\\d+)(?::(\\d+))?$')
+  assert.ok(hasColumnFragment || hasLineFragment, "shared opener must parse #L12 line fragments (with optional column)")
+  const hasTrailingLine = eventRouterSource.includes('trailing.match(/^(.+?):(\\d+)(?::(\\d+))?$/)') ||
+    eventRouterSource.includes('trailing = working.match')
+  assert.ok(hasTrailingLine, "shared opener must support :LINE and :LINE:COL trailing line refs")
   assert.ok(
     eventRouterSource.includes("this.opts.sessionStore.get(sessionId)?.workspacePath"),
     "shared opener must prefer the stored session workspace path"

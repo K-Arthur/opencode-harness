@@ -1416,6 +1416,12 @@ body.chat-rtl .markdown-content {
   border-color: var(--markdown-link, var(--color-accent));
 }
 
+.markdown-content a.file-link {
+  border-bottom: 1px dashed var(--color-accent);
+  font-family: var(--oc-font-mono, var(--vscode-editor-font-family, monospace));
+  font-size: var(--oc-font-size-sm, 0.875em);
+}
+
 .markdown-content a:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-color: var(--markdown-link, var(--color-accent));

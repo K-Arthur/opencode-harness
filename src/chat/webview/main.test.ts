@@ -39,6 +39,7 @@ const fileTrackingSource = readFileSync(path.join(__dirname, "ui", "fileTracking
 const buttonSetupSource = readFileSync(path.join(__dirname, "ui", "buttonSetup.ts"), "utf8")
 const scrollMarkersSource = readFileSync(path.join(__dirname, "ui", "scrollMarkers.ts"), "utf8")
 const keyboardShortcutsSource = (() => { try { return readFileSync(path.join(__dirname, "ui", "keyboardShortcuts.ts"), "utf8") } catch { return "" } })()
+const markdownFileLinksSource = (() => { try { return readFileSync(path.join(__dirname, "ui", "markdownFileLinks.ts"), "utf8") } catch { return "" } })()
 const todoSubagentSetupSource = (() => { try { return readFileSync(path.join(__dirname, "todoSubagentSetup.ts"), "utf8") } catch { return "" } })()
 const tabSwitcherSource = (() => { try { return readFileSync(path.join(__dirname, "tabSwitcher.ts"), "utf8") } catch { return "" } })()
 const panelSetupSource = (() => { try { return readFileSync(path.join(__dirname, "panelSetup.ts"), "utf8") } catch { return "" } })()
@@ -882,6 +883,18 @@ it("unified modal: server session items send resume_server_session on click", ()
       assert.ok(block.includes("createNewTab()"), "document-level Ctrl/Cmd+T must create a tab")
       assert.ok(block.includes("closeTab(active.id)"), "document-level Ctrl/Cmd+W must close the active tab")
       assert.ok(block.includes("switchRelativeTab"), "document-level Ctrl/Cmd+Tab must cycle tabs")
+    })
+
+    it("wires markdown file-link handler at document level", () => {
+      assert.ok(markdownFileLinksSource.includes("function setupMarkdownFileLinksImpl("), "setupMarkdownFileLinksImpl must exist in ui/markdownFileLinks.ts")
+      assert.ok(source.includes("setupMarkdownFileLinksImpl({"), "main.ts must import and call setupMarkdownFileLinksImpl")
+      assert.ok(source.includes("setupMarkdownFileLinks()"), "main.ts must wire the file-link setup function")
+      const handlerBlock = markdownFileLinksSource.slice(
+        markdownFileLinksSource.indexOf("function setupMarkdownFileLinksImpl("),
+        markdownFileLinksSource.indexOf("function setupMarkdownFileLinksImpl(") + 1200
+      )
+      assert.ok(handlerBlock.includes('vscode.postMessage({ type: "open_file"'), "handler must post open_file message")
+      assert.ok(handlerBlock.includes("a.file-link"), "handler must target anchors with file-link class")
     })
 
     it("wires commands palette button to open modal and request commands", () => {

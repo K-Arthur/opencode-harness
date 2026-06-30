@@ -228,6 +228,21 @@ md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   if (/^(https?|ftp):/i.test(href)) {
     token.attrSet("target", "_blank")
     token.attrSet("rel", "noopener noreferrer")
+  } else if (/^(mailto|tel):/i.test(href)) {
+    // leave default (keep href alive)
+  } else if (href.startsWith("#")) {
+    // in-document fragment; leave default
+  } else if (href !== "") {
+    // Treat as a workspace file reference. Capture the raw href into
+    // data-file-path so the delegated click handler can route it through
+    // the open_file pipeline. Neutralize href to "#" — DOMPurify's
+    // ALLOWED_URI_REGEXP would strip a relative href anyway, and we
+    // never want the webview to navigate on click.
+    token.attrSet("href", "#")
+    token.attrSet("class", "file-link")
+    token.attrSet("data-file-path", href)
+    token.attrSet("role", "button")
+    token.attrSet("tabindex", "0")
   }
 
   return defaultLinkOpen(tokens, idx, options, env, self)

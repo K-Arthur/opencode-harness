@@ -112,6 +112,15 @@ it("has type guards for discriminated blocks", () => {
     assert.ok(source.includes('token.attrSet("rel", "noopener noreferrer")'), "external links must be isolated from opener access")
   })
 
+  it("tags_non_external_links_as_file_links", () => {
+    assert.ok(source.includes('token.attrSet("class", "file-link")'), "non-external links must get file-link class")
+    assert.ok(source.includes('token.attrSet("data-file-path"'), "non-external links must capture href in data-file-path")
+    assert.ok(source.includes('token.attrSet("role", "button")'), "file links must get button role for accessibility")
+    assert.ok(source.includes('token.attrSet("tabindex", "0")'), "file links must be keyboard-focusable")
+    const purifyConfig = new RegExp('"data-file-path"')
+    assert.ok(syntaxHighlighterSource.match(purifyConfig), "data-file-path must be allowed by DOMPurify")
+  })
+
   it("renders_tool_call_with_dynamic_states", () => {
     assert.ok(source.includes("tool-call--${toolState}") || toolCallRendererSource.includes("tool-call--${toolState}"), "must use dynamic tool state class")
     assert.ok(source.includes("tool-call--error") || toolCallRendererSource.includes("tool-call--error"), "must support error state")

@@ -152,6 +152,8 @@ export interface WebviewEventRouterOptions {
    * (a string the host may use to track the panel), or undefined if the
    * host declined (e.g. panel creation was rejected by VS Code).
    */
+  applySessionMode: (sessionId: string, mode: string) => boolean
+  handlePlanCompletePreference: (sessionId: string, targetMode: string, persist: boolean) => void
   openSubagentDetailPanel: (parentSessionId: string, subagentId: string) => string | undefined
   /**
    * Called after the host fetches subagent detail data (from
@@ -240,6 +242,7 @@ export class WebviewEventRouter {
     "resume_stream", "decline_resume",
     "get_voice_settings", "setup_voice_input", "voice_start", "voice_stop", "voice_cancel",
     "mode_switch_request",
+    "plan_complete_preference",
     "open_subagent_detail",
     "webview_error",
     "chat_dir_change",
@@ -705,11 +708,11 @@ export class WebviewEventRouter {
     }],
     ["change_mode", async (msg: Record<string, unknown>, sessionId?: string) => {
       if (sessionId) {
-        const previousMode = normalizeSessionMode(
-          this.opts.tabManager.getTab(sessionId)?.mode ?? this.opts.sessionStore.get(sessionId)?.mode
-        ) ?? "build"
         const mode = normalizeSessionMode(msg.mode)
         if (!mode) {
+          const previousMode = normalizeSessionMode(
+            this.opts.tabManager.getTab(sessionId)?.mode ?? this.opts.sessionStore.get(sessionId)?.mode
+          ) ?? "build"
           this.opts.postMessage({ type: "mode_change_result", accepted: false, sessionId, mode: previousMode, reason: "invalid_mode" })
           return
         }
@@ -717,12 +720,7 @@ export class WebviewEventRouter {
         // modal). See CHANGELOG: the native warning modal was removed as an
         // anti-pattern — it blocked the workbench on Linux and gated the switch.
         this.opts.ensureLocalTab(sessionId)
-        if (!this.opts.tabManager.setMode(sessionId, mode)) {
-          this.opts.postMessage({ type: "mode_change_result", accepted: false, sessionId, mode: previousMode, reason: "tab_not_found" })
-          return
-        }
-        this.opts.sessionStore.updateMode(sessionId, mode)
-        this.opts.postMessage({ type: "mode_change_result", accepted: true, sessionId, mode })
+        this.opts.applySessionMode(sessionId, mode)
       }
     }],
     ["set_model", (msg: Record<string, unknown>, sessionId?: string) => {
@@ -755,6 +753,14 @@ export class WebviewEventRouter {
       // Forward as a standard change_mode message, reusing the existing handler
       const handler = this.webviewHandlers.get("change_mode")
       if (handler) await handler({ type: "change_mode", mode: targetMode, sessionId: sid }, sid)
+    }],
+    ["plan_complete_preference", (msg: Record<string, unknown>) => {
+      const sessionId = typeof msg.sessionId === "string" ? msg.sessionId : undefined
+      const targetMode = typeof msg.targetMode === "string" ? msg.targetMode : undefined
+      const persist = typeof msg.persist === "boolean" ? msg.persist : false
+      if (sessionId && targetMode && (targetMode === "build" || targetMode === "auto")) {
+        this.opts.handlePlanCompletePreference(sessionId, targetMode, persist)
+      }
     }],
     ["set_instructions", (msg: Record<string, unknown>, sessionId?: string) => {
       if (sessionId && typeof msg.instructions === "string") {
@@ -2075,14 +2081,15 @@ export class WebviewEventRouter {
       if (!rawPath) return
 
       try {
-        const { uri, lineNumber } = await this.resolveOpenFileTarget(rawPath, sessionId)
+        const { uri, lineNumber, columnNumber } = await this.resolveOpenFileTarget(rawPath, sessionId)
         const doc = await vscode.workspace.openTextDocument(uri)
         const options: vscode.TextDocumentShowOptions = {
           preview: false,
           viewColumn: vscode.ViewColumn.Beside,
         }
         if (lineNumber) {
-          options.selection = new vscode.Range(lineNumber - 1, 0, lineNumber - 1, 0)
+          const col = columnNumber ? columnNumber - 1 : 0
+          options.selection = new vscode.Range(lineNumber - 1, col, lineNumber - 1, col)
         }
         await vscode.window.showTextDocument(doc, options)
       } catch (err) {
@@ -2892,7 +2899,7 @@ export class WebviewEventRouter {
     return resolvePlanPermission({ type: permissionType, pattern }) === "reject"
   }
 
-  private async resolveOpenFileTarget(rawPath: string, sessionId?: string): Promise<{ uri: vscode.Uri; lineNumber?: number }> {
+  private async resolveOpenFileTarget(rawPath: string, sessionId?: string): Promise<{ uri: vscode.Uri; lineNumber?: number; columnNumber?: number }> {
     const parsed = this.parseOpenFileTarget(rawPath)
     const roots = this.getOpenFileRoots(sessionId)
     const filePath = this.expandHomePath(parsed.filePath)
@@ -2905,7 +2912,7 @@ export class WebviewEventRouter {
       }
       const uri = vscode.Uri.file(realPath)
       await this.assertOpenableFile(uri, rawPath)
-      return { uri, lineNumber: parsed.lineNumber }
+      return { uri, lineNumber: parsed.lineNumber, columnNumber: parsed.columnNumber }
     }
 
     if (roots.length === 0) {
@@ -2919,24 +2926,60 @@ export class WebviewEventRouter {
     for (const candidate of candidates) {
       const uri = vscode.Uri.file(candidate)
       if (await this.isOpenableFile(uri)) {
-        return { uri, lineNumber: parsed.lineNumber }
+        return { uri, lineNumber: parsed.lineNumber, columnNumber: parsed.columnNumber }
       }
     }
 
     throw new Error(`File "${parsed.filePath}" was not found under the session workspace or open workspace folders`)
   }
 
-  private parseOpenFileTarget(rawPath: string): { filePath: string; lineNumber?: number } {
-    const fragmentIdx = rawPath.indexOf("#")
-    if (fragmentIdx < 0) return { filePath: rawPath }
-
-    const fragment = rawPath.slice(fragmentIdx + 1)
-    const lineMatch = fragment.match(/^L(\d+)/i)
-    const lineNumber = lineMatch ? Number.parseInt(lineMatch[1] ?? "0", 10) : undefined
-    return {
-      filePath: rawPath.slice(0, fragmentIdx),
-      lineNumber: lineNumber && lineNumber > 0 ? lineNumber : undefined,
+  private parseOpenFileTarget(rawPath: string): { filePath: string; lineNumber?: number; columnNumber?: number } {
+    // Strip a file:// scheme prefix and decode to a filesystem path — model
+    // output may emit file:// URIs for absolute paths.
+    let working = rawPath
+    if (/^file:\/\//i.test(working)) {
+      try {
+        working = vscode.Uri.parse(working).fsPath
+      } catch {
+        // fall through with the raw string
+      }
     }
+
+    // Form 1: #L42 or #L42:7 fragment (existing, extended with column)
+    const fragmentIdx = working.indexOf("#")
+    if (fragmentIdx >= 0) {
+      const fragment = working.slice(fragmentIdx + 1)
+      const m = fragment.match(/^L(\d+)(?::(\d+))?$/i)
+      if (m) {
+        const line = Number.parseInt(m[1] ?? "0", 10)
+        const col = m[2] ? Number.parseInt(m[2], 10) : undefined
+        return {
+          filePath: working.slice(0, fragmentIdx),
+          lineNumber: line > 0 ? line : undefined,
+          columnNumber: col && col > 0 ? col : undefined,
+        }
+      }
+    }
+
+    // Form 2: trailing :LINE or :LINE:COL (Cursor / Claude Code style).
+    // Only treat as a line ref when the prefix looks like a file path
+    // (contains a path separator or a dotted extension), to avoid false
+    // positives like "localhost:8080" or "package:12".
+    const trailing = working.match(/^(.+?):(\d+)(?::(\d+))?$/)
+    if (trailing) {
+      const filePath = trailing[1] ?? ""
+      if (filePath && (/[\\/]/.test(filePath) || /\.[A-Za-z0-9]{1,8}$/.test(filePath))) {
+        const line = Number.parseInt(trailing[2] ?? "0", 10)
+        const col = trailing[3] ? Number.parseInt(trailing[3], 10) : undefined
+        return {
+          filePath,
+          lineNumber: line > 0 ? line : undefined,
+          columnNumber: col && col > 0 ? col : undefined,
+        }
+      }
+    }
+
+    return { filePath: working }
   }
 
   private expandHomePath(filePath: string): string {

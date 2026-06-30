@@ -111,6 +111,16 @@ function getMarkdown(): MarkdownIt {
     if (/^(https?|ftp):/i.test(href)) {
       token.attrSet("target", "_blank")
       token.attrSet("rel", "noopener noreferrer")
+    } else if (/^(mailto|tel):/i.test(href)) {
+      // leave default
+    } else if (href.startsWith("#")) {
+      // in-document fragment; leave default
+    } else if (href !== "") {
+      token.attrSet("href", "#")
+      token.attrSet("class", "file-link")
+      token.attrSet("data-file-path", href)
+      token.attrSet("role", "button")
+      token.attrSet("tabindex", "0")
     }
     return defaultLinkOpen(tokens, idx, options, env, self)
   }

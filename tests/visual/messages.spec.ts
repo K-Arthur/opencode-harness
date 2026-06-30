@@ -545,5 +545,29 @@ test.describe('Chat Messages', () => {
       const openFileMsg = messages.find(m => m.type === 'open_file' && m.path === 'src/chat/webview/renderer.ts')
       expect(openFileMsg).toBeDefined()
     })
+
+    test('should trigger open_file when clicking a markdown file-link anchor', async ({ page }) => {
+      await page.evaluate(() => {
+        const msgList = document.querySelector('.message-list')
+        if (!msgList) return
+
+        const assistantMsg = document.createElement('div')
+        assistantMsg.className = 'message assistant'
+        assistantMsg.innerHTML = `
+          <div class="message-bubble markdown-content">
+            <p>Check <a class="file-link" data-file-path="src/main.ts:42" href="#" tabindex="0" role="button">src/main.ts</a> for details.</p>
+          </div>
+        `
+        msgList.appendChild(assistantMsg)
+      })
+
+      const link = page.locator('.file-link').first()
+      await expect(link).toBeVisible()
+      await link.click()
+
+      const messages = await postedMessages(page)
+      const openFileMsg = messages.find(m => m.type === 'open_file' && m.path === 'src/main.ts:42')
+      expect(openFileMsg).toBeDefined()
+    })
   })
 })
