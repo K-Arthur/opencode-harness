@@ -103,4 +103,30 @@ void describe("SseSubscriber", () => {
   void it("emits normalized events via onEvent callback", () => {
     assert.ok(source.includes("this.onEvent(normalized)"), "should call onEvent with normalized events")
   })
+
+  // Fix 4: EventDeduplicator integration
+  void it("imports and uses EventDeduplicator for replay deduplication", () => {
+    assert.ok(source.includes("EventDeduplicator"), "should import EventDeduplicator")
+    assert.ok(source.includes("this.eventDeduplicator"), "should instantiate eventDeduplicator")
+    assert.ok(source.includes("eventDeduplicator.isDuplicate"), "should call isDuplicate on incoming events")
+  })
+
+  void it("does NOT reset EventDeduplicator on reconnect (deduplicator survives reconnects)", () => {
+    // The deduplicator must persist across reconnects so server-replayed events are dropped.
+    // The normalizer is reset (line: this.eventNormalizer = createSdkEventNormalizer()) but deduplicator must not be.
+    assert.ok(!source.includes("this.eventDeduplicator = new EventDeduplicator"), "EventDeduplicator must NOT be recreated on reconnect")
+    assert.ok(source.includes("readonly eventDeduplicator") || source.includes("private readonly eventDeduplicator"), "EventDeduplicator must be readonly (no reassignment)")
+  })
+
+  void it("logs deduplicator-retained message on reconnect", () => {
+    assert.ok(source.includes("deduplicator retained"), "should log that deduplicator was retained on reconnect")
+  })
+
+  // Fix 6: IdleWatchdog timeout
+  void it("uses 300s idle watchdog timeout (not 90s) for thinking-model compatibility", () => {
+    assert.ok(source.includes("IDLE_WATCHDOG_TIMEOUT_MS"), "should define IDLE_WATCHDOG_TIMEOUT_MS constant")
+    assert.ok(source.includes("300_000"), "IDLE_WATCHDOG_TIMEOUT_MS should be 300000ms (5 minutes)")
+    assert.ok(source.includes("SseSubscriber.IDLE_WATCHDOG_TIMEOUT_MS"), "should use the constant in idleWatchdog construction")
+    assert.ok(!source.includes("timeoutMs: 90_000"), "should NOT use the old 90s hardcoded value")
+  })
 })

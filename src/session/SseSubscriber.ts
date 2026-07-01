@@ -4,6 +4,7 @@ import { createSdkEventNormalizer } from "./EventNormalizer"
 import type { SdkEventLike } from "./eventHandlers/types"
 import { SseEventParser } from "./sseParser"
 import { IdleWatchdog } from "./IdleWatchdog"
+import { EventDeduplicator } from "./EventDeduplicator"
 import type { EventStreamLifecycleState, EventStreamStatus, OpencodeEvent, OpencodeEventType } from "./sessionTypes"
 
 export class SseSubscriber {
@@ -22,9 +23,25 @@ export class SseSubscriber {
   private readonly eventStreamReadyWaiters = new Set<(ready: boolean) => void>()
   private readonly MAX_EVENT_STREAM_RECONNECT_ATTEMPTS = 10
   private firstPartEventLoggedForSessions = new Set<string>()
+  /** EventNormalizer handles shape transformation only — it is safe to reset on reconnect. */
   private eventNormalizer = createSdkEventNormalizer()
+  /**
+   * Survives reconnects intentionally: drops server-replayed events that were
+   * already processed before the SSE disconnect. The normalizer is reset but
+   * the deduplicator is not, so replayed events are silently dropped instead
+   * of causing duplicate state updates on the client.
+   */
+  private readonly eventDeduplicator = new EventDeduplicator()
   private droppedNonDataFrameCount = 0
   private disposed = false
+
+  /**
+   * Idle watchdog timeout: 300s (5 min) to accommodate long-thinking models
+   * (DeepSeek-R1, Qwen-QwQ, Kimi) that can be silent for 60–180s between
+   * tokens. The previous 90s value triggered spurious reconnects mid-thinking,
+   * losing in-flight events and creating "stuck streaming" UI states.
+   */
+  static readonly IDLE_WATCHDOG_TIMEOUT_MS = 300_000
 
   constructor(
     private readonly hasClient: () => boolean,
@@ -146,7 +163,7 @@ export class SseSubscriber {
     }, 30_000)
 
     const idleWatchdog = new IdleWatchdog({
-      timeoutMs: 90_000,
+      timeoutMs: SseSubscriber.IDLE_WATCHDOG_TIMEOUT_MS,
       onTimeout: () => {
         if (!controller.signal.aborted) controller.abort()
       },
@@ -268,6 +285,15 @@ export class SseSubscriber {
           continue
         }
         const sdkEvent = event as unknown as SdkEventLike
+        // Dedup using the SSE event's own `id` field (set by result.lastEventId tracking).
+        // High-frequency delta events (message.part.delta, server.heartbeat) carry no id
+        // and are exempt — isDuplicate("") returns false, so they always pass through.
+        const sseId = (sdkEvent as unknown as Record<string, unknown>).id
+        const deduplicableId = typeof sseId === "string" ? sseId : ""
+        if (deduplicableId && this.eventDeduplicator.isDuplicate(deduplicableId)) {
+          log.debug(`SSE event dedup: dropped replayed ${sdkEvent.type} id=${deduplicableId}`)
+          continue
+        }
         if (sdkEvent.type !== "message.part.delta" && sdkEvent.type !== "server.heartbeat" &&
             sdkEvent.type !== "message.part.updated" && sdkEvent.type !== "sync") {
           log.debug(`SSE event: ${sdkEvent.type} props=${JSON.stringify(sdkEvent.properties ?? {}).slice(0, 200)}`)
@@ -326,8 +352,12 @@ export class SseSubscriber {
     this.setEventStreamState("connected")
 
     if (wasReconnect) {
+      // Reset shape-transformation normalizer (stateless; safe to recreate).
+      // EventDeduplicator is intentionally NOT reset — it retains event IDs
+      // seen before the disconnect so server-replayed events are dropped.
       this.eventNormalizer = createSdkEventNormalizer()
       this.droppedNonDataFrameCount = 0
+      log.info("Event stream reconnected: normalizer reset, deduplicator retained")
     }
 
     if (this.eventStreamStableTimer) {
