@@ -1,7 +1,7 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-07-01
-**Version:** v0.4.41
+**Version:** v0.4.42
 
 ## Highlights (2026-07-01) — Performance audit, state integrity fixes, frontend improvements
 

@@ -216,6 +216,14 @@
 // path.resolve() normalization. Production build measures 749.8KB /
 // 812.6KB. +4KB each keeps ~0.5% headroom so the gate still trips on
 // a real regression.
+//
+// 2026-07-01 re-baseline (host 761KB -> 763KB, webview 819KB -> 821KB):
+// stream integrity fixes (EventDeduplicator, activity-sequence guard,
+// pendingStream restoration, finalizer chain, paginated fetch, heartbeat
+// fingerprint) and frontend improvements (elapsed time ticker in typing
+// indicator, generation_outcome in-webview toast, notifyTurnOutcome
+// distinguishing success/error/aborted). Production build measures
+// 762.1KB host / 819.5KB webview. +2KB each keeps ~0.3% headroom.
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -225,8 +233,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
-  { path: "dist/extension.js", limitBytes: 761 * 1024, label: "extension host" },
-  { path: "dist/chat/webview/main.js", limitBytes: 819 * 1024, label: "chat webview" },
+  { path: "dist/extension.js", limitBytes: 763 * 1024, label: "extension host" },
+  { path: "dist/chat/webview/main.js", limitBytes: 821 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
 
