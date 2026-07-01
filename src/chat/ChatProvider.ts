@@ -1762,7 +1762,10 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       for (const t of this.tabManager.getAllTabs()) {
         if (t.isStreaming) candidateTabIds.add(t.id)
       }
-      for (const snap of this.tabManager.getInterruptedTabs()) {
+      // Fix 2: also reconcile tabs that were in the finalizing phase
+      // (pendingStream=true but wasStreaming=false) — they may have completed
+      // during the outage and need the dropped stream_end emitted.
+      for (const snap of this.tabManager.getPendingStreamTabs()) {
         candidateTabIds.add(snap.tabId)
       }
       for (const tabId of candidateTabIds) {

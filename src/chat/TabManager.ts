@@ -121,23 +121,37 @@ export class TabManager {
     this.restorationStates.clear()
     const now = Date.now()
     for (const tab of this.tabs.values()) {
-      if (tab.isStreaming) {
+      const hasPendingStream = tab.isStreaming || tab.waitingForCompletion
+      if (hasPendingStream) {
         this.restorationStates.set(tab.id, {
           tabId: tab.id,
           cliSessionId: tab.cliSessionId,
-          wasStreaming: true,
+          wasStreaming: tab.isStreaming,
+          // Fix 2: broader pending-stream flag covers the finalizing phase where
+          // isStreaming is false but waitingForCompletion is still true.
+          // On reload, reconcileAfterReconnect uses this to detect completed runs.
+          pendingStream: true,
           interruptedAt: now,
         })
       }
     }
     this.persistRestorationState()
     if (this.restorationStates.size > 0) {
-      log.info(`Captured streaming snapshot for ${this.restorationStates.size} tab(s)`)
+      log.info(`Captured streaming snapshot for ${this.restorationStates.size} tab(s) (streaming=${
+        Array.from(this.restorationStates.values()).filter(s => s.wasStreaming).length
+      }, pendingStream=${this.restorationStates.size})`)
     }
   }
 
   getInterruptedTabs(): TabRestorationState[] {
     return Array.from(this.restorationStates.values()).filter(s => s.wasStreaming)
+  }
+
+  /** Fix 2: Returns ALL tabs that had any pending stream at capture time,
+   *  including those in the finalizing phase (pendingStream=true, wasStreaming=false).
+   *  Use for reconcileAfterReconnect; use getInterruptedTabs() for UI banners. */
+  getPendingStreamTabs(): TabRestorationState[] {
+    return Array.from(this.restorationStates.values()).filter(s => s.pendingStream || s.wasStreaming)
   }
 
   clearRestorationState(tabId: string): void {

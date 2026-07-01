@@ -226,8 +226,9 @@ void describe("streaming-state stability: G4 reconcile also covers interrupted s
     assert.ok(idx >= 0)
     const block = CHAT_PROVIDER.slice(idx, idx + 2200)
     assert.ok(
-      block.includes("candidateTabIds") && block.includes("getInterruptedTabs()"),
-      "reconcile must consider both isStreaming tabs and getInterruptedTabs snapshot",
+      block.includes("candidateTabIds") &&
+        (block.includes("getInterruptedTabs()") || block.includes("getPendingStreamTabs()")),
+      "reconcile must consider both isStreaming tabs and getInterruptedTabs/getPendingStreamTabs snapshot",
     )
     assert.ok(
       block.includes("reconcileAfterReconnect(tabId"),

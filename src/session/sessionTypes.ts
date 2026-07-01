@@ -81,6 +81,16 @@ export interface TabRestorationState {
   cliSessionId?: string
   /** True when the tab was actively streaming (not just idle). */
   wasStreaming: boolean
+  /**
+   * Fix 2: True when the tab had a pending stream at capture time
+   * (`waitingForCompletion === true`). Broader than `wasStreaming` — covers
+   * the finalizing phase where `isStreaming` is false but the run is still
+   * completing. On reload, tabs with `pendingStream` trigger
+   * `reconcileAfterReconnect` to detect if `time.completed` was set during
+   * the outage (and emit the dropped `stream_end` if so), or to restore the
+   * "thinking" state if the run is still active.
+   */
+  pendingStream?: boolean
   /** The last user message ID we sent (for resume). */
   lastUserMessageId?: string
   /** Timestamp of the crash/disconnect (ms since epoch). */
