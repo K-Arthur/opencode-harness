@@ -1,7 +1,31 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-06-28
-**Version:** v0.4.31
+**Last Updated:** 2026-07-01
+**Version:** v0.4.41
+
+## Highlights (2026-07-01) — Performance audit, state integrity fixes, frontend improvements
+
+**Six targeted fixes for session lifecycle state bugs and performance bottlenecks, plus frontend generation tracking and notifications.**
+
+- **Activity-sequence guard** (Fix 1): Replaced the 1500ms quiet-period timer
+  that could be raced by late tool events with a microtask-based sequence check.
+  Eliminates "completed session shows as running / running session shows as done".
+- **Finalizer chain fix** (Fix 3): Second concurrent finalize trigger now chains
+  on the in-flight promise instead of silently returning the same result.
+- **Paginated final fetch** (Fix 5): Replaced full-history `getSessionMessages`
+  with `getMessages(limit=5)` — O(1) regardless of session length.
+- **Heartbeat fingerprint** (Fix 7): Replaced `JSON.stringify` with a field-level
+  hash for the activity snapshot dirty check — eliminates per-tick GC pressure.
+- **EventDeduplicator** (Fix 4): TTL-based SSE event dedup that survives
+  reconnects, preventing server-replayed events from causing duplicate state updates.
+- **Idle watchdog raised to 300s** (Fix 6): Accommodates DeepSeek-R1/Qwen-QwQ
+  long reasoning silences that were triggering spurious reconnects at 90s.
+- **pendingStream restoration** (Fix 2): Finalizing-phase tabs are now captured
+  in the restoration snapshot and reconciled on VS Code reload.
+- **Elapsed time indicator**: Streaming "Thinking…" indicator shows live elapsed
+  seconds (e.g. "• 12s") ticking during generation.
+- **Generation outcome notifications**: VS Code native notifications on success/
+  failure when the webview is hidden; in-webview success/error toasts always.
 
 ## Highlights (2026-06-28) — Theme customizer rework, subagent bug fixes
 

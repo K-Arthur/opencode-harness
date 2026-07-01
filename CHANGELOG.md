@@ -15,6 +15,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > move items from `[Unreleased]` to the new version section and update the date.
 > Never leave features marked as "unreleased" after they are shipped.
 
+## [0.4.41] — 2026-07-01
+
+### Added
+
+- **Elapsed time in streaming indicator**: The "Thinking…" / "Running tool…"
+  indicator now shows elapsed seconds (`• 12s`) that tick live during generation.
+  The timer starts when `handleStreamStart` fires and clears automatically when
+  the indicator is hidden — no StreamState coupling required.
+- **Generation outcome notifications**: Completion and failure events now fire
+  both a VS Code native notification (when the webview is hidden) and an
+  in-webview toast (always, except for intentional user aborts).
+  - Success: green 3-second auto-dismiss toast; info notification with session name.
+  - Failure: red persistent toast with dismiss button and failure reason label
+    ("response timeout", "stream timeout", "an error occurred"); VS Code error
+    notification with session name.
+- **`EventDeduplicator`** (Fix 4): TTL-based dedup that survives SSE reconnects.
+  Server-replayed events after reconnect no longer cause duplicate state updates.
+  The deduplicator is NOT reset on reconnect (unlike `EventNormalizer`) so it
+  catches replayed event IDs across connection boundaries.
+- **`pendingStream` restoration state** (Fix 2): `TabManager.captureStreamingSnapshot`
+  now persists tabs in the finalizing phase (`waitingForCompletion === true` but
+  `isStreaming === false`). On VS Code reload, `getPendingStreamTabs()` includes
+  these tabs in the `reconcileAfterReconnect` candidate set, so runs that
+  completed during a reload have their dropped `stream_end` correctly emitted.
+
+### Fixed
+
+- **Status-triggered premature finalization** (Fix 1 — G5 race): The 1500ms
+  quiet-period guard was raced by a tool event arriving at 1501ms, causing
+  completed sessions to show as "running" and running sessions as "done".
+  Replaced with an activity-sequence microtask guard: a sequence number is
+  bumped by every activity event; `runMaybeFinalizeStream` captures the sequence
+  before scheduling the finalize, then checks it in a `queueMicrotask` — any
+  interleaved activity cancels the finalize atomically.
+- **Second concurrent finalize trigger lost** (Fix 3): When two finalize triggers
+  fired concurrently, the second returned the same in-flight promise and its
+  result was silently lost. Now the second trigger chains `.then()` on the
+  in-flight promise and re-runs finalization if the first attempt returned `false`.
+- **O(n) finalization fetch** (Fix 5): `getSessionMessages` fetched the full
+  session history on every stream completion, causing visible lag for long sessions.
+  Replaced with `getMessages(limit=5)` — O(1) network I/O regardless of session
+  length.
+- **GC pressure on heartbeat fingerprint** (Fix 7): `JSON.stringify(slim)` was
+  called on the full activity snapshot every heartbeat tick. Replaced with a
+  field-level hash string joining `runId`, tool `id:status:updatedAt`, and
+  subagent `id:status:updatedAt` — much cheaper to compute and GC-friendly.
+- **Idle watchdog too short for thinking models** (Fix 6): The 90-second idle
+  watchdog fired on DeepSeek-R1/Qwen-QwQ long reasoning silences, triggering
+  spurious reconnects. Raised to 300 seconds via `IDLE_WATCHDOG_TIMEOUT_MS`.
+
 ## [0.4.40] — 2026-06-30
 
 ### Added
@@ -134,8 +184,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The "stop recovery auto-switch" guard prevents a background session's
   recovery from stealing focus.
   ([`93ded58`](https://github.com/K-Arthur/opencode-harness/commit/93ded58))
-
-## [Unreleased]
 
 ## [0.4.36] — 2026-06-29
 

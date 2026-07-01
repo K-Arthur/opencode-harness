@@ -119,6 +119,30 @@ Three classes of silent message drops were identified from production logs and f
 
 `ToolCallTracker.markUnresolvedPendingToolCalls` marked tools as "unresolved" in the `RunActivityTracker` after the 30s grace timeout, but didn't remove the tool IDs from `activeToolCallIds`. `StreamCoordinator.getFinalizeDeferReason` checks `activeToolCallIds` (not the tracker status), so it kept returning "1 tool call(s) still running" and `maybeFinalizeStream` deferred forever — the stream never finalized and the spinner stayed active. Fix: `markUnresolvedPendingToolCalls` now removes each unresolved tool ID from `activeToolCallIds` and deletes the map entry when the set is empty. Tests: `ToolCallTracker.test.ts`.
 
+### Session Lifecycle State Integrity (Fixed, 2026-07-01)
+
+Six root causes behind "completed session shows as running" / "running session shows as done":
+
+- **Fix 1 — Activity-sequence guard**: Replaced the 1500ms quiet-period timer in `runMaybeFinalizeStream` (G5) with a microtask-based sequence check. `activitySeqs` tracks a per-tab counter bumped by every tool/step event; the sequence is captured before scheduling finalization, then re-checked in `queueMicrotask` — any interleaved activity atomically cancels the finalize. Eliminates the race where a tool event arrived at 1501ms and wrongly triggered completion.
+
+- **Fix 2 — pendingStream restoration**: `TabManager.captureStreamingSnapshot` now also captures tabs in the finalizing phase (`waitingForCompletion === true`, `isStreaming === false`) with `pendingStream: true`. On VS Code reload, `getPendingStreamTabs()` includes these tabs in the `reconcileAfterReconnect` candidate set so dropped `stream_end` events are re-emitted.
+
+- **Fix 3 — Finalizer chain**: When two finalize triggers fired concurrently, the second returned the same in-flight promise and its result was lost. Now the second trigger chains `.then()` on the existing promise and re-runs finalization if the first returned `false`.
+
+- **Fix 4 — EventDeduplicator**: TTL-based SSE event dedup (`EventDeduplicator`) that survives reconnects. Unlike `EventNormalizer` (reset on reconnect), the deduplicator is retained across reconnections to catch server-replayed event IDs.
+
+- **Fix 5 — Paginated final fetch**: Replaced `getSessionMessages` (full history, O(n)) with `getMessages(limit=5)` in `fetchFinalBlocks` — O(1) network cost regardless of session length.
+
+- **Fix 6 — Idle watchdog at 300s**: Raised from 90s to 300s (`IDLE_WATCHDOG_TIMEOUT_MS`) to accommodate DeepSeek-R1/Qwen-QwQ long reasoning silences that were triggering spurious reconnects.
+
+- **Fix 7 — Heartbeat fingerprint**: Replaced `JSON.stringify(slim)` with a field-level hash string (`runId§tools:id:status:updatedAt§subagents:id:status:updatedAt`) in `postRunActivitySnapshot` to avoid per-tick GC pressure.
+
+### Frontend Progression Tracking & Notifications (2026-07-01)
+
+- **Elapsed time ticker**: `handleStreamStart` sets `_elapsedStart` on the typing indicator DOM element and starts a 1s `setInterval` that updates a `.typing-elapsed` span (`• 12s`). `showTypingIndicator` appends the elapsed span whenever `_elapsedStart` is set; `hideTypingIndicator` clears the timer.
+- **`notifyTurnOutcome(sessionId, reason)`**: Replaces `notifyTurnComplete`. Fires `showInformationMessage` (success) or `showErrorMessage` (error/timeout) with the session name when the webview is hidden. Also posts a `generation_outcome` webview message for in-webview toasts.
+- **In-webview toast (`showGenerationToast`)**: Green 3-second auto-dismiss on success; red persistent toast with dismiss button on failure. Uses `--z-tooltip` z-index layer and design-system color tokens (`color-mix`). Only shown for the active session.
+
 ### Sticky-Header Collision In Modals (Fixed, 2026-06-16)
 
 `.keyboard-shortcuts-content` set `overflow-y: auto` directly on the container holding *both* the modal header (title + close button) and the shortcuts `<table>`. `.keyboard-shortcuts-table thead th` is `position: sticky; top: 0`, which sticks relative to the nearest scrolling ancestor — the same container — so as the user scrolled, the modal header scrolled away while the sticky column-header row caught at the top of that same scroll box, overlapping the title and close button it had just displaced. Every other modal in this codebase (session history, API key) avoids this by structuring `.modal-content` as a non-scrolling `.modal-header` plus a separate `.modal-body` (`flex: 1; overflow-y: auto`) sibling that scrolls independently — the keyboard-shortcuts modal was the one place that skipped the `.modal-body` wrapper and let the header live inside the scroll box. Fix: `setupKeyboardShortcutsModal` now wraps the `<table>` in a `.modal-body` div, reusing the existing rule rather than adding new CSS; `.keyboard-shortcuts-content` keeps only its `max-width` override. Audited all five `position: sticky` usages in the webview CSS (`cf-summary-bar`, `#input-area`, `.model-dropdown-search-container`, `.diff-action-bar`, plus this one) — only the keyboard-shortcuts thead shared a scroll container with another element that itself needed to stay fixed; the rest are each the sole sticky element in their scroll box (sticky-first-item or sticky-bottom-bar patterns) and don't have this failure mode. Test: `keyboardShortcutsModal.test.ts` (`"keeps the header out of the scrolling body so it can't collide with the sticky table header"`).
