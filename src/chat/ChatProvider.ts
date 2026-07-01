@@ -2608,10 +2608,10 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
 
     // F15: Notify when turn completes and webview is not visible
     if (msg.type === "stream_end") {
-      this.notifyTurnComplete()
-      // Plan-mode completion detection: offer to switch to build/auto mode
       const sessionId = typeof msg.sessionId === "string" ? msg.sessionId : undefined
       const reason = typeof msg.reason === "string" ? msg.reason : undefined
+      if (sessionId) this.notifyTurnOutcome(sessionId, reason)
+      // Plan-mode completion detection: offer to switch to build/auto mode
       if (sessionId && reason !== "aborted" && reason !== "error" && reason !== "ttfb_timeout" && reason !== "hard_timeout") {
         this.maybeSuggestModeSwitch(sessionId)
       }
@@ -2806,13 +2806,43 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     await this.diffAcceptService.handleCompactBannerAction(sessionId, action)
   }
 
-  // F15: Notification when stream completes and webview is not focused
-  private notifyTurnComplete(): void {
+  // F15: Notification when stream completes or fails. VS Code native notification
+  // fires only when the webview is hidden; the in-webview toast fires always (except
+  // for intentional user aborts).
+  private notifyTurnOutcome(sessionId: string, reason?: string): void {
+    const isError = reason === "error" || reason === "ttfb_timeout" || reason === "hard_timeout"
+    const isAborted = reason === "aborted"
+
     if (!this._view?.visible) {
-      vscode.window.showInformationMessage("OpenCode turn complete", "Open Chat").then(selection => {
-        if (selection === "Open Chat") {
-          this._view?.show?.(true)
-        }
+      const session = this.sessionStore.get(sessionId)
+      const title = session?.name ? `"${session.name}"` : "the session"
+      if (isError) {
+        const reasonLabel = reason === "ttfb_timeout" ? "response timeout"
+          : reason === "hard_timeout" ? "stream timeout"
+          : "error"
+        void vscode.window.showErrorMessage(
+          `OpenCode: generation failed (${reasonLabel}) for ${title}`,
+          "Open Chat"
+        ).then(selection => {
+          if (selection === "Open Chat") this._view?.show?.(true)
+        })
+      } else if (!isAborted) {
+        void vscode.window.showInformationMessage(
+          `OpenCode: generation complete for ${title}`,
+          "Open Chat"
+        ).then(selection => {
+          if (selection === "Open Chat") this._view?.show?.(true)
+        })
+      }
+    }
+
+    // Send in-webview toast for all outcomes except intentional aborts.
+    if (!isAborted) {
+      this.postMessage({
+        type: "generation_outcome",
+        sessionId,
+        success: !isError,
+        reason,
       })
     }
   }

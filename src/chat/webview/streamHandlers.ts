@@ -387,6 +387,13 @@ export interface StreamCallbacks {
 
 const TYPING_INDICATOR_ICON = `<span class="premium-spinner-container">${SPINNER_SVG}</span>`
 
+// Elapsed-time ticker stored on the indicator DOM element so hideTypingIndicator
+// can clear it without needing access to StreamState.
+type TimedTypingIndicator = HTMLDivElement & {
+  _elapsedStart?: number
+  _elapsedTimer?: ReturnType<typeof setInterval>
+}
+
 function createLiveRenderQueue(
   state: StreamState,
   els: StreamElements,
@@ -439,12 +446,29 @@ export function showTypingIndicator(
   const labelSpan = document.createElement("span")
   labelSpan.textContent = label || "Thinking..."
   els.typingLabel.appendChild(labelSpan)
+
+  // Append elapsed time when a stream is active (start was marked by handleStreamStart)
+  const ind = els.typingIndicator as TimedTypingIndicator
+  if (ind._elapsedStart) {
+    const elSpan = document.createElement("span")
+    elSpan.className = "typing-elapsed"
+    const sec = Math.round((Date.now() - ind._elapsedStart) / 1000)
+    elSpan.textContent = ` • ${sec}s`
+    els.typingLabel.appendChild(elSpan)
+  }
+
   els.scrollAnchor.scrollIfAnchored()
 }
 
 export function hideTypingIndicator(
   els: StreamElements
 ): void {
+  const ind = els.typingIndicator as TimedTypingIndicator
+  if (ind._elapsedTimer) {
+    clearInterval(ind._elapsedTimer)
+    ind._elapsedTimer = undefined
+    ind._elapsedStart = undefined
+  }
   els.typingIndicator.classList.add("hidden")
   els.typingLabel.innerHTML = ''
 }
@@ -573,6 +597,21 @@ export function handleStreamStart(
 
   state.isStreaming = true
   state.rafPending = false
+
+  // Start elapsed time ticker. Stored on the DOM element so hideTypingIndicator
+  // can clear it without needing access to StreamState.
+  const ind = els.typingIndicator as TimedTypingIndicator
+  ind._elapsedStart = Date.now()
+  if (ind._elapsedTimer) clearInterval(ind._elapsedTimer)
+  ind._elapsedTimer = setInterval(() => {
+    if (!ind._elapsedStart) return
+    const elSpan = els.typingLabel.querySelector('.typing-elapsed') as HTMLElement | null
+    if (elSpan && !els.typingIndicator.classList.contains('hidden')) {
+      const sec = Math.round((Date.now() - ind._elapsedStart) / 1000)
+      elSpan.textContent = ` • ${sec}s`
+    }
+  }, 1_000)
+
   webviewLog(`Stream started: session=${state.streamingMessageId || "unknown"}`)
 }
 

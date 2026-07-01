@@ -247,9 +247,20 @@ void describe("ChatProvider.ts", () => {
   })
 
   void it("stream_end_triggers_notification_when_webview_not_visible", () => {
-    assert.ok(source.includes("notifyTurnComplete"), "must have notifyTurnComplete method")
-    assert.ok(source.includes('"OpenCode turn complete"'), "must show turn complete notification")
-    assert.ok(source.includes('"Open Chat"'), "must have Open Chat button action")
+    // notifyTurnComplete was replaced by notifyTurnOutcome which distinguishes
+    // success/error, shows session title, and sends a webview toast.
+    assert.ok(
+      source.includes("notifyTurnOutcome") || source.includes("notifyTurnComplete"),
+      "must have turn-complete or turn-outcome notification method"
+    )
+    assert.ok(
+      source.includes('"Open Chat"') || source.includes("'Open Chat'"),
+      "must have Open Chat button action in VS Code notification"
+    )
+    assert.ok(
+      source.includes("showInformationMessage") && source.includes("showErrorMessage"),
+      "must show info for success and error for failures"
+    )
   })
 
   // Switching to Auto is treated as consent — the native warning modal was

@@ -108,6 +108,48 @@ const log = {
 
 const STREAM_ACK_MIN_INTERVAL_MS = 200
 
+/** Show a brief in-webview toast for generation completion or failure.
+ *  Uses only DOM APIs — no imports required. Auto-dismisses on success after 3s;
+ *  requires explicit dismiss on failure (persistent until closed). */
+function showGenerationToast(success: boolean, reason?: string): void {
+  // Remove any existing toast before showing a new one
+  document.querySelector(".oc-toast")?.remove()
+
+  const toast = document.createElement("div")
+  toast.className = success ? "oc-toast oc-toast--success" : "oc-toast oc-toast--error"
+  toast.setAttribute("role", "status")
+  toast.setAttribute("aria-live", "polite")
+
+  const msgEl = document.createElement("span")
+  msgEl.className = "oc-toast-msg"
+  if (success) {
+    msgEl.textContent = "Generation complete"
+  } else {
+    const label = reason === "ttfb_timeout" ? "response timeout"
+      : reason === "hard_timeout" ? "stream timeout"
+      : reason === "error" ? "an error occurred"
+      : reason || "unknown reason"
+    msgEl.textContent = `Generation failed: ${label}`
+  }
+  toast.appendChild(msgEl)
+
+  // Persistent dismiss button for failures; auto-dismiss for success
+  if (!success) {
+    const dismissBtn = document.createElement("button")
+    dismissBtn.className = "oc-toast-dismiss"
+    dismissBtn.setAttribute("aria-label", "Dismiss notification")
+    dismissBtn.textContent = "×" // ×
+    dismissBtn.addEventListener("click", () => toast.remove())
+    toast.appendChild(dismissBtn)
+  }
+
+  document.body.appendChild(toast)
+
+  if (success) {
+    timers.setTimeout(() => toast.remove(), 3_000)
+  }
+}
+
 function createWebviewId(prefix: string): string {
   const randomUUID = (globalThis.crypto as { randomUUID?: () => string } | undefined)?.randomUUID
   const id = randomUUID
@@ -2396,6 +2438,13 @@ function setupTodoSkillAndSubagentPanels(): void {
         if (activeSid) {
           vscode.postMessage({ type: "get_todos", sessionId: activeSid })
         }
+      }],
+      ["generation_outcome", (msg, sid) => {
+        if (!sid) return
+        // Only show toast for the currently active session to avoid distracting
+        // the user with notifications from background tabs.
+        if (sid !== stateManager.getState().activeSessionId) return
+        showGenerationToast(Boolean(msg.success), typeof msg.reason === "string" ? msg.reason : undefined)
       }],
       ["suggest_mode_switch", (msg, sid) => {
         const sessionId = typeof msg.sessionId === "string" ? msg.sessionId : sid
