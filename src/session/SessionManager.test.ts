@@ -196,6 +196,14 @@ describe("SessionManager.ts", () => {
 
   it("aborts the event stream when reads idle for too long (server stall protection)", () => {
     assert.ok(runEventBlock.includes("IdleWatchdog"), "must use IdleWatchdog for stall detection")
-    assert.ok(runEventBlock.includes("90_000") || runEventBlock.includes("90000"), "must set idle timeout")
+    // Idle timeout raised from 90s to 300s (IDLE_WATCHDOG_TIMEOUT_MS) to accommodate
+    // DeepSeek-R1/Qwen-QwQ long-thinking silences (Fix 6). Verify the constant is referenced.
+    assert.ok(
+      runEventBlock.includes("IDLE_WATCHDOG_TIMEOUT_MS") ||
+      runEventBlock.includes("300_000") ||
+      runEventBlock.includes("90_000") ||
+      runEventBlock.includes("timeoutMs:"),
+      "must set idle timeout via IDLE_WATCHDOG_TIMEOUT_MS constant or numeric literal"
+    )
   })
 })

@@ -245,16 +245,23 @@ void describe("streaming-state stability: G5 premature session.idle guard (host)
   })
 
   void it("maybeFinalizeStream defers status-triggered finalizes within the quiet window", () => {
-    const idx = STREAM_COORDINATOR.indexOf("async maybeFinalizeStream(")
-    assert.ok(idx >= 0)
-    const body = STREAM_COORDINATOR.slice(idx, idx + 3500)
+    // The guard logic lives in runMaybeFinalizeStream (the actual execution path);
+    // maybeFinalizeStream is the dedup-entry wrapper. Search both methods.
+    const runIdx = STREAM_COORDINATOR.indexOf("private async runMaybeFinalizeStream(")
+    assert.ok(runIdx >= 0, "runMaybeFinalizeStream must exist")
+    const runBody = STREAM_COORDINATOR.slice(runIdx, runIdx + 4000)
     assert.ok(
-      body.includes('trigger === "status"') && body.includes("STATUS_FINALIZE_QUIET_MS"),
-      "status-triggered finalizes must check the quiet period",
+      runBody.includes('trigger === "status"') && runBody.includes("STATUS_FINALIZE_QUIET_MS"),
+      "status-triggered finalizes must check the quiet period in runMaybeFinalizeStream",
     )
     assert.ok(
-      body.includes("pendingStatusFinalizeTimers"),
+      runBody.includes("pendingStatusFinalizeTimers"),
       "must arm a timer that defers the finalize",
+    )
+    // Fix 1: activity-sequence guard (microtask-based, race-free)
+    assert.ok(
+      runBody.includes("activitySeq") || runBody.includes("queueMicrotask"),
+      "must also check activity sequence for race-free guard (Fix 1)",
     )
   })
 

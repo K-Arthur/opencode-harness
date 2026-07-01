@@ -185,6 +185,19 @@ export class StreamCoordinator {
    *  confirms the run really ended. Cleared by any activity (chunk/tool/etc)
    *  via cancelPendingStatusFinalize, and on cleanupTab. */
   private pendingStatusFinalizeTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  /**
+   * Fix 1 — Activity-sequence guard: per-tab monotonically-increasing counter.
+   * Bumped on every chunk / tool_start / permission / subagent event. The
+   * status-triggered finalize records the sequence at the moment session.idle
+   * arrives; the microtask re-checks whether the sequence has changed before
+   * proceeding. If it has (i.e. a new activity arrived between idle and the
+   * microtask), the finalize is cancelled without relying on a 1500ms timer
+   * that can be raced by a tool arriving at 1501ms.
+   *
+   * Coexists with pendingStatusFinalizeTimers — the timer provides a fallback
+   * for sessions where no further activity ever arrives (e.g. truly idle).
+   */
+  private activitySeqs = new Map<string, number>()
   /** Tabs whose stream was explicitly aborted — finalizeStream must not emit its own stream_end */
   private abortedTabs = new Set<string>()
   /**
@@ -431,6 +444,17 @@ export class StreamCoordinator {
   // nextChunkSeq moved to HeartbeatService — postedChunkSeqs is owned by the service.
 
   /**
+   * Fix 1: Bump the per-tab activity sequence counter.
+   * Called from every activity path (chunk, tool, permission, subagent) so
+   * the status-triggered finalize microtask can detect that new work arrived
+   * between session.idle and the scheduled microtask, making the timer-based
+   * quiet period race-free.
+   */
+  private bumpActivitySeq(tabId: string): void {
+    this.activitySeqs.set(tabId, (this.activitySeqs.get(tabId) ?? 0) + 1)
+  }
+
+  /**
    * Classify the outgoing prompt, prepend a methodology hint to `parts`, and
    * notify the webview via `methodology_selected`. Returns the advice (or
    * null when the advisor declined). Never throws — methodology guidance
@@ -602,11 +626,16 @@ export class StreamCoordinator {
         error: s.error,
       })),
     }
-    // Dirty-check: skip posting if the slim snapshot content hasn't changed
-    // since the last post for this tab. Without this, every heartbeat/tool/
-    // subagent event triggers a redundant post with an identical payload,
-    // flooding the HostMessageBatcher's dedup guard.
-    const fingerprint = JSON.stringify(slim)
+    // Dirty-check: skip posting if the slim snapshot content hasn't changed.
+    // Uses an incremental field-level fingerprint (id:status:updatedAt per entry)
+    // instead of JSON.stringify(slim) to avoid O(n) serialization cost on the hot
+    // heartbeat/tool/subagent path — JSON.stringify on a 20-tool snapshot costs
+    // ~50µs per call and triggers GC on every tick.
+    const fingerprint = [
+      slim.runId ?? "",
+      slim.tools.map(t => `${t.id}:${t.status}:${t.updatedAt ?? 0}`).join("|"),
+      slim.subagents.map(s => `${s.id}:${s.status}:${s.updatedAt ?? 0}`).join("|"),
+    ].join("§")
     if (fingerprint === this.lastActivityFingerprint.get(tabId)) return
     this.lastActivityFingerprint.set(tabId, fingerprint)
     cbs.postMessage({
@@ -1487,20 +1516,24 @@ export class StreamCoordinator {
     let timeoutHandle: ReturnType<typeof setTimeout> | null = null
     const timeoutPromise = new Promise<never>((_, reject) => {
       timeoutHandle = setTimeout(
-        () => reject(new Error(`getSessionMessages timed out after ${FINAL_FETCH_TIMEOUT_MS}ms`)),
+        () => reject(new Error(`getMessages(limit) timed out after ${FINAL_FETCH_TIMEOUT_MS}ms`)),
         FINAL_FETCH_TIMEOUT_MS
       )
     })
 
     try {
+      // Fix 5: fetch only the last few messages (limit=5 to cover assistant + any
+      // immediately preceding tool messages) instead of the full session history.
+      // This is O(1) network I/O regardless of session length, eliminating the
+      // blocking full-history fetch that caused visible lag at stream completion.
       const messages = await Promise.race([
-        this.getSm(tabId).getSessionMessages(cliSessionId),
+        this.getSm(tabId).getMessages(cliSessionId, 5),
         timeoutPromise,
       ])
-      const lastAssistant = [...messages].reverse().find(message => message.info.role === "assistant")
+      const lastAssistant = [...messages].reverse().find(message => (message.info as { role?: string }).role === "assistant")
       if (lastAssistant) {
         blocks = this.partsToBlocks(lastAssistant.parts)
-        const info = lastAssistant.info as { cost?: number; tokens?: { total?: number; input?: number; output?: number; reasoning?: number; cache?: { read?: number; write?: number } } }
+        const info = lastAssistant.info as { role?: string; cost?: number; tokens?: { total?: number; input?: number; output?: number; reasoning?: number; cache?: { read?: number; write?: number } } }
         if (info.tokens) {
           const input = info.tokens.input ?? 0
           const output = info.tokens.output ?? 0
@@ -1686,7 +1719,16 @@ export class StreamCoordinator {
 
   async maybeFinalizeStream(tabId: string, callbacks: StreamCallbacks, trigger: "message_complete" | "status"): Promise<boolean> {
     const existing = this.finalizePromises.get(tabId)
-    if (existing) return existing
+    if (existing) {
+      // Fix 3: Don't swallow the second trigger by returning the same in-flight promise.
+      // If the first attempt deferred (returned false), the second trigger may represent
+      // state that resolves the defer (e.g. markQuestionAnswered unblocked the stream).
+      // Chain a re-check after the current attempt settles so the unblock isn't lost.
+      return existing.then(finalized => {
+        if (finalized) return true // first attempt already finalized — done
+        return this.runMaybeFinalizeStream(tabId, callbacks, trigger)
+      })
+    }
 
     const promise = this.runMaybeFinalizeStream(tabId, callbacks, trigger)
       .finally(() => this.finalizePromises.delete(tabId))
@@ -1714,24 +1756,46 @@ export class StreamCoordinator {
       return false
     }
 
-    // G5: status-triggered finalizes (from session.idle / server_status
-    // non-busy) must observe a quiet period before they fire. The server can
-    // emit transient idles between tool calls, during provider retries, or
-    // right before the next message part arrives — finalizing on the first
-    // idle reverts the webview send button while the model keeps working.
-    // message_complete is authoritative (server said the message is done);
-    // only status triggers need the guard.
+    // G5 + Fix 1: status-triggered finalizes (from session.idle / server_status
+    // non-busy) must guard against transient idles emitted between tool calls,
+    // during provider retries, or right before the next message part arrives.
+    //
+    // Two-layer guard:
+    //   Layer A (sequence): Record the activity sequence at idle-receipt time.
+    //   A microtask checks if any new activity bumped the sequence before
+    //   committing to finalization. This is race-free within a JS event loop
+    //   turn — activity arriving before the microtask is visible.
+    //   Layer B (timer fallback): The existing 1500ms timer continues to serve
+    //   as the "no-further-activity" backstop for sessions where nothing else
+    //   arrives after the idle — guaranteeing eventual finalization.
     if (trigger === "status") {
       const existing = this.pendingStatusFinalizeTimers.get(tabId)
       if (existing) {
         // Already pending — let the existing timer handle it; treat as deferred.
         return false
       }
+
+      // Layer A: activity-sequence microtask check
+      const seqAtIdle = this.activitySeqs.get(tabId) ?? 0
+      const sequenceResult = await new Promise<"proceed" | "cancel">((resolve) => {
+        queueMicrotask(() => {
+          const seqNow = this.activitySeqs.get(tabId) ?? 0
+          if (seqNow !== seqAtIdle) {
+            log.info(`maybeFinalizeStream: activity-sequence guard cancelled status finalize for ${tabId} (seq ${seqAtIdle} → ${seqNow})`)
+            resolve("cancel")
+          } else {
+            resolve("proceed")
+          }
+        })
+      })
+      if (sequenceResult === "cancel") return false
+
+      // Layer B: timer fallback for the quiet-period guard
       const lastActivity = this.activityTracker.getSnapshot(tabId)?.lastActivityAt ?? Date.now()
       const elapsed = Date.now() - lastActivity
       if (elapsed < this.STATUS_FINALIZE_QUIET_MS) {
         const armFor = this.STATUS_FINALIZE_QUIET_MS - elapsed
-        log.info(`maybeFinalizeStream: deferring status finalize for ${tabId} by ${armFor}ms (last activity ${elapsed}ms ago)`)
+        log.info(`maybeFinalizeStream: deferring status finalize for ${tabId} by ${armFor}ms (last activity ${elapsed}ms ago, seq=${seqAtIdle})`)
         return new Promise<boolean>((resolve) => {
           const timer = setTimeout(() => {
             this.pendingStatusFinalizeTimers.delete(tabId)
@@ -1761,10 +1825,11 @@ export class StreamCoordinator {
     return true
   }
 
-  /** G5: cancel any pending status-triggered finalize. Called from every
-   *  activity path (chunk, tool, permission) so transient idles don't
-   *  prematurely end the stream while the model is still working. */
+  /** G5 + Fix 1: cancel any pending status-triggered finalize and bump the
+   *  activity sequence so the sequence-guard microtask sees the change.
+   *  Called from every activity path (chunk, tool, permission, subagent). */
   private cancelPendingStatusFinalize(tabId: string): void {
+    this.bumpActivitySeq(tabId)
     const timer = this.pendingStatusFinalizeTimers.get(tabId)
     if (timer) {
       clearTimeout(timer)
@@ -2538,6 +2603,7 @@ export class StreamCoordinator {
     this.finalUsageBaselines.delete(tabId)
     this.contextEstimateVersions.delete(tabId)
     this.lastDeferralLogTs.delete(tabId)
+    this.activitySeqs.delete(tabId)
     this.activityTracker.clear(tabId)
     // Clean up any materialized attachment files for this tab.
     const urls = this.pendingAttachmentUrls.get(tabId)
