@@ -9,7 +9,7 @@
   },
   "description": "[Beta · Independent/Unofficial] Open-source AI coding agent client for VS Code — a community-built GUI for the opencode CLI agent. Chat, refactor, debug, and write code using Claude, GPT, Gemini, and 75+ models. Includes cost tracking, custom themes, permission controls, and checkpoint rollback. Not developed by the OpenCode team.",
   "icon": "media/opencode-icon-256.png",
-  "version": "0.4.43",
+  "version": "0.4.44",
   "engines": {
     "vscode": "^1.98.0"
   },
