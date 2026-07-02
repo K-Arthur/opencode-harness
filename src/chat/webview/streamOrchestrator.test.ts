@@ -161,6 +161,10 @@ function makeHarness(): Harness {
     },
     streamHandlers: streams as unknown as Map<string, StreamHandlers>,
     getState: () => ({ activeSessionId, globalModel }),
+    // c432142 added getPendingMode to the orchestrator deps (auto-created
+    // sessions use it instead of hardcoded "build") but the harness was
+    // never updated — session-ensure paths threw TypeError without it.
+    getPendingMode: () => "build",
     getSession: (id: string) => sessions.get(id),
     getAllSessions: () => Array.from(sessions.values()),
     ensureSession: (init: { id: string; name: string; model: string; mode: string; messages: ChatMessage[]; isStreaming: boolean }) => {
@@ -476,14 +480,32 @@ describe("createStreamOrchestrator", () => {
       assert.ok(h.deps._posted.some((m) => String(m.message).includes("creating...")))
     })
 
-    it("switches to the tab when it is not the active session", () => {
+    it("switches to the tab when the current active session is INVALID (safety case)", () => {
       const h = makeHarness()
       h.addSession(session("s1"))
       h.setMessageList("s1", document.createElement("div"))
       h.addStream("s1")
-      h.setActive("other")
+      h.setActive("other") // "other" is not a registered session → nothing valid in focus
       h.api.handleStreamStart("s1")
       assert.ok((h.calls.switchTab || []).some((c) => c[0] === "s1"))
+    })
+
+    it("does NOT steal focus when the user is on a different VALID tab", () => {
+      // Tab auto-switching is disabled (v0.4.36 policy): a background tab's
+      // stream_start — including replays after reconnect — must render into
+      // its own panel without yanking the user away from the tab they're on.
+      const h = makeHarness()
+      h.addSession(session("s1"))
+      h.addSession(session("s2"))
+      h.setMessageList("s1", document.createElement("div"))
+      h.setMessageList("s2", document.createElement("div"))
+      h.addStream("s1")
+      h.addStream("s2")
+      h.setActive("s2")
+      h.api.handleStreamStart("s1")
+      assert.equal((h.calls.switchTab || []).length, 0, "must not switch away from a valid active tab")
+      // The stream still starts in its own (background) tab.
+      assert.ok(h.streams.get("s1")!.calls.some((c) => c.method === "handleStreamStart"))
     })
 
     it("does NOT switch when the session is already active", () => {

@@ -15,6 +15,7 @@ import { partsToBlocks as sdkConvertPartsToBlocks } from "../../session/sdkMessa
 import { isLocalPlaceholderSessionId } from "../../session/sessionUtils"
 import type { LiveToolOutputSnapshot } from "../../session/liveToolOutput"
 import { StreamFinalizerService } from "./StreamFinalizerService"
+import { pickLatestAssistant } from "./finalMessagePicker"
 import { MethodologyAdvisor, type MethodologyAdvice } from "../../methodology/MethodologyAdvisor"
 import { classifyTool, isSubagentToolName, parseSubagentInvocation } from "./toolClassifier"
 import { parseQuestionArgs, parseAllowFreeText } from "../../session/questionModel"
@@ -185,6 +186,12 @@ export class StreamCoordinator {
    *  confirms the run really ended. Cleared by any activity (chunk/tool/etc)
    *  via cancelPendingStatusFinalize, and on cleanupTab. */
   private pendingStatusFinalizeTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  /** Resolvers for the in-flight deferred status-finalize promises. Settling
+   *  on cancel is MANDATORY: the deferred promise is held in finalizePromises,
+   *  and an unsettled promise never runs its .finally cleanup — every future
+   *  finalize trigger for the tab would chain onto the dead promise and the
+   *  stream could never complete. */
+  private pendingStatusFinalizeResolvers = new Map<string, (finalized: boolean) => void>()
   /**
    * Fix 1 — Activity-sequence guard: per-tab monotonically-increasing counter.
    * Bumped on every chunk / tool_start / permission / subagent event. The
@@ -1530,7 +1537,10 @@ export class StreamCoordinator {
         this.getSm(tabId).getMessages(cliSessionId, 5),
         timeoutPromise,
       ])
-      const lastAssistant = [...messages].reverse().find(message => (message.info as { role?: string }).role === "assistant")
+      // The server returns NEWEST-first with `limit` but OLDEST-first without —
+      // pickLatestAssistant selects by time.created/id, independent of order.
+      // (Position-based reverse().find() picked the previous turn's message.)
+      const lastAssistant = pickLatestAssistant(messages)
       if (lastAssistant) {
         blocks = this.partsToBlocks(lastAssistant.parts)
         const info = lastAssistant.info as { role?: string; cost?: number; tokens?: { total?: number; input?: number; output?: number; reasoning?: number; cache?: { read?: number; write?: number } } }
@@ -1797,16 +1807,33 @@ export class StreamCoordinator {
         const armFor = this.STATUS_FINALIZE_QUIET_MS - elapsed
         log.info(`maybeFinalizeStream: deferring status finalize for ${tabId} by ${armFor}ms (last activity ${elapsed}ms ago, seq=${seqAtIdle})`)
         return new Promise<boolean>((resolve) => {
+          // The settle function is registered so cancelPendingStatusFinalize can
+          // resolve this promise when activity cancels the timer. Leaving it
+          // unsettled would keep the entry in finalizePromises alive forever
+          // (its .finally never runs), blocking every future finalize.
+          const settle = (finalized: boolean) => {
+            this.pendingStatusFinalizeResolvers.delete(tabId)
+            resolve(finalized)
+          }
+          this.pendingStatusFinalizeResolvers.set(tabId, settle)
           const timer = setTimeout(() => {
             this.pendingStatusFinalizeTimers.delete(tabId)
             // Re-enter the pipeline; if new activity arrived during the wait,
             // cancelPendingStatusFinalize already deleted this timer and we
             // never get here. If we do get here, the quiet period held.
-            this.maybeFinalizeStream(tabId, callbacks, "status")
-              .then(resolve)
+            //
+            // DEADLOCK GUARD: this must call runMaybeFinalizeStream (internal),
+            // NOT the public maybeFinalizeStream. The public wrapper would find
+            // THIS call's own still-pending promise in finalizePromises and
+            // chain onto it — a circular wait where the outer promise waits on
+            // this timer and this timer waits on the outer promise. The stream
+            // then never finalizes and every later trigger chains onto the dead
+            // promise ("deferring status finalize …" then silence forever).
+            this.runMaybeFinalizeStream(tabId, callbacks, "status")
+              .then(settle)
               .catch((err) => {
                 log.error(`Deferred status finalize failed for ${tabId}`, err)
-                resolve(false)
+                settle(false)
               })
           }, armFor)
           this.pendingStatusFinalizeTimers.set(tabId, timer)
@@ -1835,6 +1862,11 @@ export class StreamCoordinator {
       clearTimeout(timer)
       this.pendingStatusFinalizeTimers.delete(tabId)
     }
+    // Settle the deferred promise (as "not finalized") so its .finally clears
+    // the finalizePromises entry — a cancelled-but-unsettled defer would block
+    // every future finalize for this tab.
+    const settle = this.pendingStatusFinalizeResolvers.get(tabId)
+    if (settle) settle(false)
   }
 
   private getFinalizeDeferReason(tabId: string, blocks: Block[], trigger: "message_complete" | "status"): string | null {
@@ -2037,8 +2069,10 @@ export class StreamCoordinator {
     try {
       await this.reconcilePendingToolCallsFromServer(tabId, callbacks)
 
-      const messages = await this.getSm(tabId).getSessionMessages(tab.cliSessionId)
-      const lastAssistant = [...messages].reverse().find(m => m.info.role === "assistant")
+      // limit=5 keeps this O(1) for long sessions; pickLatestAssistant is
+      // order-independent (the server's limit path returns newest-first).
+      const messages = await this.getSm(tabId).getMessages(tab.cliSessionId, 5)
+      const lastAssistant = pickLatestAssistant(messages)
       if (lastAssistant) {
         const blocks = this.partsToBlocks(lastAssistant.parts)
         this.tabManager.clearBlocksBuffer(tabId)
@@ -2732,6 +2766,11 @@ export class StreamCoordinator {
       clearTimeout(timer)
     }
     this.pendingStatusFinalizeTimers.clear()
+    // Settle any deferred finalize promises so awaiting callers don't hang.
+    for (const settle of [...this.pendingStatusFinalizeResolvers.values()]) {
+      settle(false)
+    }
+    this.pendingStatusFinalizeResolvers.clear()
     for (const timer of this.pendingToolGraceTimeouts.values()) {
       clearTimeout(timer)
     }

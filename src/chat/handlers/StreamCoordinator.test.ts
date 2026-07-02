@@ -981,14 +981,16 @@ describe("StreamCoordinator.ts", () => {
     )
   })
 
-  it("routes getSessionMessages through getSm in fetchFinalBlocks", () => {
+  it("routes the final message fetch through getSm in fetchFinalBlocks", () => {
     const fnIdx = source.indexOf("private async fetchFinalBlocks(")
     assert.ok(fnIdx >= 0, "fetchFinalBlocks must exist")
     const blockEnd = source.indexOf("\n  private recordFinalUsageFallback", fnIdx)
     const block = source.slice(fnIdx, blockEnd > fnIdx ? blockEnd : fnIdx + 1000)
+    // Fix 5 replaced getSessionMessages (full history) with getMessages(limit)
+    // — either way the fetch must route through getSm for multi-server support.
     assert.ok(
-      block.includes("this.getSm(tabId).getSessionMessages("),
-      "fetchFinalBlocks must route getSessionMessages through getSm"
+      block.includes("this.getSm(tabId).getMessages(") || block.includes("this.getSm(tabId).getSessionMessages("),
+      "fetchFinalBlocks must route the message fetch through getSm"
     )
   })
 

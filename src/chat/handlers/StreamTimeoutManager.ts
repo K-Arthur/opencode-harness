@@ -8,6 +8,7 @@ import type { StreamingLogSink } from "./StreamingLog"
 import { log } from "../../utils/outputChannel"
 import { emit } from "./StreamingLog"
 import { mapRunError } from "./runErrorMapper"
+import { pickLatestAssistant } from "./finalMessagePicker"
 import * as vscode from "vscode"
 
 type ActiveRunState = "sending" | "accepted" | "streaming" | "finalizing" | "completed" | "failed" | "aborted" | "timeout" | "interrupted"
@@ -401,8 +402,10 @@ export class StreamTimeoutManager {
     }
 
     try {
-      const messages = await this.deps.getSm(tabId).getSessionMessages(tab.cliSessionId)
-      const lastAssistant = [...messages].reverse().find(m => m.info.role === "assistant")
+      // limit=5 keeps the probe O(1) for long sessions; pickLatestAssistant is
+      // order-independent (the server's limit path returns newest-first).
+      const messages = await this.deps.getSm(tabId).getMessages(tab.cliSessionId, 5)
+      const lastAssistant = pickLatestAssistant(messages)
       if (!lastAssistant) {
         reply(false, true)
         return

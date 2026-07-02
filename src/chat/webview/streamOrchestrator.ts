@@ -595,9 +595,20 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
     })
     if (!finalStream) return
 
-    if (getState().activeSessionId !== sessionId) {
-      vscode.postMessage({ type: "webview_log", level: "info", message: `handleStreamStart: Switching to tab ${sessionId}` })
-      switchTab(sessionId)
+    // Tab auto-switching is disabled (v0.4.36 policy). A stream_start for a
+    // background session — including replays after reconnect — renders into
+    // its own tab panel without stealing focus. The only exception mirrors
+    // sessionFocus.ts: switch when the user has nothing valid in focus
+    // (welcome screen / active id missing or stale).
+    const activeId = getState().activeSessionId
+    if (activeId !== sessionId) {
+      const activeIsValid = Boolean(activeId && getSession(activeId))
+      if (!activeIsValid) {
+        vscode.postMessage({ type: "webview_log", level: "info", message: `handleStreamStart: switching to ${sessionId} (no valid active tab)` })
+        switchTab(sessionId)
+      } else {
+        vscode.postMessage({ type: "webview_log", level: "info", message: `handleStreamStart: background stream for ${sessionId}, keeping focus on ${activeId}` })
+      }
     }
     hideWelcomeView()
     updateTabBar()
