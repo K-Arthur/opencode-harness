@@ -1,7 +1,25 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-07-02
-**Version:** v0.4.44
+**Version:** v0.4.45
+
+## Highlights (2026-07-02) — Test infrastructure: 174-file glob blind spot fixed
+
+**The npm test script was silently skipping 174 of 303 TypeScript test files.**
+
+- **Root cause**: `npm run test:unit` used an unquoted `src/**/*.test.ts` glob.
+  `/bin/sh` (used by npm) doesn't support `**` recursion without `globstar`,
+  so every test in `src/chat/handlers/`, `src/chat/webview/`, `src/chat/diff/`,
+  and `src/session/eventHandlers/` was never executed.
+- **Fix**: single-quoted the glob so Node 26's built-in engine expands it.
+  Added `tests/unit/*.test.ts` (5 behavioural TS tests for input/send/webview)
+  which were also missing from the pipeline.
+- **Harness drift fixed**: three divergences in the newly-running tests —
+  max-height cap (200→160px), missing `els.welcomeView` in JSDOM fixture,
+  missing `sessions: {}` in `getState` overrides, and missing
+  `attachmentManager` stubs (getContextItems, isActiveFileIncluded, etc.).
+- **Net gain**: `npm run test:unit` now runs ~4280+ tests across 303 TS files
+  + 64 MJS files + 5 previously-hidden TS unit files, all green.
 
 ## Highlights (2026-07-02) — Finalize deadlock, message ordering, queue/steer robustness
 

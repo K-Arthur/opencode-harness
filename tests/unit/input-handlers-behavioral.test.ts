@@ -63,12 +63,12 @@ beforeEach(() => {
 })
 
 describe("inputHandlers - autoResizeTextarea", () => {
-  it("caps height at 200px", async () => {
+  it("caps height at 160px", async () => {
     const { createInputHandlers } = await import("../../src/chat/webview/inputHandlers")
     const handlers = createInputHandlers(makeDeps())
     Object.defineProperty(promptInput, "scrollHeight", { value: 500, configurable: true })
     handlers.autoResizeTextarea()
-    assert.equal(promptInput.style.height, "200px")
+    assert.equal(promptInput.style.height, "160px")
   })
 
   it("does nothing when promptInput is missing", async () => {

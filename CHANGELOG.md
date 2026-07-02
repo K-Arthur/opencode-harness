@@ -15,6 +15,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > move items from `[Unreleased]` to the new version section and update the date.
 > Never leave features marked as "unreleased" after they are shipped.
 
+## [0.4.45] — 2026-07-02
+
+### Fixed
+
+- **Test suite blind spot — 174 deep-path TypeScript tests never ran**: `npm run
+  test:unit` used `npx tsx --test src/**/*.test.ts` without quoting the glob.
+  Shells without `globstar` (the default for `/bin/sh`, which npm uses to run
+  scripts) expand `**` as a single directory level, so every test file inside
+  `src/chat/handlers/`, `src/chat/webview/`, `src/chat/diff/`, and
+  `src/session/eventHandlers/` was silently skipped. Fixed by quoting the
+  pattern so Node 26's built-in glob engine handles the recursion:
+  `'src/**/*.test.ts'`. Also added `'tests/unit/*.test.ts'` (five TypeScript
+  behavioural tests for input handlers, send logic, webview helpers, etc.) that
+  were likewise missing from the pipeline.
+- **Test harness drift in `tests/unit/*.test.ts`** — three divergences
+  accumulated while these files were not running:
+  - `input-handlers-behavioral`: max-height cap expectation updated 200px → 160px
+    to match the production constant in `inputHandlers.ts`.
+  - `send-logic-behavioral`: `els.welcomeView` added to the JSDOM fixture —
+    `sendMessage.ts` accesses it when creating a tab panel that doesn't yet
+    exist in the DOM.
+  - `send-logic-behavioral`: `sessions: {}` added to the `getState` overrides in
+    both model-validation tests — the `isServerStreaming` helper accesses
+    `stateManager.getState().sessions[id]` unconditionally; a partial override
+    that omitted `sessions` threw `TypeError: Cannot read properties of undefined
+    (reading 's1')` before reaching the model-check assertion.
+  - `send-logic-behavioral`: `attachmentManager.getContextItems / isActiveFileIncluded
+    / getActiveFile / getActiveFileSelection / clearSentContextItems` added to the
+    test harness — `sendMessage.ts` calls these on every send path, so the harness
+    was missing required stubs.
+
 ## [0.4.44] — 2026-07-02
 
 ### Fixed

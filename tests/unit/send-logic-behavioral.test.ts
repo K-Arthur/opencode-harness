@@ -8,13 +8,14 @@ let promptInput: HTMLTextAreaElement
 let sendBtn: HTMLButtonElement
 let inputArea: HTMLDivElement
 let tabPanels: HTMLDivElement
+let welcomeView: HTMLDivElement
 let posted: Array<Record<string, unknown>>
 let messagesAdded: Array<{ sessionId: string; msg: any }>
 let errorsReported: Array<{ sessionId: string; msg: string }>
 let agentStatus: string
 
 function makeEls() {
-  return { promptInput, sendBtn, inputArea, tabPanels } as any
+  return { promptInput, sendBtn, inputArea, tabPanels, welcomeView } as any
 }
 
 function makeState(overrides?: {
@@ -44,7 +45,15 @@ function makeDeps(overrides?: { state?: ReturnType<typeof makeState> }) {
     els: makeEls(),
     stateManager: state,
     vscode: { postMessage: (msg: Record<string, unknown>) => { posted.push(msg) } },
-    attachmentManager: { getAttachments: () => [], clearAttachments: () => {} },
+    attachmentManager: {
+      getAttachments: () => [],
+      clearAttachments: () => {},
+      getContextItems: () => [],
+      clearSentContextItems: () => {},
+      isActiveFileIncluded: () => false,
+      getActiveFile: () => null,
+      getActiveFileSelection: () => null,
+    },
     streamHandlers: { get: () => ({ showTypingIndicator: () => {} }) },
     modelDropdown: { getCurrentModel: () => "claude-3" },
     hideWelcomeView: () => {},
@@ -71,6 +80,7 @@ beforeEach(() => {
     <button id="send-btn"></button>
     <div id="input-area"></div>
     <div id="tab-panels"></div>
+    <div id="welcome-view" class="hidden"></div>
   `)
   document = dom.window.document
   ;(globalThis as any).document = document
@@ -84,6 +94,7 @@ beforeEach(() => {
   sendBtn = document.getElementById("send-btn") as HTMLButtonElement
   inputArea = document.getElementById("input-area") as HTMLDivElement
   tabPanels = document.getElementById("tab-panels") as HTMLDivElement
+  welcomeView = document.getElementById("welcome-view") as HTMLDivElement
 })
 
 describe("sendLogic - basic send", () => {
@@ -170,7 +181,7 @@ describe("sendLogic - model validation", () => {
     let modelManagerOpened = 0
     const deps = makeDeps()
     deps.modelDropdown.getCurrentModel = () => undefined
-    deps.stateManager.getState = () => ({ activeSessionId: "s1", globalModel: undefined }) as any
+    deps.stateManager.getState = () => ({ activeSessionId: "s1", globalModel: undefined, sessions: {} }) as any
     deps.openModelManager = () => { modelManagerOpened++ }
     const logic = createSendLogic(deps)
     promptInput.value = "No model"
@@ -185,7 +196,7 @@ describe("sendLogic - model validation", () => {
     let modelManagerOpened = 0
     const deps = makeDeps({ state: makeState({ activeSession: null, sessions: [] }) })
     deps.modelDropdown.getCurrentModel = () => undefined
-    deps.stateManager.getState = () => ({ activeSessionId: undefined, globalModel: undefined }) as any
+    deps.stateManager.getState = () => ({ activeSessionId: undefined, globalModel: undefined, sessions: {} }) as any
     deps.openModelManager = () => { modelManagerOpened++ }
     const logic = createSendLogic(deps)
     promptInput.value = "No model on welcome"

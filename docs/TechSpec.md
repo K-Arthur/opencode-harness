@@ -62,7 +62,7 @@ OpenCode Harness is a VS Code extension that integrates the opencode AI coding a
 - **Framework**: VS Code Extension API (^1.98.0)
 - **SDK**: @opencode-ai/sdk (official opencode SDK)
 - **UI**: Webview (HTML/CSS/TypeScript embedded in VS Code extension)
-- **Testing**: Playwright (E2E), Node.js built-in test runner (unit + behavioral), Mocha (integration via vscode-test)
+- **Testing**: Playwright (E2E), Node.js built-in test runner (unit + behavioral), Mocha (integration via vscode-test). `npm test` runs `'tests/unit/*.test.mjs'` (64 MJS files, ~1205 tests), `'src/**/*.test.ts'` (303 TS files, ~4280 tests — single-quoted so Node 26 handles `**` recursion; unquoted shell expansion would silently skip `src/chat/handlers/`, `src/chat/webview/` etc.), `'tests/unit/*.test.ts'` (5 TS behavioral files), `tests/webview/message-contract.test.ts`, and `tests/integration/message-roundtrip.test.mjs`.
 - **Build**: esbuild, npm
 - **Password/security**: Auto-generated `OPENCODE_SERVER_PASSWORD` per local server session, HTTP Basic auth via SDK client headers, environment allowlist for child processes
 
