@@ -15,6 +15,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > move items from `[Unreleased]` to the new version section and update the date.
 > Never leave features marked as "unreleased" after they are shipped.
 
+## [0.4.44] — 2026-07-02
+
+### Fixed
+
+- **Finalize deadlock — streams stuck "running" forever**: the G5 quiet-period
+  defer timer re-entered the public `maybeFinalizeStream`, which found its own
+  still-pending promise in `finalizePromises` and chained onto it — a circular
+  wait. The log signature was "deferring status finalize …" followed by silence
+  while the tab replayed an empty live stream indefinitely. The timer now calls
+  the internal `runMaybeFinalizeStream` directly, and cancelled defers settle
+  their promise (new `pendingStatusFinalizeResolvers`) so a cancelled-but-
+  unsettled defer can no longer block every future finalize for the tab.
+- **Output replaced by a previous turn's message at stream end**: the server's
+  `session.messages` endpoint returns NEWEST-first with `limit` but oldest-first
+  without. `fetchFinalBlocks`' `reverse().find()` picked the oldest assistant in
+  the window — the previous turn — overwriting just-streamed output with stale
+  content. New order-independent `pickLatestAssistant` (selects by
+  `time.created`, id tiebreak) applied to `fetchFinalBlocks`,
+  `reconcileAfterReconnect`, and the run-status probe; the latter two also
+  converted from full-history fetches to the O(1) `limit=5` path.
+- **Stream-start focus stealing**: the webview force-switched the active tab to
+  any session that started or replayed a stream — the source of "generation
+  appearing before the prompt" and tabs yanking away mid-read. Streams now
+  render into their own background tab; switching only happens when nothing
+  valid is in focus (v0.4.36 no-auto-switch policy).
+- **"Send Now" on queued prompts only worked for the first item**: any other
+  item was silently ignored by the host while the webview removed it locally —
+  the prompt then ghost-sent on the next drain or reappeared after reload. The
+  host now promotes the requested item via `HostPromptQueue.moveToFront`; on a
+  busy tab it becomes next-to-drain (instead of failing against the stream
+  slot), on an idle tab it sends immediately. Every path re-posts `queue_state`.
+- **Keyboard queue reorder silently reverted**: Alt+Arrow/Home/End posted
+  `reorder_queue` with `fromIndex === toIndex` (both computed after the local
+  move) — a host no-op, so the order snapped back on the next sync. Real
+  indices are now sent.
+- **Stale queue chips after drain**: the `queue_state` empty branch queried a
+  non-existent element id (`tab-panel-*`; panels are `panel-*`), leaving
+  drained chips in the input area; background sessions could also render into
+  the shared input area. Queue state now syncs always but renders only for the
+  active session.
+- **Paused queue dead-end**: after an abort (with `queue.drainAfterAbort`
+  false) or a reload, queued prompts sat forever under a hint claiming they
+  "auto-send". Idle sessions now show "N queued — paused" with a **Send next**
+  button (posts the existing `resume_queue` host command, which previously had
+  no UI trigger).
+
+### Internal
+
+- Repaired stale deep-path tests (`SteerPromptHandler`, `attachmentStorage`,
+  `streamOrchestrator` harness) that never run under `npm run test` because the
+  `src/**/*.test.ts` glob does not recurse in `sh`. New test suites:
+  `StreamCoordinator.finalizeIntegrity.test.ts`, `HostPromptQueue.sendNow.test.ts`,
+  `queueRenderer.test.ts` (JSDOM behavioral).
+
 ## [0.4.42] — 2026-07-01
 
 ### Added

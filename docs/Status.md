@@ -1,7 +1,27 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-07-01
-**Version:** v0.4.42
+**Last Updated:** 2026-07-02
+**Version:** v0.4.44
+
+## Highlights (2026-07-02) — Finalize deadlock, message ordering, queue/steer robustness
+
+**Log-driven root-cause fixes for stuck/vanishing generations, plus a queueing & steering overhaul.**
+
+- **Finalize deadlock fixed**: the quiet-period defer timer re-entered the
+  public `maybeFinalizeStream` and chained onto its own pending promise —
+  streams never finalized ("deferring status finalize…" then silence).
+  Timer now calls the internal path; cancelled defers settle their promise.
+- **Wrong message at stream end fixed**: server returns newest-first with
+  `limit`; `reverse().find()` picked the previous turn's assistant message,
+  replacing streamed output with stale content. Order-independent
+  `pickLatestAssistant` used in all three consumers.
+- **Focus stealing fixed**: background stream starts/replays no longer switch
+  the active tab (v0.4.36 policy honored in the stream orchestrator).
+- **Queue/steer overhaul**: Send Now works on any queued item with busy-tab
+  move-to-front semantics; keyboard reorder posts real indices; stale chips
+  cleared; paused queues (post-abort/reload) show a "Send next" resume button.
+- **Test debt**: repaired stale deep-path suites (steer, attachments,
+  orchestrator harness) that the npm glob never executes; added 3 new suites.
 
 ## Highlights (2026-07-01) — Performance audit, state integrity fixes, frontend improvements
 

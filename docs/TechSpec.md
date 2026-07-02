@@ -119,6 +119,25 @@ Three classes of silent message drops were identified from production logs and f
 
 `ToolCallTracker.markUnresolvedPendingToolCalls` marked tools as "unresolved" in the `RunActivityTracker` after the 30s grace timeout, but didn't remove the tool IDs from `activeToolCallIds`. `StreamCoordinator.getFinalizeDeferReason` checks `activeToolCallIds` (not the tracker status), so it kept returning "1 tool call(s) still running" and `maybeFinalizeStream` deferred forever — the stream never finalized and the spinner stayed active. Fix: `markUnresolvedPendingToolCalls` now removes each unresolved tool ID from `activeToolCallIds` and deletes the map entry when the set is empty. Tests: `ToolCallTracker.test.ts`.
 
+### Finalize Deadlock & Message-Ordering Regressions (Fixed, 2026-07-02)
+
+Log-driven root causes for "generation stopping" / "output disappearing" reported on v0.4.43:
+
+- **Deadlock**: `runMaybeFinalizeStream`'s quiet-period defer returned a promise that resolves only when its timer fires; the timer called the public `maybeFinalizeStream`, which found that same still-pending promise in `finalizePromises` and chained onto it — circular wait, the stream never finalized, and every later trigger chained onto the dead promise. Fix: the timer calls the internal `runMaybeFinalizeStream` directly. Additionally, `cancelPendingStatusFinalize` now settles the deferred promise via `pendingStatusFinalizeResolvers` — a cancelled-but-unsettled defer left a permanently-pending entry in `finalizePromises` with the same stuck outcome. Tests: `StreamCoordinator.finalizeIntegrity.test.ts`.
+- **Ordering**: the opencode server's `session.messages` returns NEWEST-first when called with `limit` (SQL `orderBy desc`, unreversed) but oldest-first without. Position-based `[...messages].reverse().find(assistant)` therefore picked the OLDEST assistant in the limited window — the previous turn — and `fetchFinalBlocks` replaced just-streamed output with stale content at stream end. Fix: `pickLatestAssistant` (`src/chat/handlers/finalMessagePicker.ts`) selects by `info.time.created` with the id as tiebreak, independent of array order; used by `fetchFinalBlocks`, `reconcileAfterReconnect`, and `StreamTimeoutManager.probeActiveRun` (the latter two also moved to the O(1) `limit=5` fetch).
+- **Focus stealing**: `streamOrchestrator.handleStreamStart` force-switched the active tab to any session that started or replayed a stream. Now mirrors the `sessionFocus.ts` policy — switch only when nothing valid is in focus. Tests: `streamOrchestrator.test.ts`.
+
+### Queueing & Steering Robustness (2026-07-02)
+
+The prompt queue is host-authoritative: `HostPromptQueue` (persisted to `workspaceState`) is the source of truth; the webview's `PromptQueue` is a render cache synced via `queue_state`. Fixes to the contract:
+
+- **`send_queue_item` (Send Now)**: previously honored only the head item (`peek()` + id compare) and silently ignored others while the webview optimistically removed them — ghost sends on the next drain. Now: `HostPromptQueue.moveToFront(sessionId, id)` promotes the item (sending items stay anchored); busy tabs (streaming or `waitingForCompletion`) leave it queued as next-to-drain instead of failing against `reserveStreamSlotOrReject`; idle tabs dequeue + drain immediately. Every path posts `queue_state`. The webview no longer mutates locally on Send Now.
+- **Keyboard reorder**: Alt+Arrow/Home/End posted `fromIndex === toIndex` (computed after the local move) — host no-op, order reverted on next sync. Real indices now posted.
+- **`queue_state` rendering**: syncs every session's cache but renders only the active session (the queue container lives in the shared input area); the old empty-branch queried a non-existent `tab-panel-${sid}` id, leaving stale chips after drain.
+- **Paused queue resume**: queues only drain at stream end, so an idle session with queued items (post-abort with `drainAfterAbort=false`, or restored after reload) never drains. The hint now reads "N queued — paused" with a **Send next** button posting `resume_queue` (host handler pre-existed with no UI trigger).
+
+Tests: `HostPromptQueue.sendNow.test.ts` (behavioral), `queueRenderer.test.ts` (JSDOM behavioral).
+
 ### Session Lifecycle State Integrity (Fixed, 2026-07-01)
 
 Six root causes behind "completed session shows as running" / "running session shows as done":
