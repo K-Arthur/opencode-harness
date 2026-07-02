@@ -70,11 +70,19 @@ function makeStreamCoordinator(overrides: Partial<Record<string, (...args: unkno
 }
 
 function makeSessionStore(sessions: Record<string, unknown> = {}) {
-  return {
+  // 8bf74eb: the handler persists the user message via appendMessage at
+  // submit/queue time so queued/interrupted prompts survive reloads.
+  const appended: Array<{ sessionId: string; message: unknown }> = []
+  const store = {
     get(id: string) {
       return sessions[id]
     },
-  } as unknown as import("../../session/SessionStore").SessionStore
+    appendMessage(sessionId: string, message: unknown) {
+      appended.push({ sessionId, message })
+    },
+    appended,
+  }
+  return store as unknown as import("../../session/SessionStore").SessionStore & { appended: typeof appended }
 }
 
 describe("SteerPromptHandler.sendSteerPrompt", () => {
@@ -203,7 +211,8 @@ describe("SteerPromptHandler.sendSteerPrompt", () => {
       const prompt = { id: "p1", text: "redirect", mode: "unknown" as unknown as "interrupt", attachments: [], timestamp: 1, sessionId: "session-1" }
       await handler.sendSteerPrompt("session-1", prompt as SteerPrompt, callbacks)
       assert.equal(callbacks.errors.length, 0, "unknown mode must not raise an error")
-      assert.equal(callbacks.posted[0]!.type, "prompt_queued")
+      // posted[0] is the add_message persist echo (8bf74eb); prompt_queued follows.
+      assert.equal(callbacks.posted[1]!.type, "prompt_queued")
       assert.equal(queuedItems.length, 1)
     })
   })
@@ -240,11 +249,14 @@ describe("SteerPromptHandler.sendSteerPrompt", () => {
     it("coerces a removed 'append' mode to queue (no abort, no append callback)", async () => {
       const prompt = { id: "p1", text: "and another thing", mode: "append", attachments: [], timestamp: 1, sessionId: "session-1" } as unknown as SteerPrompt
       await handler.sendSteerPrompt("session-1", prompt, callbacks)
-      // Queued (prompt_queued + queue_state), not routed through the stream coordinator.
+      // Queued (add_message echo + prompt_queued + queue_state), not routed
+      // through the stream coordinator. 8bf74eb: the user message is persisted
+      // and echoed at queue time so it survives even if the queue never drains.
       assert.equal(callbacks.errors.length, 0)
       assert.equal(coord.calls.length, 0)
-      assert.equal(callbacks.posted[0]!.type, "prompt_queued")
-      assert.equal(callbacks.posted[1]!.type, "queue_state")
+      assert.equal(callbacks.posted[0]!.type, "add_message")
+      assert.equal(callbacks.posted[1]!.type, "prompt_queued")
+      assert.equal(callbacks.posted[2]!.type, "queue_state")
       assert.equal(queuedItems.length, 1)
       assert.equal(queuedItems[0]!.text, "and another thing")
     })
@@ -259,12 +271,15 @@ describe("SteerPromptHandler.sendSteerPrompt", () => {
         attachments: [{ data: "x", mimeType: "image/png" }], timestamp: 1, sessionId: "session-1",
       }
       await handler.sendSteerPrompt("session-1", prompt, callbacks)
-      // Should have posted prompt_queued + queue_state
-      assert.equal(callbacks.posted.length, 2)
-      const promptQueued = callbacks.posted[0]!
+      // Should have posted add_message (8bf74eb persist echo) + prompt_queued + queue_state
+      assert.equal(callbacks.posted.length, 3)
+      const addMessage = callbacks.posted[0]!
+      assert.equal(addMessage.type, "add_message")
+      assert.equal(addMessage.sessionId, "session-1")
+      const promptQueued = callbacks.posted[1]!
       assert.equal(promptQueued.type, "prompt_queued")
       assert.equal(promptQueued.sessionId, "session-1")
-      const queueState = callbacks.posted[1]!
+      const queueState = callbacks.posted[2]!
       assert.equal(queueState.type, "queue_state")
       assert.equal(queueState.sessionId, "session-1")
       assert.ok(Array.isArray(queueState.items))

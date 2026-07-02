@@ -15,6 +15,18 @@ function makeTinyPng(): string {
   return "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
 }
 
+function makeTinyJpeg(): string {
+  // Minimal JPEG-magic payload (FF D8 FF E0 + JFIF marker + padding).
+  // 33b8923 added magic-byte validation: data materialized as image/jpeg
+  // must actually start with the JPEG signature or it is rejected.
+  const bytes = Buffer.concat([
+    Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00]),
+    Buffer.alloc(32, 0x00),
+    Buffer.from([0xff, 0xd9]), // EOI
+  ])
+  return bytes.toString("base64")
+}
+
 describe("attachmentStorage — toFileUrl (cross-platform URL encoding)", () => {
   it("encodes POSIX absolute paths with file:// and a single leading slash", () => {
     const url = toFileUrl("/tmp/opencode-harness/img.png", "linux")
@@ -78,7 +90,7 @@ describe("attachmentStorage — materialization (write base64 → temp file → 
     const png = await storage.materialize({ data: makeTinyPng(), mimeType: "image/png" })
     assert.ok(png.url.endsWith(".png"), `expected .png suffix, got ${png.url}`)
 
-    const jpg = await storage.materialize({ data: makeTinyPng(), mimeType: "image/jpeg" })
+    const jpg = await storage.materialize({ data: makeTinyJpeg(), mimeType: "image/jpeg" })
     assert.ok(jpg.url.endsWith(".jpg") || jpg.url.endsWith(".jpeg"),
       `expected .jpg/.jpeg suffix, got ${jpg.url}`)
   })
@@ -95,9 +107,14 @@ describe("attachmentStorage — materialization (write base64 → temp file → 
     // 2 MB of base64 should decode to ~1.5 MB which still fits, but we set a
     // tiny cap (16 KB) to verify the cap is enforced regardless of platform.
     const small = createAttachmentStorage({ rootDir: root, platform: "linux", maxBytes: 16 * 1024 })
-    const oversizeB64 = Buffer.alloc(64 * 1024, 0xab).toString("base64")
+    // Valid PNG signature so the payload passes magic-byte validation (33b8923)
+    // and reaches the size-cap check this test is about.
+    const oversized = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.alloc(64 * 1024, 0xab),
+    ])
     await assert.rejects(
-      () => small.materialize({ data: oversizeB64, mimeType: "image/png" }),
+      () => small.materialize({ data: oversized.toString("base64"), mimeType: "image/png" }),
       /exceeds|too large|cap|size/i,
     )
   })
@@ -139,7 +156,7 @@ describe("attachmentStorage — cleanup (delete temp files after the server has 
 
   it("cleanupAll removes every materialized file under the storage root", async () => {
     const a = await storage.materialize({ data: makeTinyPng(), mimeType: "image/png" })
-    const b = await storage.materialize({ data: makeTinyPng(), mimeType: "image/jpeg" })
+    const b = await storage.materialize({ data: makeTinyJpeg(), mimeType: "image/jpeg" })
     assert.ok(existsSync(fileUrlToPath(a.url, "linux")))
     assert.ok(existsSync(fileUrlToPath(b.url, "linux")))
 
