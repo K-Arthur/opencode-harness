@@ -13,7 +13,7 @@ export interface QueueRendererDeps {
     postMessage: (msg: Record<string, unknown>) => void
   }
   stateManager: {
-    getActiveSession: () => { id: string } | null
+    getActiveSession: () => { id: string; isStreaming?: boolean; isServerStreaming?: boolean } | null
   }
   promptQueues: Map<string, PromptQueue>
 }
@@ -307,10 +307,12 @@ export function createQueueRenderer(deps: QueueRendererDeps): QueueRendererAPI {
         sendBtn.innerHTML = SEND_NOW_SVG
         sendBtn.addEventListener("click", (e) => {
           e.stopPropagation()
+          // Host-authoritative: do NOT remove locally. The host may defer
+          // (busy tab → item moved to front, sends at stream end) and always
+          // answers with a queue_state that reconciles this view. An
+          // optimistic removal here made the chip vanish while the prompt
+          // stayed queued host-side — it then ghost-sent on the next drain.
           postQueueAction("send_queue_item", tabId, { itemId: item.id })
-          queue.remove(item.id)
-          persistQueues()
-          renderQueue(tabId)
         })
         chip.appendChild(sendBtn)
 
@@ -476,13 +478,16 @@ export function createQueueRenderer(deps: QueueRendererDeps): QueueRendererAPI {
 
     chip.addEventListener("keydown", (e) => {
       if (!e.altKey) return
+      // Capture the index BEFORE the local move — the old code computed both
+      // fromIndex and toIndex AFTER moving, so they were always equal and the
+      // host treated every keyboard reorder as a no-op (the user's reorder
+      // then silently reverted on the next queue_state sync).
+      const fromIdx = indexOf(itemId)
       let moved = false
       if (e.key === "ArrowUp") {
-        const idx = indexOf(itemId)
-        moved = idx > 0 && queue.reorder(idx, idx - 1)
+        moved = fromIdx > 0 && queue.reorder(fromIdx, fromIdx - 1)
       } else if (e.key === "ArrowDown") {
-        const idx = indexOf(itemId)
-        moved = idx >= 0 && queue.reorder(idx, idx + 1)
+        moved = fromIdx >= 0 && queue.reorder(fromIdx, fromIdx + 1)
       } else if (e.key === "Home") {
         moved = queue.moveToFront(itemId)
       } else if (e.key === "End") {
@@ -493,7 +498,7 @@ export function createQueueRenderer(deps: QueueRendererDeps): QueueRendererAPI {
       e.preventDefault()
       if (moved) {
         postQueueAction("reorder_queue", tabId, {
-          fromIndex: indexOf(itemId),
+          fromIndex: fromIdx,
           toIndex: indexOf(itemId),
         })
         persistQueues()
@@ -518,8 +523,28 @@ export function createQueueRenderer(deps: QueueRendererDeps): QueueRendererAPI {
         div.className = "queue-hint"
         els.inputArea.insertBefore(div, els.inputWrapper)
       }
-      const hintEl = els.inputArea.querySelector(".queue-hint")!
-      hintEl.textContent = `${qCount} queued \u2014 auto-sends when current response completes`
+      const hintEl = els.inputArea.querySelector(".queue-hint")! as HTMLElement
+      // The queue only drains at stream end. When the session is idle
+      // (post-abort with drainAfterAbort=false, or restored after a reload)
+      // NOTHING will ever drain it \u2014 claiming "auto-sends" was a lie that
+      // left users staring at a stuck queue. Offer an explicit resume.
+      const isBusy = Boolean(active.isStreaming || active.isServerStreaming)
+      hintEl.replaceChildren()
+      const label = document.createElement("span")
+      label.textContent = isBusy
+        ? `${qCount} queued \u2014 auto-sends when current response completes`
+        : `${qCount} queued \u2014 paused`
+      hintEl.appendChild(label)
+      if (!isBusy) {
+        const resumeBtn = document.createElement("button")
+        resumeBtn.className = "queue-resume-btn"
+        resumeBtn.textContent = "Send next"
+        resumeBtn.setAttribute("aria-label", `Send next of ${qCount} queued prompts`)
+        resumeBtn.addEventListener("click", () => {
+          postQueueAction("resume_queue", active.id)
+        })
+        hintEl.appendChild(resumeBtn)
+      }
     } else {
       if (hint) hint.remove()
     }

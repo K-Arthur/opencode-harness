@@ -2740,6 +2740,33 @@ button.modal-session-item:focus {
   padding: var(--space-1) var(--space-3);
   text-align: center;
   border-top: 1px solid var(--oc-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+/* "Send next" — resumes a paused queue (idle session with queued items). */
+.queue-resume-btn {
+  font-size: var(--oc-font-size-2xs);
+  font-style: normal;
+  background: none;
+  border: 1px solid var(--oc-border);
+  color: var(--color-accent);
+  cursor: pointer;
+  padding: var(--space-0-5) var(--space-1-5);
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast), border-color var(--duration-fast);
+}
+
+.queue-resume-btn:hover {
+  background: var(--oc-accent-subtle);
+  border-color: var(--color-accent);
+}
+
+.queue-resume-btn:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, var(--color-accent));
+  outline-offset: 1px;
 }
 
 @media (prefers-reduced-motion: reduce) {

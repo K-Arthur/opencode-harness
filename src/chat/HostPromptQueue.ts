@@ -232,6 +232,28 @@ export class HostPromptQueue {
   }
 
   /**
+   * Promote a queued item ahead of all other queued items ("Send Now" /
+   * "next up"). Items in "sending" state are positional anchors and stay
+   * ahead — the promoted item becomes the one dequeue() returns next.
+   * Returns false for unknown ids or items not in "queued" state
+   * (failed items must be retried first).
+   */
+  moveToFront(sessionId: string, id: string): boolean {
+    const queue = this.queues.get(sessionId)
+    if (!queue) return false
+    const idx = queue.findIndex(i => i.id === id)
+    if (idx === -1) return false
+    const target = queue[idx]!
+    if (target.state !== "queued") return false
+    const firstQueuedIdx = queue.findIndex(i => i.state === "queued")
+    if (firstQueuedIdx === idx) return true // already next
+    queue.splice(idx, 1)
+    queue.splice(firstQueuedIdx, 0, target)
+    this.persist()
+    return true
+  }
+
+  /**
    * Reorder items. Swaps item at fromIdx with toIdx.
    */
   reorder(sessionId: string, fromIdx: number, toIdx: number): boolean {

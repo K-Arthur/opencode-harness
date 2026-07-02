@@ -3295,16 +3295,14 @@ function setupTodoSkillAndSubagentPanels(): void {
           promptQueues.set(sid, q)
         }
         q.syncFromHost(msg.items as import("./queue").QueueItem[])
-        const queuedCount = (msg.items as import("./queue").QueueItem[]).filter((i) => i.state === "queued").length
-        if (queuedCount > 0) {
+        // The queue container lives in the SHARED input area, not a per-tab
+        // panel — only the ACTIVE session's queue may render into it.
+        // renderQueue also handles the empty case (removes the container and
+        // clears the hint). The old empty-branch queried `tab-panel-${sid}`,
+        // an id that doesn't exist (panels are `panel-${id}`), so stale chips
+        // lingered in the input area after the queue drained.
+        if (sid === stateManager.getState().activeSessionId) {
           renderQueue(sid)
-        } else {
-          // Only remove the queue container for the specific session's tab
-          const tabPanel = document.getElementById(`tab-panel-${sid}`)
-          if (tabPanel) {
-            const container = tabPanel.querySelector<HTMLElement>(".prompt-queue")
-            if (container) container.remove()
-          }
         }
       }],
       ["permission_request", (_msg, sid) => {

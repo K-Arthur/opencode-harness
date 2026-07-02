@@ -2445,11 +2445,33 @@ export class WebviewEventRouter {
     }],
     ["send_queue_item", async (msg: Record<string, unknown>, sessionId?: string) => {
       if (!sessionId || typeof msg.itemId !== "string") return
-      const item = this.opts.hostQueue.peek(sessionId)
-      if (!item || item.id !== msg.itemId) return
-      // Remove the item from the queue and send it immediately
-      this.opts.hostQueue.remove(sessionId, msg.itemId)
-      this.drainQueuedPrompt(sessionId, item)
+      // "Send Now" for ANY queued item, not just the head. The old peek()+id
+      // compare silently dropped non-head items while the webview removed them
+      // locally — the item then ghost-sent on the next drain or reappeared
+      // after reload. moveToFront makes the requested item the next to send.
+      const promoted = this.opts.hostQueue.moveToFront(sessionId, msg.itemId)
+      if (!promoted) {
+        // Unknown/stale id or non-queued state — resync the webview.
+        this.postQueueState(sessionId)
+        return
+      }
+      // If the tab is busy, don't fire startPrompt into it (the per-tab
+      // stream slot would reject and wrongly mark the item failed). The item
+      // is now first in line and drains automatically at stream end.
+      const tab = this.opts.tabManager.getTab(sessionId)
+      if (tab && (tab.isStreaming || tab.waitingForCompletion)) {
+        this.postQueueState(sessionId)
+        return
+      }
+      // Idle tab: send it right away through the normal drain path (dequeue
+      // marks it "sending"; drainQueuedPrompt confirms or marks failed).
+      const item = this.opts.hostQueue.dequeue(sessionId)
+      if (!item) {
+        this.postQueueState(sessionId)
+        return
+      }
+      this.postQueueState(sessionId)
+      await this.drainQueuedPrompt(sessionId, item)
     }],
     ["request_queue_state", (msg: Record<string, unknown>, sessionId?: string) => {
       // If a specific session is requested, send state for that session.
