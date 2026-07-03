@@ -1112,4 +1112,31 @@ void describe("ChatProvider question.asked surfacing (B1)", () => {
       "server_connected handler must post error_cleared to dismiss stale banners",
     )
   })
+
+  // Issue 4: max-reconnect failure must produce a structured, actionable error
+  void it("detects max reconnect attempts and maps to EVENT_STREAM_FAILED error context", () => {
+    assert.ok(
+      source.includes("EVENT_STREAM_FAILED"),
+      "must define EVENT_STREAM_FAILED error code for max-reconnect failure",
+    )
+    assert.ok(
+      source.includes("max reconnect attempts reached"),
+      "must detect the max-reconnect-attempts-reached message",
+    )
+    assert.ok(
+      source.includes("restart the OpenCode server"),
+      "must provide actionable guidance to restart the server",
+    )
+  })
+
+  // Issue 4: isEventStreamTransportError must NOT match the terminal max-reconnect failure
+  void it("isEventStreamTransportError excludes max reconnect attempts reached", () => {
+    const fnIdx = source.indexOf("private isEventStreamTransportError")
+    assert.ok(fnIdx >= 0, "must have isEventStreamTransportError method")
+    const fnBlock = source.slice(fnIdx, fnIdx + 500)
+    assert.ok(
+      fnBlock.includes("max reconnect"),
+      "isEventStreamTransportError must check for 'max reconnect' to exclude terminal failure",
+    )
+  })
 })

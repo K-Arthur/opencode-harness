@@ -29,7 +29,7 @@ import type { OpenCodeConfigService } from "../config/OpenCodeConfigService"
 import { isSessionInCurrentWorkspace as isSessionInCurrentWorkspacePure, looksLikeSdkError, isAbortErrorValue } from "./chatUtils"
 import { shouldIncludeStoreActiveFallback } from "./restorablePolicy"
 import { mapOpencodeError, type OpencodeError } from "./webview/opencodeErrorMapper"
-import { toWebviewErrorPayload, type ErrorContext } from "./webview/errorTypes"
+import { toWebviewErrorPayload, createErrorContext, ErrorCategory, ErrorSeverity, type ErrorContext } from "./webview/errorTypes"
 import { computeMessageCounts } from "./webview/messageCounter"
 import { RetryQueueService } from "./RetryQueueService"
 import { ChatMessage, Block } from "./types"
@@ -1686,6 +1686,29 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       const errorContext = looksLikeSdkError(raw) ? mapOpencodeError(raw as OpencodeError) : undefined
       const errorMsg = errorContext?.userMessage ?? this.errorValueToMessage(raw)
       log.error("Server error during streaming", errorMsg)
+
+      if (this.isMaxReconnectFailure(raw)) {
+        const maxReconnectContext = createErrorContext("EVENT_STREAM_FAILED", {
+          category: ErrorCategory.NETWORK,
+          severity: ErrorSeverity.HIGH,
+          message: this.errorValueToMessage(raw),
+          userMessage: "The OpenCode event stream could not reconnect after multiple attempts. Please restart the OpenCode server, then reload the window.",
+          retryable: false,
+          sessionId: tab?.id ?? tabId,
+        })
+        const targetId = tab?.id || this.tabManager.getActiveTab()?.id || tabId
+        if (targetId) {
+          this.postRequestError(maxReconnectContext.userMessage, targetId, maxReconnectContext)
+          this.streamCoordinator.cleanupTab(targetId)
+          this.tabManager.setStreaming(targetId, false)
+          this.tabManager.setWaitingForCompletion(targetId, false)
+          this.tabManager.clearCompletionTimeout(targetId)
+        } else {
+          this.postRequestError(maxReconnectContext.userMessage, undefined, maxReconnectContext)
+        }
+        return
+      }
+
       if (this.isEventStreamTransportError(raw)) {
         const targetId = tab?.id || this.tabManager.getActiveTab()?.id || tabId
         log.warn(`Transport-level OpenCode event stream error for ${targetId || "unknown"}; preserving active run state`)
@@ -2094,10 +2117,15 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
 
   private isEventStreamTransportError(raw: unknown): boolean {
     const message = this.errorValueToMessage(raw).toLowerCase()
+    if (message.includes("max reconnect")) return false
     return message.includes("event stream") ||
       message.includes("sse") ||
       message.includes("global/event") ||
       message.includes("communication is connected")
+  }
+
+  private isMaxReconnectFailure(raw: unknown): boolean {
+    return this.errorValueToMessage(raw).toLowerCase().includes("max reconnect attempts reached")
   }
 
   private isRecord(value: unknown): value is Record<string, unknown> {

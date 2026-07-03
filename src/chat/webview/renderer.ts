@@ -2429,6 +2429,7 @@ function humanizeErrorCode(code: string): string {
     RATE_LIMITED: "Rate limited",
     NETWORK_UNREACHABLE: "Server unreachable",
     SERVER_ERROR: "Server error",
+    EVENT_STREAM_FAILED: "Event stream failed",
     BAD_REQUEST: "Bad request",
     OUTPUT_LENGTH_EXCEEDED: "Output too long",
     MESSAGE_ABORTED: "Cancelled",
