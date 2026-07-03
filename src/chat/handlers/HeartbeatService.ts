@@ -20,6 +20,7 @@ export interface HeartbeatDeps {
   lastForceRerenderSeqs: Map<string, number>
   postedChunkSeqs: Map<string, number>
   deferredChunks: Map<string, DeferredChunkEntry>
+  heartbeatNoticePosted: Set<string>
   readonly MAX_UNACKED_STREAM_CHUNKS: number
   readonly MAX_STREAM_DEFER_MS: number
 }
@@ -42,6 +43,7 @@ export class HeartbeatService {
     this.stopHeartbeat(tabId)
     this.deps.heartbeatSeqs.set(tabId, 0)
     this.deps.heartbeatAckedSeqs.set(tabId, 0)
+    this.deps.heartbeatNoticePosted.delete(tabId)
     const timer = setInterval(() => {
       const tab = this.deps.tabManager.getTab(tabId)
       if (!tab?.isStreaming) {
@@ -57,9 +59,10 @@ export class HeartbeatService {
       })
       const ackedSeq = this.deps.heartbeatAckedSeqs.get(tabId) || 0
       const lastRerenderSeq = this.deps.lastForceRerenderSeqs.get(tabId) || 0
-      if (seq - ackedSeq > 2 && seq > lastRerenderSeq) {
-        if (seq - ackedSeq === 3) {
-          log.warn(`Heartbeat: tab ${tabId} missed ${seq - ackedSeq} pings, sending force_rerender (seq=${seq})`)
+      const missedCount = seq - ackedSeq
+      if (missedCount > 2 && seq > lastRerenderSeq) {
+        if (missedCount === 3) {
+          log.warn(`Heartbeat: tab ${tabId} missed ${missedCount} pings, sending force_rerender (seq=${seq})`)
         }
         const fullText = tab.streamingBuffer || ""
         callbacks.postMessage({
@@ -68,7 +71,16 @@ export class HeartbeatService {
           text: fullText,
         })
         this.deps.lastForceRerenderSeqs.set(tabId, seq)
-      } else if (seq - ackedSeq <= 2) {
+        if (missedCount >= 5 && !this.deps.heartbeatNoticePosted.has(tabId)) {
+          this.deps.heartbeatNoticePosted.add(tabId)
+          log.warn(`Heartbeat: tab ${tabId} missed ${missedCount} pings — posting unresponsiveness notice`)
+          callbacks.postMessage({
+            type: "request_error",
+            message: "The chat panel appears to be unresponsive. If the UI doesn't recover, try reloading the window (Developer: Reload Window).",
+            sessionId: tabId,
+          })
+        }
+      } else if (missedCount <= 2) {
         this.deps.lastForceRerenderSeqs.set(tabId, 0)
       }
     }, 5000)

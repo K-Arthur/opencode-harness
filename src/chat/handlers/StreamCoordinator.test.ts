@@ -1246,4 +1246,54 @@ describe("StreamCoordinator.ts", () => {
         "dispose must clear disconnect grace timeouts to prevent firing after disposal",
       )
     })
+
+    // Issue 6: heartbeat unresponsiveness notice after 5+ missed pings
+    void it("HeartbeatService posts request_error after 5+ missed pings", () => {
+      assert.ok(
+        heartbeatSource.includes("missedCount >= 5"),
+        "HeartbeatService must check for 5+ missed pings before posting notice",
+      )
+      assert.ok(
+        heartbeatSource.includes("heartbeatNoticePosted"),
+        "HeartbeatService must track notice dedup via heartbeatNoticePosted set",
+      )
+      assert.ok(
+        heartbeatSource.includes("request_error"),
+        "HeartbeatService must post a request_error with the unresponsiveness notice",
+      )
+      assert.ok(
+        heartbeatSource.includes("unresponsive"),
+        "HeartbeatService notice message must mention 'unresponsive'",
+      )
+    })
+
+    void it("HeartbeatService does NOT post notice at 3 missed pings (only force_rerender)", () => {
+      const startIdx = heartbeatSource.indexOf("startHeartbeat(tabId: string, callbacks: StreamCallbacks)")
+      const startBody = heartbeatSource.slice(startIdx, startIdx + 2000)
+      const noticeCheck = startBody.indexOf("missedCount >= 5")
+      const forceRerenderCheck = startBody.indexOf("missedCount === 3")
+      assert.ok(forceRerenderCheck >= 0, "must check for 3 missed pings for force_rerender")
+      assert.ok(noticeCheck >= 0, "must check for 5 missed pings for notice")
+      assert.ok(noticeCheck > forceRerenderCheck, "notice check (5 pings) must come after force_rerender check (3 pings)")
+    })
+
+    void it("StreamCoordinator wires heartbeatNoticePosted into HeartbeatDeps", () => {
+      assert.ok(
+        source.includes("heartbeatNoticePosted: this.heartbeatNoticePosted"),
+        "StreamCoordinator must wire heartbeatNoticePosted into HeartbeatDeps",
+      )
+      assert.ok(
+        source.includes("private heartbeatNoticePosted = new Set<string>()"),
+        "StreamCoordinator must declare heartbeatNoticePosted set",
+      )
+    })
+
+    void it("cleanupTab clears heartbeatNoticePosted", () => {
+      const cleanupIdx = source.indexOf("cleanupTab(tabId: string): void")
+      const cleanupBody = source.slice(cleanupIdx, cleanupIdx + 2000)
+      assert.ok(
+        cleanupBody.includes("heartbeatNoticePosted.delete(tabId)"),
+        "cleanupTab must clear heartbeatNoticePosted to allow notice on next heartbeat session",
+      )
+    })
   })

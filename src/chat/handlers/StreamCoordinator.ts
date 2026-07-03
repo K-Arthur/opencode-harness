@@ -257,6 +257,8 @@ export class StreamCoordinator {
   private injectedInstructionsSessions = new Set<string>()
   /** Per-tab last force_rerender seq sent — prevents spamming the webview when acks fall behind */
   private lastForceRerenderSeqs = new Map<string, number>()
+  /** Issue 6: Tabs where the heartbeat unresponsiveness notice has been posted — dedup per heartbeat session */
+  private heartbeatNoticePosted = new Set<string>()
   /** Called after stream finalization to drain the host-side prompt queue */
   public onQueueDrain: ((tabId: string, reason?: string) => void) | null = null
   /** Per-tab message sequence counter — monotonically increasing, attached to every streaming message */
@@ -404,6 +406,7 @@ export class StreamCoordinator {
       lastForceRerenderSeqs: this.lastForceRerenderSeqs,
       postedChunkSeqs: this.postedChunkSeqs,
       deferredChunks: this.deferredChunks,
+      heartbeatNoticePosted: this.heartbeatNoticePosted,
       MAX_UNACKED_STREAM_CHUNKS: this.MAX_UNACKED_STREAM_CHUNKS,
       MAX_STREAM_DEFER_MS: this.MAX_STREAM_DEFER_MS,
     })
@@ -2673,6 +2676,7 @@ export class StreamCoordinator {
     }
     this.loggedBubbleMismatches.delete(tabId)
     this.stopHeartbeat(tabId)
+    this.heartbeatNoticePosted.delete(tabId)
     this.subagentHeartbeat.stop(tabId)
     const cliSessionId = this.tabManager.getTab(tabId)?.cliSessionId
     if (cliSessionId) this.injectedInstructionsSessions.delete(cliSessionId)
