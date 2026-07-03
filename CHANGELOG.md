@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.48] — 2026-07-03
+
 ### Fixed — Context Usage Counter Cross-Tab Bleed
 
 - **Multiple tabs showed identical context-usage figures**: `ContextMonitor`'s
