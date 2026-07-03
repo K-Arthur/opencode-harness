@@ -22,8 +22,28 @@ The authoritative backend source of truth for token and context usage state.
 **Key Methods:**
 - `updateTokens(tokens, sessionId, breakdown, options)` - Update token count with optional breakdown and options
 - `setTokenLimit(limit, sessionId)` - Set context window limit for a session
+- `emitLatestForSession(sessionId)` - Re-emit one session's stored snapshot (own tokens, own window, source preserved); no-op when the session has no recorded usage
+- `limitFor(sessionId)` - Effective context window for a session (its own limit, else the sessionless default)
+- `resetSession(sessionId)` - Drop stale usage after compaction (keeps the session's window — the model didn't change)
+- `clearSession(sessionId)` - Remove usage AND window when the tab is closed/deleted
 - `emitImmediate(data)` - Emit context usage immediately, bypassing throttling
 - `dispose()` - Cleanup throttler and emitters
+
+**Per-Session Attribution Invariant (2026-07-03):**
+
+The sessionless getters (`percent`, `tokensUsed`, `limit`) reflect whichever
+session updated last. They must NEVER be read on behalf of a specific tab and
+stamped with that tab's `sessionId` — doing so painted every tab's context bar
+with the busiest tab's figures, and mixed numerators/denominators
+(`tokens_A / limit_B`) clamp to a bogus 100%. Rules enforced by
+`src/chat/contextUsageAttribution.test.ts`:
+
+- Stream boundaries re-emit via `emitLatestForSession(tabId)`, never the getters.
+- `setTokenLimit(limit, sessionId)` does not refresh the sessionless default.
+- `AutoCompactor` gates on `getCurrentUsage(activeTab.id)`, never the global percent.
+- `ChatProvider` drops sessionless `context_usage` emits — the webview would
+  attribute them to the *viewed* tab and persist them.
+- `WebviewEventRouter`'s `get_context_usage` fallback resolves `limitFor(targetId)`.
 
 **Throttling Integration:**
 - Uses `ContextUsageThrottler` with 250ms debounce window
@@ -61,9 +81,11 @@ Debouncing utility for context usage updates per session.
    - Reflects reduced context after cleanup
 
 3. **Stream Boundaries** (`StreamCoordinator`)
-   - Stream start: immediate context usage refresh
-   - Stream end: immediate context usage refresh
-   - Ensures UI updates at critical streaming boundaries
+   - Stream start: `contextMonitor.emitLatestForSession(tabId)` — re-emits the
+     tab's own stored snapshot (no-op if the tab has none yet)
+   - Stream end: same per-session re-emit
+   - Never reads the sessionless `percent`/`tokensUsed`/`limit` getters — those
+     hold whichever session updated last (cross-tab bleed)
 
 **Event Flow:**
 ```

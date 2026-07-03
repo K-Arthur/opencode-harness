@@ -17,6 +17,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Context Usage Counter Cross-Tab Bleed
+
+- **Multiple tabs showed identical context-usage figures**: `ContextMonitor`'s
+  sessionless getters (`percent`, `tokensUsed`, `limit`) hold whichever session
+  updated last, but `StreamCoordinator`'s stream-start/end boundary emits read
+  them and stamped the result with the streaming tab's `sessionId`. The
+  webview's higher-estimated-wins guard then let the busiest tab's count
+  overwrite every other tab's persisted bar. Boundary emits now use the new
+  `ContextMonitor.emitLatestForSession(tabId)`, which re-emits the tab's OWN
+  stored snapshot (own tokens, own window, `source` preserved) and emits
+  nothing when the tab has no recorded usage.
+- **Bogus 100% despite auto-compaction at ≤80%**: `setTokenLimit(limit,
+  sessionId)` also refreshed the shared sessionless default, so a session
+  without its own resolved window computed `tokens_A / limit_B` against
+  whichever tab's model resolved last — a ratio that clamps to 100%. The
+  per-session branch no longer touches the shared default.
+- **Auto-compaction gated on the wrong tab's usage**: `AutoCompactor` read the
+  global `percent`/`tokensUsed`/`limit`, so a busy background tab could trigger
+  or mask compaction of the active tab. It now gates on
+  `getCurrentUsage(activeTab.id)` and does nothing when the active tab has no
+  snapshot; the banner payload and the remind-later snooze baseline also use
+  the tab's own figures.
+- **Unattributed usage painted the viewed tab**: `ChatProvider` forwarded
+  sessionless `context_usage` emits to the webview, whose handler falls back to
+  the *active* session and persists the value. Sessionless emits are now
+  dropped at the host with a debug log.
+- **`get_context_usage` fallback used the sessionless window**: the
+  no-usage-data branch now resolves `limitFor(targetId)`.
+- **Compaction erased the session's context window**: `resetSession` dropped
+  `limitBySession` too, leaving the next update to compute against
+  `maxTokens: 0` ("set limit" flicker) until the model re-resolved. It now
+  keeps the window; the new `clearSession` (called on session deletion) removes
+  everything so the monitor's maps don't accumulate dead sessions.
+
 ### Fixed — Network Failure Handling
 
 - **Stale Tier-B banners persist after reconnect (Issue 1)**: The host now

@@ -1,7 +1,29 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-07-02
-**Version:** v0.4.45
+**Last Updated:** 2026-07-03
+**Version:** v0.4.47
+
+## Highlights (2026-07-03) — Context usage counter: cross-tab bleed eliminated
+
+**Multiple tabs showed identical context-usage figures, some pegged at a bogus 100%.**
+
+- **Root cause**: `ContextMonitor`'s sessionless getters (`percent`,
+  `tokensUsed`, `limit`) hold whichever session updated last.
+  `StreamCoordinator`'s stream-boundary emits, `AutoCompactor`'s threshold
+  gate, and `WebviewEventRouter`'s `get_context_usage` fallback all read them
+  on behalf of a *specific* tab — so tab B's bar was painted with tab A's
+  numerator and/or denominator (`tokens_A / limit_B` clamps to 100%).
+- **Fix**: per-session attribution everywhere. New
+  `ContextMonitor.emitLatestForSession(tabId)` re-emits a tab's own snapshot at
+  stream boundaries; `setTokenLimit(limit, sessionId)` no longer refreshes the
+  shared default; `AutoCompactor` gates on `getCurrentUsage(activeTab.id)`;
+  `ChatProvider` drops sessionless `context_usage` emits (the webview would
+  attribute them to the viewed tab and persist them).
+- **Lifecycle**: `resetSession` (compaction) now keeps the session's context
+  window; new `clearSession` wipes usage + window on session deletion.
+- **Tests**: 8 behavioral tests (`ContextMonitor.session.test.ts`) + 4
+  attribution pins (`contextUsageAttribution.test.ts`), RED-first. See
+  `docs/token-tracking-architecture.md` § Per-Session Attribution Invariant.
 
 ## Highlights (2026-07-02) — Test infrastructure: 174-file glob blind spot fixed
 
