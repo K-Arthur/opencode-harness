@@ -15,6 +15,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > move items from `[Unreleased]` to the new version section and update the date.
 > Never leave features marked as "unreleased" after they are shipped.
 
+## [Unreleased]
+
+### Fixed — Network Failure Handling
+
+- **Stale Tier-B banners persist after reconnect (Issue 1)**: The host now
+  posts `error_cleared` on `event_stream_reconnected` and `server_connected`
+  so the webview dismisses stale disconnect banners. The webview
+  `streamOrchestrator` wires `handleErrorCleared` → `applyErrorCleared` to
+  clear the `ErrorStateStore`.
+- **Disconnect error silently dropped when no active tab (Issue 2)**:
+  `handleRequestError` in the webview no longer returns early when no
+  streaming session can be resolved — it routes the error through the
+  tier system (`routeErrorByTier`) with `sessionId = undefined` so a global
+  banner shows.
+- **Stuck streams after server disconnect (Issue 3)**: Added a 60s
+  disconnect grace timeout (`DISCONNECT_GRACE_MS`) in `StreamCoordinator`.
+  On `server_disconnected`, streaming tabs arm the timer instead of being
+  immediately cleaned up. If the event stream reconnects within 60s,
+  `reconcileAfterReconnect` cancels the timer and normal finalization takes
+  over. If not, the timeout force-finalizes the stream with unresolved
+  tools/subagents so the UI doesn't stay stuck with a live cursor.
+- **Max-reconnect failure shows generic error (Issue 4)**: The host now
+  detects "max reconnect attempts reached" and maps it to a structured
+  `EVENT_STREAM_FAILED` error context with actionable guidance ("restart
+  the OpenCode server, then reload the window"). The renderer labels the
+  code "Event stream failed". `isEventStreamTransportError` excludes this
+  terminal failure so streaming state is properly cleaned up.
+- **Stale 90000ms literal in idle timeout log (Issue 5)**: The log message
+  now interpolates `SseSubscriber.IDLE_WATCHDOG_TIMEOUT_MS` (300000ms)
+  instead of a hardcoded 90000ms that was stale from a previous timeout
+  value.
+- **Heartbeat missed pings not surfaced to user (Issue 6)**:
+  `HeartbeatService` now posts a soft `request_error` notice after 5+
+  consecutive missed pings, informing the user the panel may be
+  unresponsive and suggesting a window reload. Deduped per heartbeat
+  session via `heartbeatNoticePosted` set.
+- **PendingEventBuffer TTL expiry logs at warn level (Issue 7)**:
+  Downgraded to `info` level — subagent sessions routinely exceed the 10s
+  TTL, and the warn-level log was noise rather than a problem indicator.
+- **Streaming state not cleaned up on event stream failure (Issue 8)**:
+  The max-reconnect handler now explicitly calls `cleanupTab`,
+  `setStreaming(false)`, and `clearCompletionTimeout` so the
+  `StreamCoordinator`'s per-tab maps don't keep stale entries.
+
 ## [0.4.45] — 2026-07-02
 
 ### Fixed

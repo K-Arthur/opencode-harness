@@ -117,5 +117,49 @@ node scripts/trace-opencode-cli-parity.mjs \
   --extension-trace /tmp/opencode-extension-trace.jsonl
 ```
 
+## Network Failure Handling
+
+The extension handles network failures (server disconnects, SSE stream drops,
+max reconnect failures) with a layered strategy:
+
+### Disconnect Grace Timeout
+
+When `server_disconnected` fires, `StreamCoordinator.armDisconnectGraceTimeout`
+arms a 60s timer (`DISCONNECT_GRACE_MS`) for each streaming tab instead of
+immediately cleaning up. If the event stream reconnects within 60s,
+`reconcileAfterReconnect` cancels the timer and normal finalization takes over.
+If not, the timeout force-finalizes the stream with unresolved tools/subagents
+so the UI doesn't stay stuck with a live cursor.
+
+### Error Clearing on Reconnect
+
+On `event_stream_reconnected` and `server_connected`, the host posts
+`error_cleared` to the webview so stale Tier-B banners are dismissed. The
+webview's `streamOrchestrator.handleErrorCleared` delegates to
+`applyErrorCleared` in `errorTiers.ts`.
+
+### Max-Reconnect Failure
+
+When the SSE subscriber exhausts `MAX_EVENT_STREAM_RECONNECT_ATTEMPTS`, the
+host detects "max reconnect attempts reached" and maps it to a structured
+`EVENT_STREAM_FAILED` error context with actionable guidance. This is distinct
+from transient transport errors (`isEventStreamTransportError`), which preserve
+active run state — the max-reconnect failure is terminal and cleans up
+streaming state.
+
+### Heartbeat Unresponsiveness
+
+`HeartbeatService` monitors webview responsiveness via ping/ack. After 3
+missed pings, it sends `force_rerender` to recover. After 5+ missed pings, it
+posts a soft `request_error` notice informing the user the panel may be
+unresponsive, suggesting a window reload. The notice is deduped per heartbeat
+session via `heartbeatNoticePosted`.
+
+### Error Routing for No Active Tab
+
+When `handleRequestError` cannot resolve a session (no sessionId, no streaming
+tab), it routes the error through the tier system with `sessionId = undefined`
+so a global banner shows, rather than silently dropping the error.
+
 The script runs `opencode run --attach <url> --session <id> --format json` and
 prints compact event/part summaries for both streams.
