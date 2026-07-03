@@ -116,8 +116,8 @@ export class PendingEventBuffer {
     if (!entry) return
     this.byCli.delete(cliSessionId)
     this.expiredSessions.add(cliSessionId)
-    this.log.warn(
-      `[PendingEventBuffer] Dropped ${entry.events.length} buffered event(s) for cliSessionId "${cliSessionId}" — TTL (${this.ttlMs}ms) expired before tab mapping was registered. Future events for this session will be silently discarded.`,
+    this.log.info(
+      `[PendingEventBuffer] Expired ${entry.events.length} buffered event(s) for cliSessionId "${cliSessionId}" — TTL (${this.ttlMs}ms) elapsed before tab mapping was registered. Future events for this session will be silently discarded until a drain clears the expired list.`,
     )
   }
 

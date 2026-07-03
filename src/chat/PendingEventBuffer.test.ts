@@ -9,13 +9,15 @@ function evt(type: string, sessionId: string, extra: Record<string, unknown> = {
 void describe("PendingEventBuffer", () => {
   let buf: PendingEventBuffer
   let warnings: string[]
+  let infos: string[]
 
   beforeEach(() => {
     warnings = []
+    infos = []
     buf = new PendingEventBuffer({
       ttlMs: 200,
       maxPerSession: 3,
-      log: { warn: (m: string) => warnings.push(m), info: () => {} },
+      log: { warn: (m: string) => warnings.push(m), info: (m: string) => infos.push(m) },
     })
   })
 
@@ -57,11 +59,12 @@ void describe("PendingEventBuffer", () => {
     assert.equal(buf.drain("ses_A").length, 0)
   })
 
-  void it("expires events after the 200ms TTL and logs a warning", async () => {
+  void it("expires events after the 200ms TTL and logs an info message", async () => {
     buf.add("ses_late", evt("tool_start", "ses_late"))
     await new Promise((r) => setTimeout(r, 250))
     assert.deepEqual(buf.drain("ses_late"), [], "expired events must not replay")
-    assert.equal(warnings.filter((w) => w.includes("ses_late")).length, 1)
+    assert.equal(infos.filter((w) => w.includes("ses_late")).length, 1, "TTL expiry must log at info level")
+    assert.equal(warnings.filter((w) => w.includes("ses_late")).length, 0, "TTL expiry must NOT log at warn level")
   })
 
   void it("caps buffered events per session and drops the oldest when full", () => {
@@ -112,7 +115,7 @@ void describe("PendingEventBuffer", () => {
     buf.add("ses_dispose", evt("tool_start", "ses_dispose"))
     buf.dispose()
     await new Promise((r) => setTimeout(r, 250))
-    assert.equal(warnings.length, 0, "expiry warnings must not fire after dispose")
+    assert.equal(infos.length, 0, "expiry info logs must not fire after dispose")
   })
 
   void it("default TTL of 10s covers the heartbeat race window", () => {
@@ -125,13 +128,13 @@ void describe("PendingEventBuffer", () => {
   void it("silently discards new events for a session whose TTL already expired", async () => {
     buf.add("ses_orphan", evt("tool_start", "ses_orphan"))
     await new Promise((r) => setTimeout(r, 250))
-    assert.equal(warnings.filter((w) => w.includes("ses_orphan")).length, 1, "first expiry must warn")
+    assert.equal(infos.filter((w) => w.includes("ses_orphan")).length, 1, "first expiry must log info")
     // New events for the expired session must be silently discarded — no
-    // new buffer entry, no repeated warning.
+    // new buffer entry, no repeated info log.
     buf.add("ses_orphan", evt("text_chunk", "ses_orphan", { data: { text: "late" } }))
     assert.equal(buf.size("ses_orphan"), 0, "expired session must not re-buffer")
     await new Promise((r) => setTimeout(r, 250))
-    assert.equal(warnings.filter((w) => w.includes("ses_orphan")).length, 1, "no repeated warning for expired session")
+    assert.equal(infos.filter((w) => w.includes("ses_orphan")).length, 1, "no repeated info log for expired session")
   })
 
   void it("clears the expired denylist on drain so a later-discovered session can buffer again", async () => {
