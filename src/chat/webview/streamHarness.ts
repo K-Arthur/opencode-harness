@@ -38,6 +38,40 @@ export function installDom(opts: InstallDomOptions = {}): DomHandle {
     Node: g.Node,
     requestAnimationFrame: g.requestAnimationFrame,
     cancelAnimationFrame: g.cancelAnimationFrame,
+    setInterval: g.setInterval,
+    clearInterval: g.clearInterval,
+    setTimeout: g.setTimeout,
+    clearTimeout: g.clearTimeout,
+  }
+
+  // Track timers created while the harness DOM is installed. Module code
+  // under test calls the bare setInterval/setTimeout, which resolves to
+  // NODE's global timers, not the JSDOM window's — dom.window.close() does
+  // not touch them. Any timer a test leaves running (e.g. streamHandlers'
+  // 1s elapsed ticker when a stream is started but never ended) pins the
+  // event loop and hangs the whole test FILE after its tests pass.
+  const trackedTimers = new Set<ReturnType<typeof setInterval>>()
+  const realSetInterval = previous.setInterval
+  const realClearInterval = previous.clearInterval
+  const realSetTimeout = previous.setTimeout
+  const realClearTimeout = previous.clearTimeout
+  g.setInterval = (...args: Parameters<typeof setInterval>) => {
+    const handle = realSetInterval(...args)
+    trackedTimers.add(handle)
+    return handle
+  }
+  g.clearInterval = (handle: ReturnType<typeof setInterval>) => {
+    trackedTimers.delete(handle)
+    return realClearInterval(handle)
+  }
+  g.setTimeout = (...args: Parameters<typeof setTimeout>) => {
+    const handle = realSetTimeout(...args)
+    trackedTimers.add(handle)
+    return handle
+  }
+  g.clearTimeout = (handle: ReturnType<typeof setTimeout>) => {
+    trackedTimers.delete(handle)
+    return realClearTimeout(handle)
   }
 
   g.window = dom.window
@@ -92,6 +126,14 @@ export function installDom(opts: InstallDomOptions = {}): DomHandle {
 
   return {
     restore: () => {
+      // Clear timers the code under test leaked before handing globals back.
+      // clearTimeout/clearInterval are interchangeable for Node handles, but
+      // call both for portability with browser-typed handles.
+      for (const handle of trackedTimers) {
+        realClearInterval(handle)
+        realClearTimeout(handle)
+      }
+      trackedTimers.clear()
       Object.assign(g, previous)
       if (addedCrypto) {
         try {
