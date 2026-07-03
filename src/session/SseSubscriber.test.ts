@@ -129,4 +129,16 @@ void describe("SseSubscriber", () => {
     assert.ok(source.includes("SseSubscriber.IDLE_WATCHDOG_TIMEOUT_MS"), "should use the constant in idleWatchdog construction")
     assert.ok(!source.includes("timeoutMs: 90_000"), "should NOT use the old 90s hardcoded value")
   })
+
+  // Issue 5: log message must use the constant, not a stale hardcoded 90000ms
+  void it("idle timeout log message uses the constant, not a stale 90000ms literal", () => {
+    assert.ok(
+      source.includes("idle for ${SseSubscriber.IDLE_WATCHDOG_TIMEOUT_MS}ms"),
+      "idle timeout log should interpolate the IDLE_WATCHDOG_TIMEOUT_MS constant",
+    )
+    assert.ok(
+      !source.includes("idle for 90000ms"),
+      "idle timeout log should NOT contain the stale 90000ms literal",
+    )
+  })
 })

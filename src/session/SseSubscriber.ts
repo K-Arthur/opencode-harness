@@ -248,7 +248,7 @@ export class SseSubscriber {
     }
 
     if (idleWatchdog.timedOut) {
-      log.warn("OpenCode event stream idle for 90000ms — reconnecting")
+      log.warn(`OpenCode event stream idle for ${SseSubscriber.IDLE_WATCHDOG_TIMEOUT_MS}ms — reconnecting`)
       this.scheduleEventStreamReconnect("idle_timeout")
       return
     }
