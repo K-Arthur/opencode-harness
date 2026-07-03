@@ -288,6 +288,9 @@ export interface SubagentCardUpdate {
   error?: string
   durationMs?: number
   stale?: boolean
+  /** Updated args from a tool_update event — used to refresh the card's
+   * title and purpose when the initial tool_start carried partial/empty args. */
+  args?: unknown
 }
 
 const STATUS_CLASS_RE = /subagent-card--(?:queued|running|completed|failed|stale)/g
@@ -309,6 +312,29 @@ function statusFromUpdate(u: SubagentCardUpdate, current: SubagentCardStatus): S
 
 export function applySubagentCardUpdate(cardEl: HTMLElement, update: SubagentCardUpdate): void {
   const status = statusFromUpdate(update, currentStatusOf(cardEl))
+
+  // When args arrive (e.g., via a tool_update after the initial tool_start
+  // carried partial/empty args), re-render the card header so the title and
+  // purpose reflect the actual subagent invocation. Without this, the card
+  // shows the initial (possibly empty) title until message_complete
+  // triggers a full re-render.
+  if (update.args !== undefined) {
+    const blockId = cardEl.getAttribute("data-block-id") || ""
+    const syntheticBlock: ToolCallBlock = {
+      type: "tool-call",
+      id: blockId,
+      name: "",
+      class: "read",
+      state: status === "running" ? "running" : status === "queued" ? "pending" : status === "completed" ? "result" : status === "failed" ? "error" : "stale",
+      args: update.args,
+    }
+    const inv = parseTaskInvocation(update.args)
+    if (inv.agentName || inv.purpose || inv.prompt) {
+      const freshCard = renderSubagentTaskCard(syntheticBlock)
+      cardEl.replaceWith(freshCard)
+      return
+    }
+  }
 
   cardEl.className = cardEl.className.replace(STATUS_CLASS_RE, `subagent-card--${status}`)
   const badge = cardEl.querySelector<HTMLElement>(".subagent-card-status")

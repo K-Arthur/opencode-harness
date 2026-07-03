@@ -3,6 +3,7 @@ import type { StreamCallbacks, ToolEndResult } from "./StreamCoordinatorTypes"
 import type { SessionManager } from "../../session/SessionManager"
 import type { RunActivityTracker } from "./RunActivityTracker"
 import type { ToolActivityInput, AgentRunState } from "./runActivityTypes"
+import { isSubagentToolName } from "./toolClassifier"
 import { log } from "../../utils/outputChannel"
 
 /** Dependencies shared by reference from StreamCoordinator. */
@@ -229,6 +230,11 @@ export class ToolCallTracker {
       })
       if (isQuestionBlock) {
         log.info(`markUnresolvedPendingToolCalls: skipping question tool ${toolId} (still awaiting answer)`)
+        continue
+      }
+      const subagentBlock = tab?.blocksBuffer.find(b => b.type === "tool-call" && b.id === toolId)
+      if (subagentBlock && isSubagentToolName(String((subagentBlock as Record<string, unknown>).name ?? ""))) {
+        log.info(`markUnresolvedPendingToolCalls: skipping subagent tool ${toolId} (tracked by heartbeat)`)
         continue
       }
       const block = tab?.blocksBuffer.find(b => b.type === "tool-call" && b.id === toolId)

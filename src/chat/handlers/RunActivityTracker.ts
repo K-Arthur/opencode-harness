@@ -284,6 +284,15 @@ export class RunActivityTracker {
       if (subagent.status !== "queued" && subagent.status !== "running" && subagent.status !== "waiting" && subagent.status !== "unknown") {
         continue
       }
+      // Skip subagents linked to a child session — the SubagentHeartbeat polls
+      // every 5s and detects completion via child session removal. The grace
+      // timeout (30s) is far too short for legitimate long-running subagents;
+      // marking them failed prematurely stops the heartbeat and shows
+      // "unconfirmed" in the UI. Only mark subagents that were never linked to
+      // a child session (orphaned/never discovered by the heartbeat).
+      if (subagent.childSessionId) {
+        continue
+      }
       subagent.status = "failed"
       subagent.error = message
       subagent.completedAt = at

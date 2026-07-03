@@ -366,7 +366,19 @@ export class StreamCoordinator {
       this.sessionManager.sessionClient,
       {
         getSubagentSnapshot: (id) => this.getSubagentSnapshot(id),
-        recordSubagentActivity: (id, input) => this.recordSubagentActivity(id, input),
+        recordSubagentActivity: (id, input) => {
+          this.recordSubagentActivity(id, input)
+          // After the heartbeat updates a subagent (e.g., marks it completed
+          // when the child session is removed), re-check finalization so the
+          // stream doesn't stay deferred forever waiting for a subagent that
+          // has already finished.
+          const cbs = this.stuckStreamHandlers.get(id)
+          if (cbs) {
+            void this.maybeFinalizeStream(id, cbs, "status").catch(err =>
+              log.error(`maybeFinalizeStream after heartbeat subagent update failed for ${id}:`, err)
+            )
+          }
+        },
         hasActiveRun: (id) => {
           const run = this.activeRuns.get(id)
           return !!run && run.state !== "completed" && run.state !== "failed" && run.state !== "aborted"

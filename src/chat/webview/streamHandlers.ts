@@ -1086,6 +1086,7 @@ export function handleToolUpdate(
       state: update.state,
       result: update.result,
       error: update.error,
+      args: update.args,
     })
     return
   }
