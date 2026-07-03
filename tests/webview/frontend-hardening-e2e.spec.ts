@@ -74,8 +74,10 @@ test.describe("Frontend Hardening E2E", () => {
     await expect(strip).toContainText("from-A.ts")
     await expect(strip).not.toContainText("from-B")
 
-    // Switch to session B
-    await dispatchHostMessage(page, { type: "active_session_changed", sessionId: "sess-B" })
+    // Switch to session B via a user tab click. (Host-driven
+    // active_session_changed is deliberately ignored while the user views a
+    // valid tab — no-focus-stealing policy, sessionFocus.ts.)
+    await page.locator('.tab-btn[data-tab-id="sess-B"]').click()
     await page.waitForTimeout(200)
 
     // Now strip shows B's count and first chip; A's must not bleed in
@@ -85,7 +87,7 @@ test.describe("Frontend Hardening E2E", () => {
     await expect(strip).not.toContainText("from-A")
 
     // Switch back to A — A's file must still be there, B's gone
-    await dispatchHostMessage(page, { type: "active_session_changed", sessionId: "sess-A" })
+    await page.locator('.tab-btn[data-tab-id="sess-A"]').click()
     await page.waitForTimeout(200)
     await expect(strip).toContainText("1 file changed")
     await expect(strip).toContainText("from-A.ts")

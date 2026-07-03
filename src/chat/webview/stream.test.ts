@@ -2,7 +2,7 @@ import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
-import { JSDOM } from "jsdom"
+import { installDom as installSharedDom } from "./streamHarness"
 
 const streamSource = readFileSync(path.join(__dirname, "stream.ts"), "utf8")
 const handlersSource = readFileSync(path.join(__dirname, "streamHandlers.ts"), "utf8")
@@ -22,35 +22,12 @@ async function loadStreamHandlers(): Promise<typeof import("./streamHandlers")> 
   return import("./streamHandlers")
 }
 
+// Delegates to the shared harness: identical DOM + inline RAF, plus timer
+// tracking so a leaked stream ticker can't pin the event loop after the
+// tests pass (this file used to hang the sequential test:unit run).
 function installDom(): () => void {
-  const dom = new JSDOM(
-    '<!doctype html><div id="message-list"></div><div id="typing-indicator"></div><span id="typing-label"></span>',
-    { url: "https://opencode-harness.test" },
-  )
-  const g = globalThis as any
-  const previous = {
-    window: g.window,
-    document: g.document,
-    HTMLElement: g.HTMLElement,
-    Node: g.Node,
-    requestAnimationFrame: g.requestAnimationFrame,
-    cancelAnimationFrame: g.cancelAnimationFrame,
-  }
-
-  g.window = dom.window
-  g.document = dom.window.document
-  g.HTMLElement = dom.window.HTMLElement
-  g.Node = dom.window.Node
-  g.requestAnimationFrame = (callback: FrameRequestCallback) => {
-    callback(0)
-    return 1
-  }
-  g.cancelAnimationFrame = () => {}
-
-  return () => {
-    Object.assign(g, previous)
-    dom.window.close()
-  }
+  const handle = installSharedDom()
+  return () => handle.restore()
 }
 
 function createHarness() {
