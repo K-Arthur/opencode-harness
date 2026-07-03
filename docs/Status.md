@@ -1,7 +1,7 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-07-03
-**Version:** v0.4.47
+**Version:** v0.4.48
 
 ## Highlights (2026-07-03) — Context usage counter: cross-tab bleed eliminated
 
