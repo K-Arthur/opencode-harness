@@ -117,6 +117,48 @@ node scripts/trace-opencode-cli-parity.mjs \
   --extension-trace /tmp/opencode-extension-trace.jsonl
 ```
 
+## Subagent Tracking
+
+When the main agent delegates work via the `task` tool, the extension tracks the
+subagent through a dedicated lifecycle that is decoupled from the generic tool
+grace timeout:
+
+### Heartbeat Polling
+
+`SubagentHeartbeat` polls `sessionClient.getChildSessions` every 5s for each
+active run. When a new child session is discovered, it is linked to the
+matching subagent record (by order of arrival among unlinked subagents). When a
+child session is removed, the corresponding subagent is marked `completed`.
+Child session mappings are registered with `registerChildSessionMapping` so
+events from the child session route to the correct parent tab.
+
+### Grace Timeout Exemption
+
+The generic tool grace timeout (`TOOL_FINALIZE_GRACE_MS`, 30s) is appropriate
+for regular tools but far too short for subagents that can run for minutes.
+Subagent tools are therefore **skipped** in `markUnresolvedPendingToolCalls`
+and `markActiveSubagentsUnresolved` — the heartbeat is the authoritative
+completion signal for subagents with a linked `childSessionId`. Only subagents
+that were never linked to a child session (orphaned / never discovered by the
+heartbeat) are marked unresolved when the server goes idle.
+
+### Stream Finalization After Heartbeat Updates
+
+When the heartbeat updates a subagent's status (e.g., marks it `completed`
+after the child session is removed), `StreamCoordinator` re-checks
+`maybeFinalizeStream` so the stream can proceed to finalization. Without this
+re-check, the stream would stay deferred forever waiting for a subagent that
+has already finished.
+
+### Inline Card Live Updates
+
+The inline subagent card (`subagentCard.ts`) renders the task tool as a
+first-class entity with agent name, purpose, status, and duration. When a
+`tool_update` event arrives with full args (the initial `tool_start` may carry
+partial/empty args), `applySubagentCardUpdate` re-renders the card header so
+the title and purpose reflect the actual subagent invocation immediately — not
+only after the subagent completes.
+
 ## Network Failure Handling
 
 The extension handles network failures (server disconnects, SSE stream drops,

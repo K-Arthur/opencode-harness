@@ -17,6 +17,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.50] — 2026-07-03
+
+### Fixed — Subagent Tracking and UI
+
+- **Subagent tracker switched to "unconfirmed" for long-running tasks**: the
+  30-second tool grace timeout (`TOOL_FINALIZE_GRACE_MS`) fired while
+  subagents were still legitimately running, marking the task tool as
+  "unresolved" and the subagent as "failed". This stopped the
+  `SubagentHeartbeat` (which relies on `hasActiveRun`) and incorrectly showed
+  "Unconfirmed" in the UI. Subagent tools are now **skipped** in
+  `markUnresolvedPendingToolCalls` and `markActiveSubagentsUnresolved` — the
+  heartbeat (5s poll interval) is the authoritative completion signal for
+  subagents with a linked `childSessionId`. Only orphaned subagents (never
+  linked to a child session) are marked unresolved.
+- **Stream stayed deferred forever after heartbeat completed a subagent**:
+  when the `SubagentHeartbeat` marked a subagent `completed` (after detecting
+  child session removal), nobody re-checked `maybeFinalizeStream`. The
+  `recordSubagentActivity` heartbeat callback now triggers
+  `maybeFinalizeStream` so the stream can finalize promptly.
+- **Subagent tool card didn't update title/details until completion**: the
+  initial `tool_start` event for a `task` tool may carry partial/empty args.
+  When the full args arrived via `tool_update`, `handleToolUpdate` only
+  forwarded `state`, `result`, and `error` to `applySubagentCardUpdate` — not
+  `args`. The card's title and purpose were never updated from the initial
+  render until `message_complete` triggered a full re-render. The `args`
+  field is now forwarded, and `applySubagentCardUpdate` re-renders the card
+  header when parseable args arrive, so the title and purpose update live
+  during the running subagent.
+
+## [0.4.49] — 2026-07-03
+
+### Added
+
+- **Copy button on messages**: user prompts and model responses now carry a
+  hover-revealed copy control in the message header (alongside
+  edit/revert/regenerate/fork). Copies the message's visible prose (text
+  blocks; tool calls and diffs excluded) with a transient "copied"
+  confirmation. Falls back to the legacy `execCommand` path when the async
+  clipboard API is unavailable or denied.
+
+### Fixed — Test Infrastructure
+
+- **`npm run test:unit` hung indefinitely on webview stream tests**: code
+  under test arms Node-global timers (streamHandlers' 1s elapsed ticker);
+  the JSDOM harnesses restored globals but never cleared those timers, so
+  test files whose tests all PASSED then pinned the event loop forever
+  (observed: 57+ minutes on `streamHandlers.restart.test.ts`; a 1h47m
+  orphaned `stream.test.ts` process confirmed the same leak in its inline
+  harness). `streamHarness.installDom()` now interposes and tracks
+  `setInterval`/`setTimeout` and clears outstanding handles in `restore()`;
+  `stream.test.ts` delegates to the shared harness instead of its inline
+  copy. Every stream/webview test file now passes AND exits.
+- **Three stale webview e2e tests failed against the no-focus-stealing
+  policy**: they simulated tab switching via host-driven
+  `active_session_changed`, which the webview deliberately ignores while the
+  user is viewing a valid tab (`sessionFocus.ts`). They now switch via real
+  user tab clicks; the full chromium-webview project is green (31 passed,
+  0 failed) and the two context-usage tests re-confirm per-session isolation
+  in the webview itself.
+
 ## [0.4.48] — 2026-07-03
 
 ### Fixed — Context Usage Counter Cross-Tab Bleed
