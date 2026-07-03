@@ -191,9 +191,12 @@ private currentTokens = 0
     if (sessionId) {
       // Store per-session so a second tab's model can't change this session's
       // window. Re-emit only when this session's own limit actually changed.
+      // Deliberately does NOT refresh this.tokenLimit: the shared default
+      // must not track whichever tab's model resolved last, or sessions
+      // without their own entry compute percent against a foreign window
+      // (tokens_A / limit_B clamps to a bogus 100%).
       if (this.limitBySession.get(sessionId) !== limit) {
         this.limitBySession.set(sessionId, limit)
-        this.tokenLimit = limit // keep the sessionless default fresh
         this.reemitLatestUsageForSession(sessionId)
       }
       return
@@ -202,7 +205,7 @@ private currentTokens = 0
   }
 
   /** Effective context window for a session: its own limit, else the shared default. */
-  private limitFor(sessionId?: string): number {
+  limitFor(sessionId?: string): number {
     if (sessionId && this.limitBySession.has(sessionId)) return this.limitBySession.get(sessionId)!
     return this.tokenLimit
   }
@@ -224,11 +227,21 @@ private currentTokens = 0
   }
 
   /**
-   * Clear all per-session state after compaction or tab close, so stale
-   * pre-compaction token counts are not served by getCurrentUsage().
-   * The next real context_usage event will repopulate the entry.
+   * Clear a session's usage after compaction, so stale pre-compaction token
+   * counts are not served by getCurrentUsage(). Keeps the session's context
+   * window: compaction shrinks the conversation, not the model, and dropping
+   * the limit would make the next update compute against maxTokens 0.
+   * The next real context_usage event repopulates the usage entry.
    */
   resetSession(sessionId: string): void {
+    this.latestUsageBySession.delete(sessionId)
+  }
+
+  /**
+   * Remove ALL per-session state (usage and window). Call when the tab is
+   * closed/deleted so the maps don't accumulate dead sessions.
+   */
+  clearSession(sessionId: string): void {
     this.latestUsageBySession.delete(sessionId)
     this.limitBySession.delete(sessionId)
   }
@@ -309,7 +322,7 @@ private currentTokens = 0
     if (breakdown) {
       const pendingTokens = (breakdown.queued ?? 0) + (breakdown.steer ?? 0)
       if (pendingTokens > 0) {
-        const prediction = this.predictUsage(pendingTokens)
+        const prediction = this.predictUsage(pendingTokens, effectiveLimit)
         usage.projected = { withQueue: prediction.predictedTokens, overflow: prediction.willOverflow }
       }
     }
@@ -341,8 +354,9 @@ private currentTokens = 0
     const latest = this.latestUsageBySession.get(sessionId)
     if (!latest) return
 
+    // Never write this.currentTokens here: a background session's limit
+    // change would clobber the sessionless counter other consumers read.
     const tokens = Math.max(0, latest.tokens)
-    this.currentTokens = tokens
     const effectiveLimit = this.limitFor(sessionId)
     const usage: ContextUsage = {
       ...latest,
@@ -364,6 +378,42 @@ private currentTokens = 0
       source: usage.source,
       updatedAt: usage.updatedAt,
     })
+  }
+
+  /**
+   * Re-emit one session's stored usage snapshot with a fresh timestamp,
+   * recomputed against that session's own window. Stream boundaries
+   * (start/end) use this instead of the sessionless percent/tokensUsed/limit
+   * getters, which reflect whichever session updated last and caused
+   * cross-tab bleed in the context bar. Preserves the stored `source` so an
+   * API-reported "actual" reading is not downgraded to "estimated".
+   * Returns false when the session has no recorded usage (emits nothing —
+   * never fabricate a snapshot from another session's globals).
+   */
+  emitLatestForSession(sessionId: string): boolean {
+    const latest = this.latestUsageBySession.get(sessionId)
+    if (!latest) return false
+
+    const effectiveLimit = this.limitFor(sessionId)
+    const usage: ContextUsage = {
+      ...this.cloneUsage(latest),
+      percent: this.calculatePercent(latest.tokens, effectiveLimit),
+      maxTokens: effectiveLimit,
+      sessionId,
+      updatedAt: Date.now(),
+    }
+    this.latestUsageBySession.set(sessionId, usage)
+    this.throttler.emitImmediate({
+      percent: usage.percent,
+      tokens: usage.tokens,
+      maxTokens: usage.maxTokens,
+      sessionId,
+      breakdown: usage.breakdown,
+      cost: usage.cost,
+      source: usage.source,
+      updatedAt: usage.updatedAt,
+    })
+    return true
   }
 
   /**
@@ -398,7 +448,7 @@ private currentTokens = 0
     // Populate projected from queue
     const pendingTokens = safeQueueTokens + safeSteerTokens
     if (pendingTokens > 0) {
-      const prediction = this.predictUsage(pendingTokens)
+      const prediction = this.predictUsage(pendingTokens, queueLimit)
       usage.projected = { withQueue: prediction.predictedTokens, overflow: prediction.willOverflow }
     }
 
@@ -546,10 +596,10 @@ private currentTokens = 0
     return [...this.usageHistory]
   }
 
-  predictUsage(pendingTokens: number): { predictedTokens: number; predictedCost: number; willOverflow: boolean } {
+  predictUsage(pendingTokens: number, limit: number = this.tokenLimit): { predictedTokens: number; predictedCost: number; willOverflow: boolean } {
     const predictedTokens = this.currentTokens + pendingTokens
     const predictedCost = this.calculateCost(predictedTokens)
-    const willOverflow = predictedTokens > this.tokenLimit
+    const willOverflow = predictedTokens > limit
 
     return { predictedTokens, predictedCost, willOverflow }
   }

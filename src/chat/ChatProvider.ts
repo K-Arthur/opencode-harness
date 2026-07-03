@@ -467,6 +467,9 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       switch (change.kind) {
         case "deleted":
           this.tabManager.closeTab(change.sessionId)
+          // Drop the monitor's per-session usage/window so the maps don't
+          // accumulate dead sessions across long editor lifetimes.
+          this.contextMonitor.clearSession(change.sessionId)
           this.postMessage({ type: "session_deleted", sessionId: change.sessionId })
           // Server-side delete is handled by the delete_session /
           // delete_server_session handlers in WebviewEventRouter, which
@@ -680,6 +683,13 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       }),
       this.contextMonitor.onContextChanged?.((usage) => {
         const sessionId = typeof usage.sessionId === "string" && usage.sessionId.length > 0 ? usage.sessionId : undefined
+        if (!sessionId) {
+          // Unattributed usage must never reach the webview: its handler
+          // falls back to the ACTIVE tab, so a sessionless emit paints (and
+          // persists onto) whichever session the user happens to be viewing.
+          log.debug(`Dropping sessionless context_usage emit (tokens=${usage.tokens})`)
+          return
+        }
         const contextUsage: SessionContextUsage = {
           percent: usage.percent,
           tokens: usage.tokens,
@@ -690,9 +700,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
           source: usage.source,
           updatedAt: usage.updatedAt,
         }
-        if (sessionId) {
-          this.sessionStore.updateContextUsage(sessionId, contextUsage)
-        }
+        this.sessionStore.updateContextUsage(sessionId, contextUsage)
         this.postMessage({
           type: "context_usage",
           percent: usage.percent,

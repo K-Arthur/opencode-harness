@@ -74,16 +74,24 @@ export class AutoCompactor {
     const autoCompact = this.contextMonitor.getAutoCompactSetting()
     if (autoCompact === "off") return
 
+    // Per-tab usage: the monitor's sessionless percent/tokensUsed/limit
+    // getters hold whichever session updated last, so gating on them let a
+    // busy background tab trigger (or mask) compaction of the active tab.
+    // Read the active tab's own snapshot; without one we cannot know its
+    // real fill, so do nothing.
+    const usage = this.contextMonitor.getCurrentUsage(activeTab.id)
+    if (!usage) return
+
     // Threshold check — done HERE rather than in ChatProvider so it can be
     // customised per-model. ChatProvider still does a coarse >=80% pre-gate
     // to avoid invoking this hot path for low-usage events; the authoritative
     // check is the model-aware one below.
     const threshold = this.contextMonitor.getAutoCompactThreshold(activeTab.model)
-    if (this.contextMonitor.percent < threshold) return
+    if (usage.percent < threshold) return
 
     const now = Date.now()
     if (now < this.snoozeUntil) return
-    const currentTokens = this.contextMonitor.tokensUsed
+    const currentTokens = usage.tokens
     // If snoozeTokens was set (user clicked "remind me later" earlier), only
     // re-trigger once usage has grown materially (5%) past that point.
     if (this.snoozeTokens > 0 && currentTokens < this.snoozeTokens * 1.05) return
@@ -134,11 +142,10 @@ export class AutoCompactor {
     if (autoCompact === "auto") {
       doCompact()
     } else {
-      // Use the ContextMonitor's already-clamped percent rather than
-      // recomputing here — its percent calc guards against limit === 0,
-      // ours did not, and could surface NaN/Infinity when the model's
-      // context window hasn't resolved yet.
-      const limit = this.contextMonitor.limit
+      // Banner payload uses the active tab's own window (usage.maxTokens),
+      // guarded against limit === 0 so an unresolved context window can't
+      // surface NaN/Infinity in the banner percent.
+      const limit = usage.maxTokens
       const safeLimit = limit > 0 ? limit : 1
       const pct = Math.min(100, Math.max(0, Math.round((currentTokens / safeLimit) * 100)))
       callbacks.postMessage({
@@ -163,7 +170,10 @@ export class AutoCompactor {
       this.snoozeTokens = 0
     } else if (action === "remind_later") {
       this.snoozeUntil = Date.now() + 10 * 60 * 1000
-      this.snoozeTokens = this.contextMonitor.tokensUsed
+      // Snooze against the dismissing session's own count — the sessionless
+      // tokensUsed getter may hold a different (busier) tab's figure, which
+      // would inflate the 1.05× regrowth gate and suppress future banners.
+      this.snoozeTokens = this.contextMonitor.getCurrentUsage(sessionId)?.tokens ?? 0
       callbacks.postMessage({ type: "compact_banner_dismissed", sessionId })
     }
   }

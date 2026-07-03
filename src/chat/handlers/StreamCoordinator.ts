@@ -1319,18 +1319,11 @@ export class StreamCoordinator {
     })
     this.traceRun(tabId, "stream_start")
     
-    // Stream boundary trigger: refresh context usage immediately at stream start
-    const tab = this.tabManager.getTab(tabId)
-    if (tab) {
-      this.contextMonitor.emitImmediate({
-        percent: this.contextMonitor.percent,
-        tokens: this.contextMonitor.tokensUsed,
-        maxTokens: this.contextMonitor.limit,
-        sessionId: tabId,
-        source: "estimated",
-        updatedAt: Date.now(),
-      })
-    }
+    // Stream boundary trigger: re-emit this tab's own usage snapshot at
+    // stream start. Never emit the monitor's sessionless getters here —
+    // they hold whichever session updated last, so stamping them with this
+    // tabId painted every tab's bar with the busiest tab's figures.
+    this.contextMonitor.emitLatestForSession(tabId)
     callbacks.clearPromptsInFlight?.()
 
     this.tabManager.setWaitingForCompletion(tabId, true)
@@ -1717,15 +1710,10 @@ export class StreamCoordinator {
     this.activeRuns.delete(tabId)
     this.activeRunMetrics.delete(tabId)
 
-    // Stream boundary trigger: refresh context usage immediately at stream end
-    this.contextMonitor.emitImmediate({
-      percent: this.contextMonitor.percent,
-      tokens: this.contextMonitor.tokensUsed,
-      maxTokens: this.contextMonitor.limit,
-      sessionId: tabId,
-      source: "estimated",
-      updatedAt: Date.now(),
-    })
+    // Stream boundary trigger: re-emit this tab's own usage snapshot at
+    // stream end (same rationale as the stream-start emit — the sessionless
+    // getters belong to whichever session updated last, not this tab).
+    this.contextMonitor.emitLatestForSession(tabId)
 
     // Drain host-side prompt queue after stream finalization
     // (the old "append" mode is gone — queued follow-ups are the single path).

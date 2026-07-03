@@ -1906,7 +1906,9 @@ export class WebviewEventRouter {
         return
       }
 
-      const maxTokens = this.opts.contextMonitor.limit
+      // Per-session window — the sessionless `limit` getter holds whichever
+      // session's model resolved last, not necessarily this session's.
+      const maxTokens = this.opts.contextMonitor.limitFor(targetId)
       if (maxTokens > 0) {
         this.opts.postMessage({ type: "context_window_known", sessionId: targetId, maxTokens, source: "monitor" })
       } else {
