@@ -1738,7 +1738,10 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       }
       this.postRequestError("OpenCode server connection lost. Attempting to reconnect...")
     }],
-    ["server_connected", () => { this.pushModelListToWebview() }],
+    ["server_connected", () => {
+      this.pushModelListToWebview()
+      this.postMessage({ type: "error_cleared", correlationIds: ["server_connected"] })
+    }],
     ["event_stream_reconnected", () => {
       log.info("Event stream reconnected — reconciling active streaming sessions and checking for interrupted tabs")
       // Restore CLI session IDs in SessionStore. server_disconnected
@@ -1855,6 +1858,8 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       if (allSessionIds.length > 0) {
         this.postMessage({ type: "reconnect_sync", sessionIds: allSessionIds })
       }
+
+      this.postMessage({ type: "error_cleared", correlationIds: ["event_stream_reconnected"] })
     }],
     ["sessions_recovered", async () => {
       log.info("sessions_recovered: re-pushing init state with recovered sessions")

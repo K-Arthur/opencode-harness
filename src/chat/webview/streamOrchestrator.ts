@@ -11,7 +11,7 @@ import { finalizeStreamingText } from "./streamHandlers"
 import { generateUserMessageId } from "../../session/messageId"
 import { hasRecentErrorCard } from "./streamEndErrorPolicy"
 import { normalizeIncomingError } from "./errorWire"
-import { ErrorStateStore, routeErrorByTier, type ErrorTierDeps } from "./errorTiers"
+import { ErrorStateStore, routeErrorByTier, applyErrorCleared, type ErrorTierDeps } from "./errorTiers"
 
 /**
  * G2: read the `mayStillBeRunning` signal from an opaque errorContext
@@ -489,6 +489,7 @@ export interface StreamOrchestratorAPI {
   resetStream: (sessionId: string) => void
   handleServerStatus: (sessionId: string, status?: string, errorContext?: unknown) => void
   handleRequestError: (sessionId: string | undefined, message?: string, errorContext?: unknown) => void
+  handleErrorCleared: (raw: unknown) => void
   handleDiffResult: (sessionId?: string, blockId?: string, ok?: boolean, message?: string, checkpointCreated?: boolean) => void
   handleHostMessage: (msg: ChatMessage) => void
   handleCostUpdate: (sessionId: string, cost: number) => void
@@ -941,6 +942,10 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
     }
   }
 
+  function handleErrorCleared(raw: unknown): void {
+    applyErrorCleared(raw, errorTierDeps)
+  }
+
   return {
     handleStreamStart,
     handleStreamChunk,
@@ -948,6 +953,7 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
     resetStream,
     handleServerStatus,
     handleRequestError,
+    handleErrorCleared,
     handleDiffResult,
     handleHostMessage,
     handleCostUpdate,

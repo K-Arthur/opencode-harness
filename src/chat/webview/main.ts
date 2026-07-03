@@ -3792,6 +3792,7 @@ function setupTodoSkillAndSubagentPanels(): void {
         }
       }],
       ["request_error", (msg, sid) => { handleRequestError(sid ?? stateManager.getState().activeSessionId ?? undefined, typeof msg.message === "string" ? msg.message : undefined, msg.errorContext) }],
+      ["error_cleared", (msg) => { streamOrchestrator.handleErrorCleared(msg) }],
       ["diff_result", (msg) => {
         handleDiffResult(typeof msg.sessionId === "string" ? msg.sessionId : undefined, msg.blockId as string, msg.ok as boolean, typeof msg.message === "string" ? msg.message : undefined, Boolean(msg.checkpointCreated))
       }],

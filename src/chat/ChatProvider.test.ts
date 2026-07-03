@@ -1090,4 +1090,26 @@ void describe("ChatProvider question.asked surfacing (B1)", () => {
       "handleCompleteProviderOAuth must call refreshModels after successful callback"
     )
   })
+
+  // Issue 1: error_cleared must be posted after reconnect to dismiss stale banners
+  void it("posts error_cleared envelope after event_stream_reconnected", () => {
+    const idx = source.indexOf('"event_stream_reconnected"')
+    assert.ok(idx >= 0, "must have event_stream_reconnected handler")
+    const blockEnd = source.indexOf('"sessions_recovered"', idx)
+    const block = source.slice(idx, blockEnd > idx ? blockEnd : idx + 5000)
+    assert.ok(
+      block.includes('"error_cleared"'),
+      "event_stream_reconnected handler must post error_cleared to dismiss stale banners",
+    )
+  })
+
+  void it("posts error_cleared envelope after server_connected", () => {
+    const idx = source.indexOf('"server_connected"')
+    assert.ok(idx >= 0, "must have server_connected handler")
+    const block = source.slice(idx, idx + 1000)
+    assert.ok(
+      block.includes('"error_cleared"'),
+      "server_connected handler must post error_cleared to dismiss stale banners",
+    )
+  })
 })
