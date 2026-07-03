@@ -803,7 +803,11 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
       const sessions = getAllSessions()
       const streaming = sessions.find(s => s.isStreaming)
       if (streaming) sessionId = streaming.id
-      else return
+      else {
+        const normalized = normalizeIncomingError(errorContext, undefined)
+        routeErrorByTier(normalized, errorTierDeps, errorStateStore)
+        return
+      }
     }
 
     // G2: Do NOT unconditionally clear the streaming flag. Many error sources
