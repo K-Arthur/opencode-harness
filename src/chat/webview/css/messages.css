@@ -667,6 +667,44 @@
   border-color: var(--oc-accent-border);
 }
 
+/* ─── Copy Button (user prompts + assistant responses) ─── */
+.message-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  padding: var(--space-0-5);
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--duration-fast), visibility var(--duration-fast);
+  min-width: var(--size-target-min);
+  min-height: var(--size-target-min);
+  margin-left: var(--space-1);
+}
+
+.message:hover .message-copy-btn,
+.message:focus-within .message-copy-btn {
+  opacity: 0.5;
+  visibility: visible;
+}
+
+.message-copy-btn:hover {
+  opacity: 1;
+  background: var(--oc-accent-subtle);
+  border-color: var(--oc-accent-border);
+}
+
+.message-copy-btn.copied {
+  opacity: 1;
+  visibility: visible;
+  color: var(--oc-success);
+  border-color: var(--oc-success-border);
+}
+
 /* ─── Fork Button (turn-based) ─── */
 .message-fork-btn {
   display: inline-flex;

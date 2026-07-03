@@ -13,6 +13,7 @@ import {
 } from "./toolCallRenderer"
 import { getCompactMode, setCompactMode } from "./displayPrefs"
 import { estimateMessageTokens } from "../../utils/tokenCounter"
+import { createMessageCopyButton } from "./messageCopy"
 
 export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecutive?: boolean): HTMLDivElement {
   const div = document.createElement("div")
@@ -133,6 +134,12 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
         }
       })
       header.appendChild(regenBtn)
+    }
+    if (role === "user" || role === "assistant") {
+      // Whole-message copy (user prompt / model output). Built in
+      // messageCopy.ts; null when the message has no copyable text.
+      const copyBtn = createMessageCopyButton(msg)
+      if (copyBtn) header.appendChild(copyBtn)
     }
     if (msg.id && opts?.turnIndex !== undefined) {
       const forkBtn = document.createElement("button")
