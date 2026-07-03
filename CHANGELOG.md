@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.4.50] — 2026-07-03
+## [0.4.51] — 2026-07-03
 
 ### Fixed — Subagent Tracking and UI
 
