@@ -1185,4 +1185,65 @@ describe("StreamCoordinator.ts", () => {
         "B10-recovery: cleanupTab must clear the recovery watchdog so it cannot fire after finalize/abort",
       )
     })
+
+    // Issue 3: disconnect grace timeout for force-finalizing stuck streams
+    void it("defines DISCONNECT_GRACE_MS constant (60s)", () => {
+      assert.ok(source.includes("DISCONNECT_GRACE_MS"), "must define DISCONNECT_GRACE_MS")
+      assert.ok(source.includes("60_000"), "DISCONNECT_GRACE_MS must be 60000ms (60s)")
+    })
+
+    void it("has armDisconnectGraceTimeout method that force-finalizes on timeout", () => {
+      assert.ok(
+        source.includes("armDisconnectGraceTimeout(tabId: string, callbacks: StreamCallbacks)"),
+        "must have armDisconnectGraceTimeout method",
+      )
+      const fnIdx = source.indexOf("armDisconnectGraceTimeout(tabId: string, callbacks: StreamCallbacks)")
+      const fnBody = source.slice(fnIdx, fnIdx + 1200)
+      assert.ok(
+        fnBody.includes("markUnresolvedPendingToolCalls"),
+        "armDisconnectGraceTimeout must mark pending tools unresolved on timeout",
+      )
+      assert.ok(
+        fnBody.includes("markUnresolvedActiveSubagents"),
+        "armDisconnectGraceTimeout must mark active subagents unresolved on timeout",
+      )
+      assert.ok(
+        fnBody.includes("finalizeStream"),
+        "armDisconnectGraceTimeout must call finalizeStream on timeout",
+      )
+    })
+
+    void it("has cancelDisconnectGraceTimeout method", () => {
+      assert.ok(
+        source.includes("cancelDisconnectGraceTimeout(tabId: string)"),
+        "must have cancelDisconnectGraceTimeout method",
+      )
+    })
+
+    void it("cleanupTab cancels disconnect grace timeout", () => {
+      const cleanupIdx = source.indexOf("cleanupTab(tabId: string): void")
+      const cleanupBody = source.slice(cleanupIdx, cleanupIdx + 1500)
+      assert.ok(
+        cleanupBody.includes("cancelDisconnectGraceTimeout(tabId)"),
+        "cleanupTab must cancel disconnect grace timeout to prevent firing after cleanup",
+      )
+    })
+
+    void it("reconcileAfterReconnect cancels disconnect grace timeout", () => {
+      const reconIdx = source.indexOf("async reconcileAfterReconnect")
+      const reconBody = source.slice(reconIdx, reconIdx + 500)
+      assert.ok(
+        reconBody.includes("cancelDisconnectGraceTimeout(tabId)"),
+        "reconcileAfterReconnect must cancel disconnect grace timeout — reconnect means normal finalization takes over",
+      )
+    })
+
+    void it("dispose clears all disconnect grace timeouts", () => {
+      const disposeIdx = source.indexOf("dispose(): void")
+      const disposeBody = source.slice(disposeIdx, disposeIdx + 2000)
+      assert.ok(
+        disposeBody.includes("disconnectGraceTimeouts"),
+        "dispose must clear disconnect grace timeouts to prevent firing after disposal",
+      )
+    })
   })

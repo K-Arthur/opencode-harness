@@ -147,6 +147,11 @@ export class StreamCoordinator {
   readonly EXPIRED_RECOVERY_TIMEOUT_MS = 20_000
   /** Short grace window for terminal status to be followed by late tool_end events */
   readonly TOOL_FINALIZE_GRACE_MS = 30000
+  /** Issue 3: Grace window before force-finalizing a stream after a server disconnect.
+   *  If the event stream reconnects within this window, reconcileAfterReconnect
+   *  takes over and properly finalizes. If not, the stream is force-finalized
+   *  with unresolved tools/subagents so the UI doesn't stay stuck. */
+  readonly DISCONNECT_GRACE_MS = 60_000
   /** G5: quiet period required before a status-triggered finalize is allowed
    *  to run. The server can emit transient `session.idle` events between
    *  tool calls, during provider retries, or right before the next message
@@ -168,6 +173,9 @@ export class StreamCoordinator {
   private ttfbTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map()
   private ttfbAbortControllers: Map<string, AbortController> = new Map()
   private pendingToolGraceTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map()
+  /** Issue 3: Per-tab disconnect grace timers — if the event stream doesn't
+   *  reconnect within DISCONNECT_GRACE_MS, the stream is force-finalized. */
+  private disconnectGraceTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map()
   /** B10-recovery: Hard, unconditional timeouts for the expired-question
    *  fallback startPrompt. Distinct from ttfbTimeouts because these fire
    *  regardless of activity-tracker state. */
@@ -2064,6 +2072,7 @@ export class StreamCoordinator {
     const tab = this.tabManager.getTab(tabId)
     if (!tab?.cliSessionId) return
 
+    this.cancelDisconnectGraceTimeout(tabId)
     this.setStreamState(tabId, "streaming", { sessionId: tab.cliSessionId, reason: "reconnecting" })
 
     try {
@@ -2598,9 +2607,46 @@ export class StreamCoordinator {
     this.childSessionReplayer = replayer
   }
 
+  /**
+   * Issue 3: Arm a disconnect grace timeout for a streaming tab. If the event
+   * stream doesn't reconnect within DISCONNECT_GRACE_MS, force-finalize the
+   * stream so the UI doesn't stay stuck with a live cursor and spinning tools.
+   *
+   * The timeout is cancelled by {@link cancelDisconnectGraceTimeout} when the
+   * event stream reconnects (via reconcileAfterReconnect) or when the tab is
+   * cleaned up.
+   */
+  armDisconnectGraceTimeout(tabId: string, callbacks: StreamCallbacks): void {
+    this.cancelDisconnectGraceTimeout(tabId)
+    const timer = setTimeout(() => {
+      this.disconnectGraceTimeouts.delete(tabId)
+      const tab = this.tabManager.getTab(tabId)
+      if (!tab || !tab.isStreaming) return
+      log.warn(`Disconnect grace timeout fired for ${tabId} — force-finalizing after ${this.DISCONNECT_GRACE_MS}ms without reconnect`)
+      void this.toolCallTracker.markUnresolvedPendingToolCalls(tabId, callbacks)
+        .then(() => this.toolCallTracker.markUnresolvedActiveSubagents(tabId, callbacks))
+        .then(() => this.finalizeStream(tabId, callbacks))
+        .catch(err => log.error(`Disconnect grace finalization failed for ${tabId}`, err))
+    }, this.DISCONNECT_GRACE_MS)
+    this.disconnectGraceTimeouts.set(tabId, timer)
+  }
+
+  /**
+   * Issue 3: Cancel a pending disconnect grace timeout. Called when the event
+   * stream reconnects (reconcileAfterReconnect takes over) or on cleanupTab.
+   */
+  cancelDisconnectGraceTimeout(tabId: string): void {
+    const timer = this.disconnectGraceTimeouts.get(tabId)
+    if (timer) {
+      clearTimeout(timer)
+      this.disconnectGraceTimeouts.delete(tabId)
+    }
+  }
+
   cleanupTab(tabId: string): void {
     this.clearTtfbTimeout(tabId)
     this.clearExpiredRecoveryTimeout(tabId)
+    this.cancelDisconnectGraceTimeout(tabId)
     // G5: clear any pending status-finalize timer so it can't fire after cleanup.
     this.cancelPendingStatusFinalize(tabId)
     this.stopAllToolPartialPolling(tabId)
@@ -2775,6 +2821,10 @@ export class StreamCoordinator {
       clearTimeout(timer)
     }
     this.pendingToolGraceTimeouts.clear()
+    for (const timer of this.disconnectGraceTimeouts.values()) {
+      clearTimeout(timer)
+    }
+    this.disconnectGraceTimeouts.clear()
     this.subagentHeartbeat.stopAll()
     this.finalizingTabs.clear()
     this.finalizePromises.clear()

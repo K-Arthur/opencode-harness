@@ -1744,16 +1744,15 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       }
     }],
     ["server_disconnected", () => {
-      log.info("Server disconnected — capturing streaming snapshot and resetting states")
+      log.info("Server disconnected — capturing streaming snapshot and arming disconnect grace timers")
       this.tabManager.captureStreamingSnapshot()
+      const callbacks = {
+        postMessage: (m: Record<string, unknown>) => this.postMessage(m),
+        postRequestError: (m: string, sid?: string) => this.postRequestError(m, sid),
+      }
       for (const t of this.tabManager.getAllTabs()) {
         if (t.isStreaming) {
-          this.streamCoordinator.cleanupTab(t.id)
-          // setStreaming already fires the onStreamingStateChanged emitter,
-          // which posts streaming_state to the webview with the extended
-          // payload (source: "reconnect" + cliSessionId so the webview knows
-          // this is a reconnect-driven clear, not normal completion). Don't
-          // double-post here.
+          this.streamCoordinator.armDisconnectGraceTimeout(t.id, callbacks)
           this.tabManager.setStreaming(t.id, false, { source: "reconnect", cliSessionId: t.cliSessionId })
           this.tabManager.setWaitingForCompletion(t.id, false)
           this.tabManager.clearCompletionTimeout(t.id)
