@@ -224,6 +224,17 @@
 // indicator, generation_outcome in-webview toast, notifyTurnOutcome
 // distinguishing success/error/aborted). Production build measures
 // 762.1KB host / 819.5KB webview. +2KB each keeps ~0.3% headroom.
+//
+// 2026-07-03 re-baseline (webview 821KB -> 823KB): whole-message copy
+// control (messageCopy.ts: text extraction, clipboard with execCommand
+// fallback, header wiring). Production build measures 821.5KB webview.
+// +1.5KB keeps ~0.2% headroom.
+//
+// 2026-07-03 re-baseline (host 770KB -> 772KB): subagent tracking fixes
+// (ToolCallTracker subagent skip, RunActivityTracker childSessionId guard,
+// StreamCoordinator heartbeat finalize re-check, subagentCard args
+// re-render). Production build measures 770.1KB host. +2KB keeps ~0.3%
+// headroom.
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -233,8 +244,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
-  { path: "dist/extension.js", limitBytes: 770 * 1024, label: "extension host" },
-  { path: "dist/chat/webview/main.js", limitBytes: 821 * 1024, label: "chat webview" },
+  { path: "dist/extension.js", limitBytes: 772 * 1024, label: "extension host" },
+  { path: "dist/chat/webview/main.js", limitBytes: 823 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
 
