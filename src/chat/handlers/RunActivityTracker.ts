@@ -275,7 +275,11 @@ export class RunActivityTracker {
     return this.snapshot(run)
   }
 
-  markActiveSubagentsUnresolved(tabId: string, message: string): AgentRunState | undefined {
+  markActiveSubagentsUnresolved(
+    tabId: string,
+    message: string,
+    opts: { includeChildLinked?: boolean } = {},
+  ): AgentRunState | undefined {
     const run = this.runs.get(tabId)
     if (!run) return undefined
     const at = this.now()
@@ -284,13 +288,11 @@ export class RunActivityTracker {
       if (subagent.status !== "queued" && subagent.status !== "running" && subagent.status !== "waiting" && subagent.status !== "unknown") {
         continue
       }
-      // Skip subagents linked to a child session — the SubagentHeartbeat polls
-      // every 5s and detects completion via child session removal. The grace
-      // timeout (30s) is far too short for legitimate long-running subagents;
-      // marking them failed prematurely stops the heartbeat and shows
-      // "unconfirmed" in the UI. Only mark subagents that were never linked to
-      // a child session (orphaned/never discovered by the heartbeat).
-      if (subagent.childSessionId) {
+      // By default, skip subagents linked to a child session — SubagentHeartbeat
+      // detects completion via child session removal and the 30s grace is too
+      // short for legitimate long-running subagents. On escalation (second
+      // identical grace expiry), includeChildLinked forces termination.
+      if (subagent.childSessionId && !opts.includeChildLinked) {
         continue
       }
       subagent.status = "failed"

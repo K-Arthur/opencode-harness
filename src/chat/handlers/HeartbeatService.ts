@@ -10,6 +10,11 @@ export interface DeferredChunkEntry {
   timer: ReturnType<typeof setTimeout>
 }
 
+/** Tracks tabs that need one force_rerender once the webview acks again. */
+const pendingForceRerenders = new Map<string, boolean>()
+/** Tracks the skip counter for ping backoff (skip every 2-of-3 ticks during miss storm). */
+const pingBackoffCounters = new Map<string, number>()
+
 /** Dependencies shared by reference from StreamCoordinator. */
 export interface HeartbeatDeps {
   tabManager: TabManager
@@ -31,6 +36,8 @@ export interface HeartbeatDeps {
  * the timing/ack logic from stream content assembly.
  */
 export class HeartbeatService {
+  private readonly callbacksMap = new Map<string, StreamCallbacks>()
+
   constructor(private readonly deps: HeartbeatDeps) {}
 
   private nextChunkSeq(tabId: string): number {
@@ -44,33 +51,39 @@ export class HeartbeatService {
     this.deps.heartbeatSeqs.set(tabId, 0)
     this.deps.heartbeatAckedSeqs.set(tabId, 0)
     this.deps.heartbeatNoticePosted.delete(tabId)
+    this.callbacksMap.set(tabId, callbacks)
     const timer = setInterval(() => {
       const tab = this.deps.tabManager.getTab(tabId)
       if (!tab?.isStreaming) {
         this.stopHeartbeat(tabId)
         return
       }
-      const seq = (this.deps.heartbeatSeqs.get(tabId) || 0) + 1
-      this.deps.heartbeatSeqs.set(tabId, seq)
-      callbacks.postMessage({
-        type: "stream_ping",
-        sessionId: tabId,
-        seq,
-      })
+
+      const currentSeq = this.deps.heartbeatSeqs.get(tabId) || 0
       const ackedSeq = this.deps.heartbeatAckedSeqs.get(tabId) || 0
-      const lastRerenderSeq = this.deps.lastForceRerenderSeqs.get(tabId) || 0
-      const missedCount = seq - ackedSeq
-      if (missedCount > 2 && seq > lastRerenderSeq) {
-        if (missedCount === 3) {
-          log.warn(`Heartbeat: tab ${tabId} missed ${missedCount} pings, sending force_rerender (seq=${seq})`)
+      const currentMissed = currentSeq - ackedSeq
+
+      if (currentMissed > 2) {
+        // Backoff: skip 2-of-3 ticks while the webview is unresponsive to
+        // avoid flooding an already-blocked message queue.
+        const counter = (pingBackoffCounters.get(tabId) || 0) + 1
+        pingBackoffCounters.set(tabId, counter)
+        if (counter % 3 !== 0) {
+          return  // skip this tick entirely — no new seq, no ping
         }
-        const fullText = tab.streamingBuffer || ""
-        callbacks.postMessage({
-          type: "force_rerender",
-          sessionId: tabId,
-          text: fullText,
-        })
-        this.deps.lastForceRerenderSeqs.set(tabId, seq)
+      }
+
+      const seq = currentSeq + 1
+      this.deps.heartbeatSeqs.set(tabId, seq)
+      callbacks.postMessage({ type: "stream_ping", sessionId: tabId, seq })
+
+      const missedCount = seq - ackedSeq
+      if (missedCount > 2) {
+        if (missedCount === 3) {
+          log.warn(`Heartbeat: tab ${tabId} missed ${missedCount} pings, queuing force_rerender for next ack (seq=${seq})`)
+        }
+        pendingForceRerenders.set(tabId, true)
+
         if (missedCount >= 5 && !this.deps.heartbeatNoticePosted.has(tabId)) {
           this.deps.heartbeatNoticePosted.add(tabId)
           log.warn(`Heartbeat: tab ${tabId} missed ${missedCount} pings — posting unresponsiveness notice`)
@@ -80,7 +93,8 @@ export class HeartbeatService {
             sessionId: tabId,
           })
         }
-      } else if (missedCount <= 2) {
+      } else {
+        pingBackoffCounters.delete(tabId)
         this.deps.lastForceRerenderSeqs.set(tabId, 0)
       }
     }, 5000)
@@ -97,12 +111,27 @@ export class HeartbeatService {
     this.deps.heartbeatAckedSeqs.delete(tabId)
     this.deps.heartbeatAckedChunkSeqs.delete(tabId)
     this.deps.lastForceRerenderSeqs.delete(tabId)
+    pendingForceRerenders.delete(tabId)
+    pingBackoffCounters.delete(tabId)
+    this.callbacksMap.delete(tabId)
   }
 
   handleStreamAck(tabId: string, seq: number, lastRenderedChunkSeq?: number): void {
     if (seq > 0) this.deps.heartbeatAckedSeqs.set(tabId, seq)
     if (lastRenderedChunkSeq !== undefined) {
       this.deps.heartbeatAckedChunkSeqs.set(tabId, lastRenderedChunkSeq)
+    }
+    if (pendingForceRerenders.get(tabId)) {
+      pendingForceRerenders.delete(tabId)
+      const cb = this.callbacksMap.get(tabId)
+      const tab = this.deps.tabManager.getTab(tabId)
+      if (cb && tab) {
+        cb.postMessage({
+          type: "force_rerender",
+          sessionId: tabId,
+          text: tab.streamingBuffer || "",
+        })
+      }
     }
     this.drainDeferredChunk(tabId)
   }
@@ -178,5 +207,8 @@ export class HeartbeatService {
       clearTimeout(deferred.timer)
     }
     this.deps.deferredChunks.clear()
+    pendingForceRerenders.clear()
+    pingBackoffCounters.clear()
+    this.callbacksMap.clear()
   }
 }

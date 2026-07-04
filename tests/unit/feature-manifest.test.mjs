@@ -135,6 +135,7 @@ const EXPECTED_CONFIG_KEYS = [
   "opencode.voice.model",
   "opencode.voice.localCommand",
   "opencode.voice.recordCommand",
+  "opencode.agentGaze.enabled",
 ]
 
 const EXPECTED_KEYBINDING_COMMANDS = [

@@ -140,6 +140,7 @@
 | FM-CFG-046 | `opencode.voice.model` | string | `""` | machine | stable |
 | FM-CFG-047 | `opencode.voice.localCommand` | string | `""` | machine | stable |
 | FM-CFG-048 | `opencode.voice.recordCommand` | string | `""` | machine | stable |
+| FM-CFG-049 | `opencode.agentGaze.enabled` | boolean | `true` | window | stable |
 
 ---
 

@@ -78,6 +78,7 @@ import {
   type VoiceCaptureConfig,
 } from "./voiceCapture"
 import { buildVoiceSetupPlan, pickPipCommand, recorderInstallCommand, uvBootstrapCommand } from "./voiceSetup"
+import { PerSessionDebouncer } from "./PerSessionDebouncer"
 
 type ServerEvent = { type: string; sessionId?: string; data?: unknown }
 
@@ -105,6 +106,10 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
    *  spawn the opencode server (idempotent; safe to call on every re-resolve). */
   private serverWarmup?: () => void
   private diffApplier = new DiffApplier()
+  private todosDebouncer = new PerSessionDebouncer<unknown[]>(
+    (tabId, todos) => this.postMessage({ type: "todos_update", sessionId: tabId, todos }),
+    300,
+  )
   private disposables: vscode.Disposable[] = []
   private webviewContent: WebviewContent
   private tabManager: TabManager
@@ -1424,7 +1429,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
     }],
     ["todo_updated", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => {
       const data = event.data as { todos?: unknown[] } | undefined
-      this.postMessage({ type: "todos_update", sessionId: tabId, todos: data?.todos ?? [] })
+      this.todosDebouncer.schedule(tabId, data?.todos ?? [])
     }],
     ["file_edited", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => {
       const data = event.data as {
@@ -3206,6 +3211,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
   }
 
   dispose(): void {
+    this.todosDebouncer.dispose()
     this.backfillService.dispose()
     this.retryQueueService.dispose()
     this.messageBatcher.dispose()

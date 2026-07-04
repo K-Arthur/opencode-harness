@@ -22,16 +22,19 @@ describe("InlineActionProvider.ts", () => {
     assert.ok(source.includes("provideCodeLenses("))
   })
 
-  it("has getSymbolRange private method", () => {
-    assert.ok(source.includes("private getSymbolRange("))
+  it("uses per-document cache for performance", () => {
+    // getSymbolRange extracted to inlineLensScanner.ts; provider now uses a
+    // per-document {version, lenses} cache to skip re-scanning unchanged files.
+    assert.ok(source.includes("cache") && source.includes("version"), "provider must cache results by document version")
   })
 
-  it("matches functions with regex", () => {
-    assert.ok(source.includes("funcRegex"))
+  it("matches functions with regex (via inlineLensScanner)", () => {
+    // funcRegex and classRegex extracted to inlineLensScanner.ts; provider delegates to scanLensTargets
+    assert.ok(source.includes("scanLensTargets"), "provider must call scanLensTargets from inlineLensScanner")
   })
 
-  it("matches classes with regex", () => {
-    assert.ok(source.includes("classRegex"))
+  it("matches classes with regex (via inlineLensScanner)", () => {
+    assert.ok(source.includes("scanLensTargets"), "provider must call scanLensTargets from inlineLensScanner")
   })
 
   it("generates Explain CodeLens", () => {

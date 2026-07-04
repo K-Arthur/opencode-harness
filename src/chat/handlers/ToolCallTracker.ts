@@ -34,8 +34,20 @@ export interface ToolCallTrackerDeps {
  * StreamCoordinator to isolate tool-call lifecycle tracking from stream
  * content assembly.
  */
+/** Fingerprint of grace-expiry state — used to detect stuck cycles and escalate. */
+const graceFingerprints = new Map<string, string>()
+
 export class ToolCallTracker {
   constructor(private readonly deps: ToolCallTrackerDeps) {}
+
+  private computeGraceFingerprint(tabId: string): string {
+    const toolIds = [...(this.deps.activeToolCallIds.get(tabId) ?? [])].sort()
+    const snapshot = this.deps.activityTracker.getSnapshot(tabId)
+    const subagentParts = (snapshot?.subagents ?? [])
+      .map(s => `${s.id}:${s.status}`)
+      .sort()
+    return JSON.stringify({ toolIds, subagentParts })
+  }
 
   getOrCreatePendingToolIds(tabId: string): Set<string> {
     let pending = this.deps.activeToolCallIds.get(tabId)
@@ -144,8 +156,13 @@ export class ToolCallTracker {
 
     const timeout = setTimeout(() => {
       this.deps.pendingToolGraceTimeouts.delete(tabId)
+      const currentFingerprint = this.computeGraceFingerprint(tabId)
+      const prevFingerprint = graceFingerprints.get(tabId)
+      // Escalate if state is identical to last grace expiry: no progress in 2× grace window.
+      const escalate = prevFingerprint !== undefined && prevFingerprint === currentFingerprint
+      graceFingerprints.set(tabId, currentFingerprint)
       void this.markUnresolvedPendingToolCalls(tabId, callbacks)
-        .then(() => this.markUnresolvedActiveSubagents(tabId, callbacks))
+        .then(() => this.markUnresolvedActiveSubagents(tabId, callbacks, { includeChildLinked: escalate }))
         .then(() => this.deps.maybeFinalizeStream(tabId, callbacks, "status"))
         .catch(err => log.error("Pending tool grace finalization failed", err))
     }, this.deps.TOOL_FINALIZE_GRACE_MS)
@@ -257,13 +274,22 @@ export class ToolCallTracker {
     }
   }
 
-  markUnresolvedActiveSubagents(tabId: string, callbacks: StreamCallbacks): void {
+  markUnresolvedActiveSubagents(
+    tabId: string,
+    callbacks: StreamCallbacks,
+    opts: { includeChildLinked?: boolean } = {},
+  ): void {
     const active = this.deps.activityTracker.getSnapshot(tabId)?.activeSubagentCount ?? 0
     if (active === 0) return
-    const message = "Subagent did not emit a completion event before the server became idle."
-    log.warn(`Marking ${active} active subagent(s) unresolved for ${tabId} after terminal server status`)
-    const snapshot = this.deps.activityTracker.markActiveSubagentsUnresolved(tabId, message)
-    this.deps.postRunActivitySnapshot(tabId, snapshot, callbacks)
+    const message = opts.includeChildLinked
+      ? "Subagent (including child-linked) unresolved after escalated grace timeout."
+      : "Subagent did not emit a completion event before the server became idle."
+    const snapshot = this.deps.activityTracker.markActiveSubagentsUnresolved(tabId, message, opts)
+    const changed = (snapshot?.activeSubagentCount ?? active) < active
+    if (changed) {
+      log.warn(`Marking ${active} active subagent(s) unresolved for ${tabId} after terminal server status`)
+      this.deps.postRunActivitySnapshot(tabId, snapshot, callbacks)
+    }
   }
 
   private isRecord(value: unknown): value is Record<string, unknown> {
@@ -275,6 +301,7 @@ export class ToolCallTracker {
     this.deps.activeToolCallIds.delete(tabId)
     this.deps.toolCallCounts.delete(tabId)
     this.deps.toolActivityAt.delete(tabId)
+    graceFingerprints.delete(tabId)
     this.clearPendingToolGraceTimeout(tabId)
   }
 
@@ -287,5 +314,6 @@ export class ToolCallTracker {
     this.deps.activeToolCallIds.clear()
     this.deps.toolCallCounts.clear()
     this.deps.toolActivityAt.clear()
+    graceFingerprints.clear()
   }
 }

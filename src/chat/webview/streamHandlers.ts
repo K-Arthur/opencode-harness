@@ -779,7 +779,7 @@ function updateExistingToolStart(
   webviewLog(`handleToolStart: updating existing tool_start id=${toolCall.id}`)
   const block = msgObj.blocks[existing] as ToolCallBlock
   block.args = toolCall.args
-  handleToolUpdate(els, toolCall.id, { args: toolCall.args })
+  handleToolUpdate(els, toolCall.id, { args: toolCall.args }, postMessage)
   return true
 }
 
@@ -1082,7 +1082,8 @@ function fileEditStatusLabel(state: string, error?: string): string {
 export function handleToolUpdate(
   els: StreamElements,
   toolId: string,
-  update: { state?: ToolCallState; result?: string; error?: string; args?: unknown }
+  update: { state?: ToolCallState; result?: string; error?: string; args?: unknown },
+  postMessage?: (msg: Record<string, unknown>) => void,
 ): void {
   const toolEl = els.messageList.querySelector(`[data-block-id="${toolId}"]`) as HTMLElement | null
   if (!toolEl) return
@@ -1148,7 +1149,7 @@ export function handleToolUpdate(
       args: update.args,
     }
     if (isEditLikeTool(syntheticBlock)) {
-      const freshCard = renderFileEditCard(syntheticBlock)
+      const freshCard = renderFileEditCard(syntheticBlock, { postMessage })
       if (freshCard) {
         toolEl.replaceWith(freshCard)
         const scrollAnchor = (els as unknown as { scrollAnchor: ScrollAnchor }).scrollAnchor
