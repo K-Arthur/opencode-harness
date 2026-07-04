@@ -249,6 +249,26 @@ void describe("AutoCompactor.ts", () => {
       )
     })
 
+    // Models not in the models.dev/OpenRouter catalogue (e.g. glm-4.7) have no
+    // known context window, so resolveContextWindow returns undefined → maxTokens=0
+    // → percent=0 in calculatePercent. The old `if (percent < threshold) return`
+    // always short-circuited, so compaction NEVER fired for these models.
+    // The fix adds a message-count fallback (≥50 messages) for this case.
+    void it("falls through to message-count gate when context window is unknown (maxTokens=0)", () => {
+      const fnIdx = source.indexOf("tryCompactIfNeeded(")
+      const block = source.slice(fnIdx, source.indexOf("handleBannerAction(", fnIdx))
+      assert.match(
+        block,
+        /windowUnknown/,
+        "tryCompactIfNeeded must detect when the context window is unknown (maxTokens === 0)",
+      )
+      assert.match(
+        block,
+        /windowUnknown\s*&&\s*session\.messages\.length\s*<\s*50|session\.messages\.length\s*<\s*50[\s\S]{0,30}windowUnknown/,
+        "must fall through to a message-count gate (< 50 messages) when context window is unknown",
+      )
+    })
+
     // post-compaction success must explicitly post session_compacted on the
     // compactNow path so the webview reload triggers and the user sees the
     // refreshed message list — earlier this only fired on the auto-compact path.

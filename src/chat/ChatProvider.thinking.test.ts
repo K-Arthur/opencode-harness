@@ -63,4 +63,42 @@ describe("ChatProvider thinking handler — Layer 4 RED", () => {
     assert.equal(reasoningEventToBlock({ text: "   " }), null)
     assert.equal(reasoningEventToBlock({ text: undefined }), null)
   })
+
+  it("L4-T6 (structural): ChatProvider uses reasoningAccumulator for stable message IDs", () => {
+    const src = readFileSync(join(process.cwd(), "src/chat/ChatProvider.ts"), "utf8")
+    assert.match(
+      src,
+      /reasoningAccumulator/,
+      "ChatProvider must use reasoningAccumulator to accumulate streaming reasoning deltas",
+    )
+    // Verify stable msgId is set on the message so upsertMessageById can replace in-place
+    assert.match(
+      src,
+      /id:\s*entry\.msgId/,
+      "ChatProvider must assign entry.msgId as the message id for stable upsert",
+    )
+  })
+
+  it("L4-T7 (structural): reasoning.ended activity clears accumulator entries", () => {
+    const src = readFileSync(join(process.cwd(), "src/chat/ChatProvider.ts"), "utf8")
+    assert.match(
+      src,
+      /reasoning\.ended/,
+      "ChatProvider activity handler must detect reasoning.ended to clear the accumulator",
+    )
+    assert.match(
+      src,
+      /reasoningAccumulator\.delete/,
+      "ChatProvider must delete accumulator entries when reasoning ends",
+    )
+  })
+
+  it("L4-T8: reasoningEventToBlock uses partId for block-level dedup", () => {
+    const block1 = reasoningEventToBlock({ text: "alpha", partId: "r-1" })
+    const block2 = reasoningEventToBlock({ text: "alpha", partId: "r-1" })
+    assert.ok(block1 && block2)
+    const f1 = block1 as unknown as Record<string, unknown>
+    const f2 = block2 as unknown as Record<string, unknown>
+    assert.equal(f1.id, f2.id, "same partId produces same block id")
+  })
 })
