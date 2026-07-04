@@ -572,6 +572,10 @@ function registerInlineProviders(context: vscode.ExtensionContext, chatProvider:
   const inlineProvider = new InlineActionProvider()
   const completionProvider = new InlineCompletionProvider()
   context.subscriptions.push(completionProvider)
+  context.subscriptions.push(inlineProvider)
+  context.subscriptions.push(
+    vscode.workspace.onDidCloseTextDocument((doc) => inlineProvider.onDocumentClose(doc)),
+  )
 
   const codeDocumentSelectors: vscode.DocumentSelector = INLINE_CODE_LANGUAGES.map((language) => ({ scheme: "file", language }))
 

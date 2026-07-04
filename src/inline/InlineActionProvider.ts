@@ -1,18 +1,35 @@
 import * as vscode from "vscode"
+import { scanLensTargets } from "./inlineLensScanner"
+
+const MAX_DOC_SIZE = 500 * 1024
+
+interface CacheEntry {
+  version: number
+  lenses: vscode.CodeLens[]
+}
 
 export class InlineActionProvider implements vscode.CodeLensProvider {
   private _onDidChangeCodeLenses = new vscode.EventEmitter<void>()
   onDidChangeCodeLenses = this._onDidChangeCodeLenses.event
+  private cache = new Map<string, CacheEntry>()
+  private debounceTimer: ReturnType<typeof setTimeout> | undefined
 
   provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
-    const lenses: vscode.CodeLens[] = []
+    if (document.getText().length > MAX_DOC_SIZE) return []
+
+    const key = document.uri.toString()
+    const cached = this.cache.get(key)
+    if (cached && cached.version === document.version) return cached.lenses
+
     const text = document.getText()
+    const targets = scanLensTargets(text)
+    const lenses: vscode.CodeLens[] = []
 
-    const funcRegex = /(?:export\s+)?(?:async\s+)?function\s+(\w+)|(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\(/g
-    let match
-    while ((match = funcRegex.exec(text)) !== null) {
-      const name = match[1] || match[2]
-      const range = this.getSymbolRange(document, text, match.index, funcRegex.lastIndex)
+    for (const target of targets) {
+      const range = new vscode.Range(
+        document.positionAt(target.startOffset),
+        document.positionAt(target.endOffset),
+      )
       lenses.push(
         new vscode.CodeLens(range, { title: "$(comment) Explain", command: "opencode-harness.explainCode", arguments: [document.uri, range] }),
         new vscode.CodeLens(range, { title: "$(edit) Refactor", command: "opencode-harness.refactorCode", arguments: [document.uri, range] }),
@@ -20,38 +37,17 @@ export class InlineActionProvider implements vscode.CodeLensProvider {
       )
     }
 
-    const classRegex = /(?:export\s+)?class\s+(\w+)/g
-    while ((match = classRegex.exec(text)) !== null) {
-      const range = this.getSymbolRange(document, text, match.index, classRegex.lastIndex)
-      lenses.push(
-        new vscode.CodeLens(range, { title: "$(comment) Explain", command: "opencode-harness.explainCode", arguments: [document.uri, range] }),
-        new vscode.CodeLens(range, { title: "$(edit) Refactor", command: "opencode-harness.refactorCode", arguments: [document.uri, range] }),
-        new vscode.CodeLens(range, { title: "$(beaker) Test", command: "opencode-harness.generateTests", arguments: [document.uri, range] }),
-      )
-    }
-
+    this.cache.set(key, { version: document.version, lenses })
     return lenses
   }
 
-  private getSymbolRange(document: vscode.TextDocument, text: string, startOffset: number, searchFrom: number): vscode.Range {
-    const bodyStart = text.indexOf("{", searchFrom)
-    if (bodyStart === -1) {
-      const start = document.positionAt(startOffset)
-      return document.lineAt(start.line).range
-    }
+  /** Called from extension.ts to wire up cache eviction on document close. */
+  onDocumentClose(document: vscode.TextDocument): void {
+    this.cache.delete(document.uri.toString())
+  }
 
-    let depth = 0
-    for (let i = bodyStart; i < text.length; i++) {
-      const ch = text[i]
-      if (ch === "{") depth++
-      if (ch === "}") {
-        depth--
-        if (depth === 0) {
-          return new vscode.Range(document.positionAt(startOffset), document.positionAt(i + 1))
-        }
-      }
-    }
-
-    return new vscode.Range(document.positionAt(startOffset), document.positionAt(text.length))
+  dispose(): void {
+    if (this.debounceTimer !== undefined) clearTimeout(this.debounceTimer)
+    this._onDidChangeCodeLenses.dispose()
   }
 }

@@ -46,10 +46,12 @@ describe("AgentGazeService.ts", () => {
 
   it("extracts_file_path_from_tool_input", () => {
     // Tool input is a JSON object with a 'path' or 'file_path' key.
-    // The service must extract it to know which file to decorate.
+    // Path extraction logic lives in agentGazePolicy.ts (recordToolStart).
     assert.ok(
-      source.includes("extractFilePath") || (source.includes('"path"') && source.includes("input")),
-      "must extract file path from tool input"
+      source.includes("agentGazePolicy") || source.includes("extractFilePath") ||
+        (source.includes('"path"') && source.includes("input")) ||
+        source.includes("recordToolStart"),
+      "must extract file path from tool input (directly or via agentGazePolicy)",
     )
   })
 

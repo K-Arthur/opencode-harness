@@ -932,6 +932,12 @@
           "default": 0.05,
           "description": "Fraction of remaining rate limit that triggers a critical warning (0.0-1.0)"
         },
+        "opencode.agentGaze.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "description": "Show editor glow/highlight decorations while the agent reads or writes files. Disable on low-end hardware or when running 3+ concurrent sessions to reduce CPU load."
+        },
         "opencode.inlineSuggestions.enabled": {
           "type": "boolean",
           "default": false,
