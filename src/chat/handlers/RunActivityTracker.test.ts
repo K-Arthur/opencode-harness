@@ -125,4 +125,38 @@ describe("RunActivityTracker", () => {
     assert.equal(snapshot?.statusLabel, "Cancelled")
     assert.equal(snapshot?.lastError?.kind, "user_cancelled")
   })
+
+  // RED: these tests require { includeChildLinked } support on markActiveSubagentsUnresolved
+  it("force_marks_child_linked_subagents_unresolved_when_forced", () => {
+    const tracker = new RunActivityTracker(() => 10_000)
+    tracker.startRun({ tabId: "tab-force", cliSessionId: "ses-f", messageId: "msg-f" })
+    tracker.recordSubagent("tab-force", {
+      id: "sub-linked",
+      agentName: "ChildAgent",
+      status: "running",
+      childSessionId: "ses-child-1",
+    })
+
+    // Without force: child-linked subagent is skipped
+    tracker.markActiveSubagentsUnresolved("tab-force", "grace expired")
+    const afterNormal = tracker.getSnapshot("tab-force")
+    const linkedAfterNormal = afterNormal?.subagents.find(s => s.id === "sub-linked")
+    assert.equal(linkedAfterNormal?.status, "running", "child-linked subagent must not be marked by normal call")
+
+    // With force: child-linked subagent must be terminated
+    tracker.markActiveSubagentsUnresolved("tab-force", "grace escalated", { includeChildLinked: true })
+    const afterForced = tracker.getSnapshot("tab-force")
+    const linkedAfterForced = afterForced?.subagents.find(s => s.id === "sub-linked")
+    assert.equal(linkedAfterForced?.status, "failed", "child-linked subagent must be marked failed when forced")
+  })
+
+  it("markActiveSubagentsUnresolved_returns_changed_flag", () => {
+    const tracker = new RunActivityTracker(() => 10_000)
+    tracker.startRun({ tabId: "tab-changed", cliSessionId: "ses-c", messageId: "msg-c" })
+    tracker.recordSubagent("tab-changed", { id: "sub-1", agentName: "A", status: "running" })
+
+    const snap = tracker.markActiveSubagentsUnresolved("tab-changed", "msg")
+    // After marking, activeSubagentCount should be 0 (sub-1 has no childSessionId → marked immediately)
+    assert.equal(snap?.activeSubagentCount, 0)
+  })
 })
