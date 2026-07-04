@@ -69,6 +69,8 @@ const PROGRAMMATIC_SCROLL_GRACE_MS = 100
  */
 const DEFAULT_REFLOW_PAUSE_MS = 150
 
+import { isPanelVisible } from "./visibilityGate"
+
 export function createScrollAnchor(container: HTMLElement, typingIndicator?: HTMLElement): ScrollAnchor {
   let anchored = true
   let lastProgrammaticScrollAt = 0
@@ -81,6 +83,12 @@ export function createScrollAnchor(container: HTMLElement, typingIndicator?: HTM
   }
 
   function scrollToBottom() {
+    // Skip scroll writes for hidden panels — writing scrollTop on a display:none
+    // panel still forces a synchronous layout read (scrollHeight) and wastes a
+    // RAF slot. With 3 concurrent streams this adds up to hundreds of forced
+    // layouts per second. Hidden panels are dormant; the next scrollToBottom
+    // after the panel becomes .active will scroll correctly.
+    if (!isPanelVisible(container)) return
     lastProgrammaticScrollAt = performance.now()
     requestAnimationFrame(() => {
       container.scrollTop = container.scrollHeight

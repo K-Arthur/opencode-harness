@@ -1,5 +1,6 @@
 import type { ElementRefs } from "./dom"
 import { REMOVE_SVG } from "./icons"
+import { notifyTabActivated } from "./visibilityGate"
 
 export interface TabCallbacks {
   onSwitch: (tabId: string) => void
@@ -234,6 +235,9 @@ export function switchToTab(els: ElementRefs, tabId: string) {
   // Activate target panel
   const panel = els.tabPanels.querySelector(`.tab-panel[data-tab-id="${tabId}"]`)
   if (panel) panel.classList.add("active")
+
+  // Trigger deferred flushes for streams that accumulated text while hidden
+  notifyTabActivated(tabId)
 
   // Update tab bar
   Array.from(els.tabBar.children).forEach((child) => {

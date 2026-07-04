@@ -1,4 +1,5 @@
 import type { ChatMessage, SessionState } from "./types"
+import { isPanelVisible } from "./visibilityGate"
 
 const BASE_PRUNE_THRESHOLD = 40
 const LONG_SESSION_PRUNE_BONUS = 30
@@ -110,6 +111,10 @@ export class VirtualMessageList {
   }
 
   private pruneOffScreen(): void {
+    // Skip the full querySelectorAll scan when the panel is hidden — with 3
+    // concurrent streams this scan fires 3× per RAF even though only one tab
+    // is visible. The IO will fire again naturally when the panel becomes active.
+    if (!isPanelVisible(this.container)) return
     const allMessages = Array.from(this.container.querySelectorAll(MESSAGE_SELECTOR)) as HTMLElement[]
     const totalCount = allMessages.length
     const session = this.getSession()

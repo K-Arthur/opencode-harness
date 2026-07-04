@@ -17,6 +17,7 @@ import type { LiveToolOutput } from "./toolPartialStore"
 import { CHECK_SVG, SUCCESS_SVG, SPINNER_SVG } from "./icons"
 import { RenderQueue } from "./renderQueue"
 import { LiveTextRenderer } from "./liveTextRenderer"
+import { isPanelVisible, registerActivationFlush } from "./visibilityGate"
 type HandleStreamEndFn = (state: StreamState, els: StreamElements, messages: ChatMessage[], saveState: () => void, messageId?: string, blocks?: unknown) => void
 let _handleStreamEndImpl: HandleStreamEndFn | undefined
 export function registerStreamEndHandler(fn: HandleStreamEndFn): void { _handleStreamEndImpl = fn }
@@ -402,7 +403,9 @@ function createLiveRenderQueue(
   callbacks?: StreamCallbacks,
 ): RenderQueue {
   const liveRenderer = new LiveTextRenderer()
-  return new RenderQueue((_text: string) => {
+  const tabPanel = els.messageList.closest<HTMLElement>(".tab-panel")
+  const tabId = tabPanel?.dataset.tabId
+  const queue = new RenderQueue((_text: string) => {
     // Guard: if tool-start cleared the buffer between enqueue and flush, skip
     // so we don't create a spurious empty text block after each tool call.
     if (!state.currentBlockBuffer.trim()) return
@@ -434,7 +437,15 @@ function createLiveRenderQueue(
       }
     }
     els.scrollAnchor.scrollIfAnchored()
-  }, () => callbacks?.onRenderFlush?.(state.chunkSeq))
+  }, () => callbacks?.onRenderFlush?.(state.chunkSeq), {
+    shouldDefer: () => !isPanelVisible(els.messageList),
+  })
+  // Register a deferred flush so accumulated text renders in one pass when the
+  // tab is activated via tabs.ts switchToTab → notifyTabActivated.
+  if (tabId) {
+    registerActivationFlush(tabId, () => queue.flushDeferred())
+  }
+  return queue
 }
 
 export function showTypingIndicator(
