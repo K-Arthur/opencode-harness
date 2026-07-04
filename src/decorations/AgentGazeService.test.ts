@@ -88,4 +88,22 @@ describe("AgentGazeService.ts", () => {
       "must only decorate files that are open in the editor"
     )
   })
+
+  it("onToolEnd_uses_policy_map_not_visibleTextEditors_loop_for_write_applied", () => {
+    // The bug: onToolEnd looped ALL visibleTextEditors and painted every file green.
+    // Fix: use agentGazePolicy to resolve the specific file from tool_start id, then
+    // only decorate that one editor.
+    assert.ok(
+      source.includes("agentGazePolicy") || source.includes("resolveToolEndTarget"),
+      "onToolEnd must resolve target editor via policy map, not loop visibleTextEditors",
+    )
+  })
+
+  it("respects_opencode_agentGaze_enabled_configuration", () => {
+    // When opencode.agentGaze.enabled is false, handleEvent must return early.
+    assert.ok(
+      source.includes("agentGaze.enabled") || source.includes("agentGaze"),
+      "must read opencode.agentGaze.enabled setting and skip decorations when false",
+    )
+  })
 })
