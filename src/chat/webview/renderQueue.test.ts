@@ -204,4 +204,61 @@ describe("RenderQueue", () => {
     assert.deepEqual(calls, ["ack me"])
     assert.equal(flushes, 1)
   })
+
+  describe("shouldDefer option", () => {
+    let deferred: boolean
+
+    beforeEach(() => {
+      deferred = true
+      queue.destroy()
+      queue = new RenderQueue(
+        (text: string) => { calls.push(text) },
+        undefined,
+        { shouldDefer: () => deferred },
+      )
+    })
+
+    it("defers_scheduling_while_shouldDefer_returns_true", () => {
+      queue.enqueue("hidden chunk")
+      assert.equal(pendingRafCbs.size, 0, "no RAF scheduled while deferred")
+      assert.equal(pendingTimerCbs.size, 0, "no timer scheduled while deferred")
+      assert.equal(calls.length, 0)
+    })
+
+    it("flushDeferred_renders_once_after_deferral", () => {
+      queue.enqueue("chunk A")
+      queue.enqueue("chunk B")
+      deferred = false
+      queue.flushDeferred()
+      assert.equal(calls.length, 1, "should render exactly once")
+    })
+
+    it("flushDeferred_is_noop_when_nothing_queued", () => {
+      deferred = false
+      queue.flushDeferred()
+      assert.equal(calls.length, 0)
+    })
+
+    it("buffer_cap_while_deferred_does_not_schedule_flush", () => {
+      const bigChunk = "x".repeat(RenderQueue.MAX_BUFFER_SIZE)
+      queue.enqueue(bigChunk)
+      // Buffer overflow while deferred: must NOT fire a flush
+      assert.equal(calls.length, 0, "must not flush while deferred on overflow")
+      assert.equal(pendingRafCbs.size, 0)
+      assert.equal(pendingTimerCbs.size, 0)
+    })
+
+    it("resumes_normal_scheduling_after_deferral_lifted", () => {
+      queue.enqueue("while hidden")
+      deferred = false
+      // Now enqueue more — should schedule normally
+      queue.enqueue("while visible")
+      assert.ok(
+        pendingRafCbs.size > 0 || pendingTimerCbs.size > 0,
+        "should schedule flush once deferral lifted",
+      )
+      fireAllPending()
+      assert.equal(calls.length, 1)
+    })
+  })
 })
