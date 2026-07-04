@@ -1,7 +1,28 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-07-03
-**Version:** v0.4.55
+**Last Updated:** 2026-07-04
+**Version:** v0.4.56 (unreleased)
+
+## Highlights (2026-07-04) — Thinking display, compaction, token cap
+
+- **Thinking blocks now grow incrementally during generation**: each reasoning
+  delta now updates the same stable DOM element instead of appending a new one.
+  A `reasoningAccumulator` Map accumulates deltas per `tabId:reasoningId` and
+  posts with a fixed `msgId` so `upsertMessageById` replaces in-place.
+  Accumulator is cleared on `reasoning.ended` so the next thinking turn is fresh.
+- **Compaction now fires for models with unknown context windows**: models absent
+  from models.dev / OpenRouter (e.g. glm-4.7) resolved to `maxTokens=0` →
+  `percent=0` → the `< threshold` gate always exited early. A `windowUnknown`
+  fallback now triggers compaction at ≥50 messages, bypassing the percent check.
+- **Context usage bar no longer shows 297M+ token counts**: heuristic token
+  estimation in `StreamCoordinator` is now capped — 50k per block,
+  2M per component — preventing astronomical values from large workspace trees
+  or many accumulated tool outputs.
+- **Open file button on streaming edit-tool cards**: `postMessage` is now
+  threaded through `StreamSession.handleToolUpdate` → `handleToolUpdate` →
+  `renderFileEditCard`, so the button's click handler can message the host.
+  (Fix committed in the 2026-07-03 batch; documented here as the reinstall
+  delivers it for the first time.)
 
 ## Highlights (2026-07-03) — Multi-session performance and fix batch
 

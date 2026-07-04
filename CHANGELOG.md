@@ -17,6 +17,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Thinking blocks only appeared after streaming completed**: each reasoning
+  delta created a new system message without a stable ID, so every token
+  appended a fresh DOM element instead of updating the existing one. A
+  `reasoningAccumulator` Map (keyed `tabId:reasoningId`) now accumulates deltas
+  and always posts with the same `msgId` — `upsertMessageById` replaces the
+  element in-place, so the thinking block grows incrementally during reasoning.
+  Accumulator entries are cleared on `reasoning.ended` so the next reasoning
+  turn gets a fresh slot.
+- **Compaction never triggered for models with unknown context windows**:
+  models not in the models.dev/OpenRouter catalogue (e.g. glm-4.7) resolve to
+  `maxTokens=0`, making `percent=0` always less than the 80% threshold — the
+  `tryCompactIfNeeded` gate silently returned early on every check. A
+  `windowUnknown` branch now bypasses the percent gate and fires at ≥50 messages
+  as a fallback, ensuring compaction is offered regardless of model coverage.
+- **Context usage bar showing impossibly high token counts (e.g. 297,381,384)**:
+  the heuristic token estimator in `StreamCoordinator.refreshContextTokenEstimate`
+  could produce astronomical values from large workspace trees or accumulation
+  of many large tool outputs. Individual blocks are now capped at 50,000 tokens
+  and per-component totals at 2,000,000 tokens, keeping the context bar accurate.
+
 ## [0.4.55] — 2026-07-03
 
 ### Fixed — Multi-Session Performance, Decorations, and Tool Cards
