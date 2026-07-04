@@ -86,8 +86,15 @@ export class AutoCompactor {
     // customised per-model. ChatProvider still does a coarse >=80% pre-gate
     // to avoid invoking this hot path for low-usage events; the authoritative
     // check is the model-aware one below.
+    //
+    // When the context window is unknown (percent === 0, maxTokens === 0) for
+    // models like glm-4.7 that aren't in the models.dev/OpenRouter catalogues,
+    // percent-based gating is useless and compaction never fires. Fall through
+    // to a message-count gate (≥50 messages) as the fallback trigger.
     const threshold = this.contextMonitor.getAutoCompactThreshold(activeTab.model)
-    if (usage.percent < threshold) return
+    const windowUnknown = !usage.maxTokens || usage.maxTokens <= 0
+    if (!windowUnknown && usage.percent < threshold) return
+    if (windowUnknown && session.messages.length < 50) return
 
     const now = Date.now()
     if (now < this.snoozeUntil) return

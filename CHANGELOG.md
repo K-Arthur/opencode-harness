@@ -45,11 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   host. Now `postMessage` is threaded through `handleToolUpdate` →
   `renderFileEditCard`, matching the behaviour of the changed-files dropdown.
 - **Finalize-defer loop (30s grace cycle spam)**: Child-linked subagents that
-  completed on the server but whose SSE completion event was missed caused
-  infinite 30s grace-timer cycles. `ToolCallTracker` now fingerprints the
-  deferred state at each grace expiry; identical consecutive fingerprints
-  escalate to `{ includeChildLinked: true }`, capping the loop at ~60s.
-- **`todo_updated` CodeLens churn**: high-frequency `todo_updated` events were
+  completed on the server but whose SSE completion event was missed caused 
   forwarded directly per event, triggering CodeLens re-scans multiple times per
   second. Events are now coalesced through `PerSessionDebouncer` (300ms
   trailing per session).

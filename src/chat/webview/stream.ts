@@ -216,7 +216,7 @@ class StreamSession implements StreamHandlers {
     ) {
       return
     }
-    handleToolUpdate(this.els, toolId, update)
+    handleToolUpdate(this.els, toolId, update, this.callbacks?.postMessage)
   }
 
   handleToolPartial(sessionId: string, toolId: string, live: LiveToolOutput): void {

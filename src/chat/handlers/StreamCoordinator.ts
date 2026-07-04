@@ -2718,27 +2718,33 @@ export class StreamCoordinator {
           log.debug(`Skipping stale context token estimate for ${tabId}`)
           return
         }
-        const workspaceTokens = estimateContextTokens(ctxPkg)
-        const total = historyTokens + systemTokens + workspaceTokens
+        // Cap each component at 2M tokens to prevent workspace JSON blowup
+        // (e.g. large workspaceTrees) from producing impossible counts like 297M.
+        const MAX_COMPONENT = 2_000_000
+        const safeHistory = Math.min(historyTokens, MAX_COMPONENT)
+        const safeWorkspace = Math.min(estimateContextTokens(ctxPkg), MAX_COMPONENT)
+        const total = safeHistory + systemTokens + safeWorkspace
         this.contextMonitor.updateTokens(total, tabId, {
           system: systemTokens,
-          history: historyTokens,
-          workspace: workspaceTokens
+          history: safeHistory,
+          workspace: safeWorkspace
         }, { source: "estimated", updatedAt: requestedAt })
       })
       .catch(err => log.warn("Failed to refresh context token estimate", err))
   }
 
   private estimateMessageTokens(msg: ChatMessage): number {
+    // Cap per-block at 50k to prevent one huge tool output inflating the total
+    const MAX_BLOCK = 50_000
     let total = 0
     for (const block of msg.blocks) {
       if (block.type === "text" && block.text) {
-        total += estimateTokens(block.text as string)
+        total += Math.min(estimateTokens(block.text as string), MAX_BLOCK)
       } else if (block.type === "image" && block.data) {
         total += 1000 // Arbitrary estimate for image tokens
       } else if (block.type === "tool-call") {
-        total += estimateTokens(JSON.stringify(block.args || {}))
-        if (block.result) total += estimateTokens(block.result as string)
+        total += Math.min(estimateTokens(JSON.stringify(block.args || {})), MAX_BLOCK)
+        if (block.result) total += Math.min(estimateTokens(block.result as string), MAX_BLOCK)
       }
     }
     return total

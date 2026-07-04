@@ -110,6 +110,10 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     (tabId, todos) => this.postMessage({ type: "todos_update", sessionId: tabId, todos }),
     300,
   )
+  // Per-session accumulator for streaming reasoning deltas. Key = `${tabId}:${reasoningId}`.
+  // Each delta appends to accText; every update re-posts the same stable msgId so the
+  // webview's upsertMessageById replaces the existing DOM element in place (live growth).
+  private readonly reasoningAccumulator = new Map<string, { accText: string; msgId: string }>()
   private disposables: vscode.Disposable[] = []
   private webviewContent: WebviewContent
   private tabManager: TabManager
@@ -1540,13 +1544,21 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       })
     }],
     ["thinking", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => {
-      const data = event.data as { text?: string } | undefined
+      const data = event.data as { text?: string; reasoningId?: string } | undefined
+      const reasoningId = (typeof data?.reasoningId === "string" && data.reasoningId) ? data.reasoningId : `rr-${tabId}`
+      const key = `${tabId}:${reasoningId}`
+      const entry = this.reasoningAccumulator.get(key) ?? { accText: "", msgId: `thinking-${reasoningId}` }
+      entry.accText += data?.text ?? ""
+      this.reasoningAccumulator.set(key, entry)
       // Route through the canonical converter so the live block has the
       // same shape as historical-load and reconnect-rebuilt reasoning
       // blocks. Spec: ADR-008 §5.2 (one converter, one switch).
-      const block = reasoningEventToBlock({ text: data?.text })
+      const block = reasoningEventToBlock({ text: entry.accText, partId: reasoningId })
       if (!block) return
-      this.postMessage({ type: "message", sessionId: tabId, message: { role: "system", blocks: [block], timestamp: Date.now(), sessionId: tabId } })
+      // Stable msgId makes upsertMessageById replace the same DOM element on each
+      // delta instead of inserting a new element, so the thinking block grows
+      // incrementally during reasoning rather than duplicating per-token.
+      this.postMessage({ type: "message", sessionId: tabId, message: { id: entry.msgId, role: "system", blocks: [block], timestamp: Date.now(), sessionId: tabId } })
     }],
     ["session_compacted", (_event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => {
       log.info(`Session compacted for ${tabId}`)
@@ -1577,6 +1589,14 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       void this.refreshCommandListQuietly()
     }],
     ["activity", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => {
+      const data = event.data as { eventType?: string; reasoningId?: string } | undefined
+      // On reasoning.ended, finalize any in-progress thinking block for this session
+      // by clearing the accumulator entries so the next reasoning gets a fresh slot.
+      if (data?.eventType === "session.next.reasoning.ended") {
+        for (const key of Array.from(this.reasoningAccumulator.keys())) {
+          if (key.startsWith(`${tabId}:`)) this.reasoningAccumulator.delete(key)
+        }
+      }
       this.appendActivityBlock(tabId, event.data)
     }],
     // PTY lifecycle events (audit §14.1/§14.2). PTY terminals are a global
