@@ -235,6 +235,11 @@
 // StreamCoordinator heartbeat finalize re-check, subagentCard args
 // re-render). Production build measures 770.1KB host. +2KB keeps ~0.3%
 // headroom.
+//
+// 2026-07-03 re-baseline (host 772KB -> 774KB): performance fixes
+// (PerSessionDebouncer, visibilityGate, agentGazePolicy, HeartbeatService
+// ack-gating, ToolCallTracker grace fingerprint, RunActivityTracker forced
+// marking). Production build measures 772.4KB host. +1.6KB → 774KB headroom.
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -244,7 +249,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
-  { path: "dist/extension.js", limitBytes: 772 * 1024, label: "extension host" },
+  { path: "dist/extension.js", limitBytes: 774 * 1024, label: "extension host" },
   { path: "dist/chat/webview/main.js", limitBytes: 823 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]

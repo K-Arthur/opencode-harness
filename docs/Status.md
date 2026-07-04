@@ -1,7 +1,30 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-07-03
-**Version:** v0.4.51
+**Version:** v0.4.55
+
+## Highlights (2026-07-03) — Multi-session performance and fix batch
+
+- **Multi-session freeze eliminated**: hidden tabs deferred via `visibilityGate`
+  — no DOM mutations, no `scrollTop` RAF churn, no markdown re-parses on
+  background chunks. Rendering is accumulated losslessly and flushed in a single
+  RAF on tab activation.
+- **force_rerender flood stopped**: `HeartbeatService` now gates resends behind
+  a `pendingForceRerender` flag; one resend fires on the next ack recovery
+  instead of flooding every 5s tick while the webview is blocked. Ping cadence
+  backs off to every 3rd tick during unresponsiveness.
+- **Whole-file green highlighting fixed**: `AgentGazeService.onToolEnd` no
+  longer loops all visible editors. Tool-call-id → file-path mapping
+  (`agentGazePolicy.ts`) restricts decoration to the specific edited file.
+  `opencode.agentGaze.enabled` setting (default true) provides an escape hatch.
+- **"Open file" button on streaming edit-tool cards**: now works; `postMessage`
+  threaded through `handleToolUpdate` → `renderFileEditCard` so the click
+  handler can message the host.
+- **Finalize-defer loop bounded**: `ToolCallTracker` fingerprints grace-expiry
+  state; identical consecutive fingerprint escalates to
+  `{ includeChildLinked: true }`, capping stuck-subagent loops at ~60s.
+- **todos_update coalesced**: `ChatProvider` routes `todo_updated` through
+  `PerSessionDebouncer` (300ms trailing per session) to reduce CodeLens churn.
 
 ## Highlights (2026-07-03) — Subagent tracking and UI fixed
 

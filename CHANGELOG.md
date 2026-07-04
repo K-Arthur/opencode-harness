@@ -17,6 +17,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.55] — 2026-07-03
+
+### Fixed — Multi-Session Performance, Decorations, and Tool Cards
+
+- **Multi-session freeze (3+ concurrent tabs)**: Background (hidden) tabs were
+  doing full markdown re-parses, DOM mutations, and `scrollTop` RAF churn for
+  every streaming chunk, blocking the main thread. Hidden tabs now defer all
+  rendering via `visibilityGate.ts` — rendering is accumlated losslessly and
+  flushed in a single RAF when the tab is activated. `scrollAnchor` and
+  `virtualList` `pruneOffScreen` also early-return when the panel is hidden.
+- **force_rerender flood**: When a webview missed 3+ heartbeat pings (because
+  it was blocked), `HeartbeatService` was resending the full streaming buffer
+  every 5s tick, flooding an already-blocked message queue. Now: a
+  `pendingForceRerender` flag is set instead; one resend is sent on the next
+  ack recovery. Ping cadence is also backed off to every 3rd tick during
+  unresponsiveness.
+- **Whole-file green highlighting on any edit**: `AgentGazeService.onToolEnd`
+  decorated all visible editors with a `Range(0,0)-(lineCount-1,0)` green
+  highlight for every write-tool completion, regardless of which file was
+  edited. Decorations are now targeted to the specific editor that the tool
+  operated on, resolved via a per-call-id map (`agentGazePolicy.ts`).
+- **"Open file" button on streaming edit-tool cards silently did nothing**:
+  When a pending tool card was upgraded to a file-edit card on args arrival
+  (`handleToolUpdate`), `renderFileEditCard` was called without the
+  `postMessage` option. The button's click handler had no way to message the
+  host. Now `postMessage` is threaded through `handleToolUpdate` →
+  `renderFileEditCard`, matching the behaviour of the changed-files dropdown.
+- **Finalize-defer loop (30s grace cycle spam)**: Child-linked subagents that
+  completed on the server but whose SSE completion event was missed caused
+  infinite 30s grace-timer cycles. `ToolCallTracker` now fingerprints the
+  deferred state at each grace expiry; identical consecutive fingerprints
+  escalate to `{ includeChildLinked: true }`, capping the loop at ~60s.
+- **`todo_updated` CodeLens churn**: high-frequency `todo_updated` events were
+  forwarded directly per event, triggering CodeLens re-scans multiple times per
+  second. Events are now coalesced through `PerSessionDebouncer` (300ms
+  trailing per session).
+
+### Added
+
+- `opencode.agentGaze.enabled` setting (default `true`) — disables all AgentGaze
+  editor decorations live when set to `false`. Useful under heavy system load.
+- `src/chat/webview/visibilityGate.ts` — background-tab rendering gate
+- `src/decorations/agentGazePolicy.ts` — pure tool-call-id→file-path policy
+- `src/inline/inlineLensScanner.ts` — extracted pure symbol scanner from
+  `InlineActionProvider`, enabling per-document version caching (skip docs >500KB)
+- `src/chat/PerSessionDebouncer.ts` — trailing-debounce coalescer for per-session events
+
 ## [0.4.51] — 2026-07-03
 
 ### Fixed — Subagent Tracking and UI
