@@ -1,7 +1,43 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-07-03
-**Version:** v0.4.48
+**Version:** v0.4.51
+
+## Highlights (2026-07-03) — Subagent tracking and UI fixed
+
+- **Subagent tracker no longer switches to "unconfirmed" for long tasks**: the
+  30-second tool grace timeout fired while subagents were still legitimately
+  running, marking the task tool as "unresolved" and the subagent as "failed".
+  This stopped the `SubagentHeartbeat` (which relies on `hasActiveRun`) and
+  incorrectly showed "Unconfirmed" in the UI. Subagent tools are now skipped in
+  `markUnresolvedPendingToolCalls` and `markActiveSubagentsUnresolved` — the
+  heartbeat (5s poll) is the authoritative completion signal for subagents with
+  a linked `childSessionId`. Only orphaned subagents are marked unresolved.
+- **Stream finalizes after heartbeat completes a subagent**: the
+  `recordSubagentActivity` heartbeat callback now triggers
+  `maybeFinalizeStream` so the stream doesn't stay deferred forever waiting for
+  a subagent that has already finished.
+- **Subagent card updates title/details live**: the initial `tool_start` for a
+  `task` tool may carry partial/empty args. When full args arrive via
+  `tool_update`, `applySubagentCardUpdate` now re-renders the card header so
+  the title and purpose reflect the actual subagent invocation immediately.
+
+## Highlights (2026-07-03) — Suite hang fixed, message copy shipped
+
+- **Test-suite hang eliminated**: JSDOM harnesses leaked Node-global timers
+  (streamHandlers' elapsed ticker), so stream test files passed their tests
+  then pinned the event loop forever — stalling the sequential
+  `npm run test:unit` run. `streamHarness.installDom()` now tracks and clears
+  timers in `restore()`; `stream.test.ts` delegates to the shared harness.
+  All stream/webview files verified to pass AND exit.
+- **Copy button on messages**: user prompts and model responses have a
+  hover-revealed copy control (messageCopy.ts — new module; renderMessage is
+  a cc=90 hotspot, so extracted rather than enlarged). DI'd clipboard with
+  execCommand fallback; 8 behavioral tests + chromium-webview e2e.
+- **Stale e2e specs modernized**: three tests still switched tabs via
+  host-driven `active_session_changed` (deliberately ignored since the
+  no-focus-stealing policy). Now they click `.tab-btn` like a user;
+  chromium-webview project fully green (31 passed / 0 failed).
 
 ## Highlights (2026-07-03) — Context usage counter: cross-tab bleed eliminated
 
