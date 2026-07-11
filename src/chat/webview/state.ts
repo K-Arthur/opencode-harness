@@ -215,9 +215,17 @@ export function createState(vscode: VsCodeApi) {
   function snapshotWithCap(cap: number): WebviewState {
     const sessions: Record<string, SessionState> = {}
     for (const [id, s] of Object.entries(state.sessions)) {
+      if (s.ephemeral) continue
       sessions[id] = s.messages.length > cap ? { ...s, messages: s.messages.slice(-cap) } : s
     }
-    return { ...state, sessions }
+    const sessionOrder = state.sessionOrder.filter((id) => sessions[id])
+    const activeSessionId = state.activeSessionId && sessions[state.activeSessionId]
+      ? state.activeSessionId
+      : sessionOrder[0] ?? null
+    const scrollPositions = Object.fromEntries(
+      Object.entries(state.scrollPositions || {}).filter(([id]) => sessions[id]),
+    )
+    return { ...state, sessions, sessionOrder, activeSessionId, scrollPositions }
   }
 
   function buildPersistSnapshot(): WebviewState {
@@ -298,7 +306,7 @@ export function createState(vscode: VsCodeApi) {
     return state
   }
 
-  function createSession(name?: string, model?: string, mode?: string): SessionState {
+  function createSession(name?: string, model?: string, mode?: string, options?: { ephemeral?: boolean }): SessionState {
     const id = `session-${generateId()}`
     const session: SessionState = {
       id,
@@ -307,6 +315,7 @@ export function createState(vscode: VsCodeApi) {
       mode: mode || state.pendingMode || "build",
       messages: [],
       isStreaming: false,
+      ...(options?.ephemeral === true ? { ephemeral: true } : {}),
       ...(state.globalVariant ? { variant: state.globalVariant } : {}),
     }
     state.sessions[id] = session
@@ -329,6 +338,7 @@ export function createState(vscode: VsCodeApi) {
       existing.name = session.name || existing.name
       existing.model = session.model || existing.model
       existing.mode = session.mode || existing.mode
+      existing.ephemeral = session.ephemeral || existing.ephemeral
       // Mutate messages in-place to preserve stream handler's array reference
       if (session.messages && session.messages !== existing.messages) {
         existing.messages.length = 0

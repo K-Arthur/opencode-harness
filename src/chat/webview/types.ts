@@ -275,6 +275,8 @@ export interface SessionState {
   variant?: string
   mode: string
   steerMode?: SteerMode
+  /** Temporary chats are kept in memory only and skipped by webview persistence. */
+  ephemeral?: boolean
   messages: ChatMessage[]
   draftText?: string
   isStreaming: boolean

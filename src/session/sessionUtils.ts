@@ -31,6 +31,7 @@ export interface SessionData {
   archived?: boolean
   changedFiles?: string[]
   variant?: string
+  ephemeral?: boolean
 }
 
 export interface CreateSessionParams {
@@ -38,6 +39,7 @@ export interface CreateSessionParams {
   id?: string
   cliSessionId?: string
   pendingServerLink?: boolean
+  ephemeral?: boolean
 }
 
 export function isLocalPlaceholderSessionId(id: string | undefined): boolean {
@@ -61,6 +63,7 @@ export function buildSession(params: CreateSessionParams): SessionData {
   }
   if (cliSessionId) session.cliSessionId = cliSessionId
   if (params.pendingServerLink) session.pendingServerLink = true
+  if (params.ephemeral === true) session.ephemeral = true
   return session
 }
 
@@ -152,12 +155,13 @@ export function classifySession(session: {
  *
  * Pure; never mutates the live sessions (capped entries are shallow copies).
  */
-export function buildPersistedSessions<T extends { messages: unknown[]; needsBackfill?: boolean }>(
+export function buildPersistedSessions<T extends { messages: unknown[]; needsBackfill?: boolean; ephemeral?: boolean }>(
   sessions: Iterable<[string, T]>,
   maxMessagesPerSession: number,
 ): Record<string, T> {
   const out: Record<string, T> = {}
   for (const [id, sess] of sessions) {
+    if (sess.ephemeral === true) continue
     const exempt = sess.needsBackfill === true
     if (sess.messages.length === 0 && !exempt) continue
     out[id] = sess.messages.length > maxMessagesPerSession

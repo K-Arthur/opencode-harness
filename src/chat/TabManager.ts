@@ -17,6 +17,8 @@ export interface TabState {
   instructions?: string
   /** Per-tab opt-out for methodology guidance, toggled via /methodology on|off. */
   methodologyDisabled?: boolean
+  /** Temporary chat tabs are live-only and intentionally skipped by tab restoration. */
+  ephemeral?: boolean
 }
 
 /** Payload for `onStreamingStateChanged`. The optional fields carry the
@@ -104,8 +106,13 @@ export class TabManager {
 
   private persist(): void {
     if (!this.storage) return
-    void this.storage.update(OPEN_TABS_STORAGE_KEY, Array.from(this.tabs.keys()))
-    void this.storage.update(ACTIVE_TAB_STORAGE_KEY, this.activeTabId)
+    const persistentTabs = Array.from(this.tabs.values()).filter((tab) => !tab.ephemeral)
+    const persistedTabIds = persistentTabs.map((tab) => tab.id)
+    const persistedActiveTabId = this.activeTabId && !this.tabs.get(this.activeTabId)?.ephemeral
+      ? this.activeTabId
+      : persistedTabIds[0] ?? ""
+    void this.storage.update(OPEN_TABS_STORAGE_KEY, persistedTabIds)
+    void this.storage.update(ACTIVE_TAB_STORAGE_KEY, persistedActiveTabId)
   }
 
   private persistRestorationState(): void {
@@ -121,6 +128,7 @@ export class TabManager {
     this.restorationStates.clear()
     const now = Date.now()
     for (const tab of this.tabs.values()) {
+      if (tab.ephemeral) continue
       const hasPendingStream = tab.isStreaming || tab.waitingForCompletion
       if (hasPendingStream) {
         this.restorationStates.set(tab.id, {
@@ -165,7 +173,7 @@ export class TabManager {
   }
 
 
-  createTab(id: string, cliSessionId?: string, model?: string, mode?: string, options?: { setActive?: boolean }): TabState | null {
+  createTab(id: string, cliSessionId?: string, model?: string, mode?: string, options?: { setActive?: boolean; ephemeral?: boolean }): TabState | null {
     if (this.tabs.has(id)) {
       log.warn(`Tab with ID ${id} already exists — returning existing tab`)
       return this.tabs.get(id)!
@@ -189,6 +197,7 @@ export class TabManager {
       mode: mode || "build",
       lastActivityTime: Date.now(),
       blocksBuffer: [],
+      ephemeral: options?.ephemeral === true,
     }
     this.tabs.set(id, tab)
     if (cliSessionId) this.cliSessionIndex.set(cliSessionId, tab)
@@ -330,6 +339,18 @@ export class TabManager {
     tab.instructions = instructions
     this._onInstructionsChanged.fire({ tabId: id, instructions })
     return true
+  }
+
+  setEphemeral(id: string, ephemeral: boolean): boolean {
+    const tab = this.tabs.get(id)
+    if (!tab) return false
+    tab.ephemeral = ephemeral
+    this.persist()
+    return true
+  }
+
+  isEphemeral(id: string): boolean {
+    return this.tabs.get(id)?.ephemeral === true
   }
 
   setCliSessionId(id: string, cliSessionId: string): boolean {
