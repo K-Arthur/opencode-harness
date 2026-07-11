@@ -17,8 +17,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Ephemeral (temporary) chat sessions**: `TabManager`, `SessionStore`, and
+  webview state now carry an `ephemeral` flag on sessions. Temp sessions are
+  excluded from workspace state persistence (`buildPersistedSessions`,
+  `snapshotWithCap`), never survive extension reload, and their server-side
+  sessions are auto-deleted when the tab closes (`close_tab` handler calls
+  `sessionManager.deleteSession` for ephemeral tabs). The welcome screen has
+  a "Temporary chat" button (`#welcome-temp-btn`) and the tab strip shows a
+  temp badge (`.tab-temp-badge`). Slash commands `/temp` and `/temporary`
+  create ephemeral sessions from the prompt input.
+- **Agent orchestration with per-phase model routing**: new model routing
+  module (`src/orchestration/modelRouting.ts`) with `inferAgentRole()` and
+  `resolveRoutedModel()` supporting four agent roles — `planning`,
+  `implementation`, `review`, `debugging`. Role resolution follows a 6-level
+  priority chain: workspace role models → settings role models → workspace
+  mode models → settings mode models → session model → current model. The
+  `ModelManager.getRoutedModel()` method is wired into
+  `StreamCoordinator.resolveModelAndAgentForPrompt()` so every prompt send
+  evaluates the appropriate role and resolves the matching model.
+- **Role-based slash commands**: `/plan`, `/review`, `/debug` (`/debugging`)
+  set the `role` field on `send_prompt`, routing each prompt to the model
+  configured for that orchestration phase via `opencode.roleModels` in VS
+  Code settings. An explicit `role-route-select` dropdown in the composer
+  provides the same control via the UI.
+- **Context-aware prompt masking** (`src/context/PromptMasker.ts`): new
+  module that masks secrets, excluded file paths, and oversized prompts
+  before sending. `maskPromptPayload()` runs three passes in sequence —
+  document-block masking, file-mention masking, and secret redaction — then
+  prunes to a token budget. `redactSecrets()` detects private keys
+  (PEM/SSH), API keys/tokens/passwords (`SECRET_ASSIGNMENT_RE`), Bearer
+  tokens, OpenAI-style `sk-*` keys, AWS access keys, GitHub tokens
+  (`ghp_`/`gho_`/`ghu_`/`ghs_`/`ghr_`/`github_pat_`), npm tokens, session
+  cookie values, and JWTs. All patterns report redaction counts to the
+  webview via `masking_summary` messages. Configurable via
+  `opencode.masking.*` settings (enabled, maxPromptTokens, reserveTokens,
+  exclude). Wired into `WebviewEventRouter.preparePromptPayload()` which is
+  called on every `send_prompt`.
+
 ### Fixed
 
+- **Ephemeral server sessions leaked on tab close**: closing a temp session
+  tab left its server-side session alive indefinitely. The `close_tab`
+  handler now captures `cliSessionId` before cleanup and calls
+  `sessionManager.deleteSession()` for ephemeral sessions.
 - **Thinking blocks only appeared after streaming completed**: each reasoning
   delta created a new system message without a stable ID, so every token
   appended a fresh DOM element instead of updating the existing one. A
