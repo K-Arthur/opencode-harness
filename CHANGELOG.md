@@ -19,6 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Model routing settings panel**: new webview dialog (`modelRoutingPanel.ts`)
+  accessible from Settings → Configure → Model Routing. Shows per-role model
+  inputs for planning, implementation, review, and debugging phases with
+  fallback chain display (phase → mode → session → global). Persists
+  configuration to VS Code settings via `set_role_models` host message.
+- **Host-side `set_role_models` handler**: writes role model overrides to
+  `opencode.roleModels` via the VS Code configuration API, updating both the
+  active session and propagating to sibling surfaces.
+
 - **Ephemeral (temporary) chat sessions**: `TabManager`, `SessionStore`, and
   webview state now carry an `ephemeral` flag on sessions. Temp sessions are
   excluded from workspace state persistence (`buildPersistedSessions`,
@@ -58,6 +67,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **GitHub PAT false negative in prompt masking**: `github_pat_` token regex
+  required 85+ suffix chars but real tokens have ~82 chars. Reduced minimum
+  to 70 to correctly match fine-grained personal access tokens.
+- **Session cookie regex false positive risk**: minimum length raised from 32
+  to 40 and trailing delimiter guard added to reduce false matches on long
+  variable names or identifiers.
 - **Ephemeral server sessions leaked on tab close**: closing a temp session
   tab left its server-side session alive indefinitely. The `close_tab`
   handler now captures `cliSessionId` before cleanup and calls

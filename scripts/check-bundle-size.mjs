@@ -5,7 +5,7 @@
 // load synchronously into the host process or the chat webview:
 //
 //   dist/extension.js                  ≤ 786KB
-//   dist/chat/webview/main.js          ≤ 833KB  (paydown target: 600KB)
+//   dist/chat/webview/main.js          ≤ 835KB  (paydown target: 600KB)
 //   dist/chat/webview/markdownWorker.js ≤ 500KB  (advisory)
 //
 // IMPORTANT: these limits describe the **production (minified) build**
@@ -247,6 +247,11 @@
 // ephemeral session cleanup, and expanded secret redaction patterns (GitHub,
 // npm, SSH, JWT, session cookies). Production build measures 782.2KB host /
 // 828.5KB webview. +12KB host / +10KB webview keeps ~0.5% headroom.
+//
+// 2026-07-10 re-baseline (webview 833KB -> 835KB): model routing settings
+// panel UI (modelRoutingPanel.ts, HTML dialog + CSS, button wiring, host
+// set_role_models handler). Production build measures 833.9KB webview.
+// +2KB keeps ~0.2% headroom.
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -257,7 +262,7 @@ const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
   { path: "dist/extension.js", limitBytes: 786 * 1024, label: "extension host" },
-  { path: "dist/chat/webview/main.js", limitBytes: 833 * 1024, label: "chat webview" },
+  { path: "dist/chat/webview/main.js", limitBytes: 835 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
 

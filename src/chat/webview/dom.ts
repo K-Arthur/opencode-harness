@@ -65,6 +65,17 @@ export interface ElementRefs {
   instructionsCancelBtn: HTMLButtonElement
   dirToggleBtn: HTMLButtonElement
 
+  modelRoutingPanel: HTMLDivElement
+  modelRoutingBtn: HTMLElement
+  modelRoutingClose: HTMLElement
+  modelRoutingCloseBtn: HTMLElement
+  modelRoutingReset: HTMLElement
+  modelRoutingBody: HTMLDivElement
+  modelRoutingList: HTMLDivElement
+  modelRoutingGlobal: HTMLDivElement
+  modelRoutingGlobalValue: HTMLSpanElement
+  modelRoutingStatus: HTMLDivElement
+
   modelDropdown: HTMLDivElement
   variantDropdown: HTMLDivElement
   historyBtn: HTMLElement
@@ -309,6 +320,17 @@ export function getElementRefs(): ElementRefs {
     modelManagerList: requireElement<HTMLDivElement>("model-manager-list"),
     modelManagerClose: requireElement<HTMLButtonElement>("model-manager-close"),
     modelManagerConnect: requireElement<HTMLButtonElement>("model-manager-connect"),
+
+    modelRoutingPanel: requireElement<HTMLDivElement>("model-routing-panel"),
+    modelRoutingBtn: requireElement("model-routing-btn"),
+    modelRoutingClose: requireElement("model-routing-close"),
+    modelRoutingCloseBtn: requireElement("model-routing-close-btn"),
+    modelRoutingReset: requireElement("model-routing-reset"),
+    modelRoutingBody: requireElement<HTMLDivElement>("model-routing-body"),
+    modelRoutingList: requireElement<HTMLDivElement>("model-routing-list"),
+    modelRoutingGlobal: requireElement<HTMLDivElement>("model-routing-global"),
+    modelRoutingGlobalValue: requireElement<HTMLSpanElement>("model-routing-global-value"),
+    modelRoutingStatus: requireElement<HTMLDivElement>("model-routing-status"),
 
     welcomeView: requireElement<HTMLDivElement>("welcome-view"),
     welcomeModelEmptyBanner: document.getElementById("welcome-model-empty-banner"),

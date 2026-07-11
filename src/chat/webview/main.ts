@@ -72,6 +72,7 @@ import { createEscapeRegistry, visibleByClass } from "./escapeCoordinator"
 
 import { handleTokenUsage as handleTokenUsageModule, accumulateTokenUsage as accumulateTokenUsageModule, accumulateCost as accumulateCostModule, applyTokenUsageTotals as applyTokenUsageTotalsModule, rememberStepUsage, isDuplicateRecentStepUsage, handleRateLimitState as handleRateLimitStateModule, updateCostDisplay as updateCostDisplayModule, updateTokenDisplay as updateTokenDisplayModule, clearTokenDisplay as clearTokenDisplayModule, updateContextBarFromSession as updateContextBarFromSessionModule, type TokenCostDeps, type RateLimitWebviewState } from "./ui/tokenCostDisplay"
 import { createAttachmentManager } from "./ui/attachments"
+import { createModelRoutingPanel } from "./ui/modelRoutingPanel"
 import { setupDragDrop } from "./ui/dragDrop"
 import { showWelcomeView as showWelcomeViewModule, hideWelcomeView as hideWelcomeViewModule, renderWelcomeContext as renderWelcomeContextModule, setupWelcomeActions as setupWelcomeActionsModule, setupWelcomeSuggestions as setupWelcomeSuggestionsModule, setupWelcomeResponsive as setupWelcomeResponsiveModule, type WelcomeViewDeps } from "./ui/welcomeView"
 import { shouldHonorActiveSessionChange, shouldHonorResumeSessionSwitch, resolveInitStateTarget } from "./sessionFocus"
@@ -241,6 +242,7 @@ function getVsCodeApi() {
   let tabBar!: ReturnType<typeof createTabBar>
   let mcpConfig!: ReturnType<typeof setupMcpConfig>
   let syncModelViews!: () => void
+  let modelRoutingPanel!: ReturnType<typeof createModelRoutingPanel>
 
   // Created by wire functions inside setupPanels
   let streamOrchestrator!: import("./streamOrchestrator").StreamOrchestratorAPI
@@ -763,6 +765,26 @@ function getVsCodeApi() {
       mcpConfig = panelApi.mcpConfig
       syncModelViews = panelApi.syncModelViews
 
+      modelRoutingPanel = createModelRoutingPanel({
+        els: {
+          modelRoutingPanel: els.modelRoutingPanel,
+          modelRoutingClose: els.modelRoutingClose,
+          modelRoutingCloseBtn: els.modelRoutingCloseBtn,
+          modelRoutingReset: els.modelRoutingReset,
+          modelRoutingBody: els.modelRoutingBody,
+          modelRoutingList: els.modelRoutingList,
+          modelRoutingGlobal: els.modelRoutingGlobal,
+          modelRoutingGlobalValue: els.modelRoutingGlobalValue,
+          modelRoutingStatus: els.modelRoutingStatus,
+        },
+        vscode,
+        getModels: () => [],
+        getRoleModels: () => ({}),
+        getModeModels: () => ({}),
+        getGlobalModel: () => stateManager.getState().globalModel || "",
+        getSessionModel: () => stateManager.getActiveSession()?.model,
+      })
+
       setCompsErrorActionHandler(errorActionHandler)
       setRendererErrorActionHandler(errorActionHandler)
 
@@ -1024,11 +1046,15 @@ function getVsCodeApi() {
         changedFilesList: null,
         attachBtn: els.attachBtn,
         skillsBtn: els.skillsBtn,
+        modelRoutingBtn: els.modelRoutingBtn,
       },
       postMessage: (msg) => vscode.postMessage(msg),
       closeSettingsMenu,
       openMcpConfig: () => mcpConfig.open(),
       openThemeCustomizer: () => themeOrchestrator.open(),
+      openModelRouting: () => {
+        modelRoutingPanel.open()
+      },
       openPermissionConfig: () => {
         const active = stateManager.getActiveSession()
         const sid = active?.id ?? stateManager.getState().activeSessionId

@@ -68,10 +68,12 @@ const SECRET_ASSIGNMENT_RE = /\b([A-Za-z0-9_.-]*(?:api[_-]?key|token|secret|pass
 const BEARER_RE = /\b(Authorization\s*:\s*Bearer\s+)[A-Za-z0-9._~+/=-]{8,}/gi
 const OPENAI_STYLE_KEY_RE = /\b(sk-[A-Za-z0-9_-]{16,})\b/g
 const AWS_ACCESS_KEY_RE = /\b(AKIA[0-9A-Z]{16}|A[KIST][A-Z0-9]{18,})\b/g
-const GITHUB_TOKEN_RE = /\b(ghp_[A-Za-z0-9_]{36,}|gho_[A-Za-z0-9_]{36,}|ghu_[A-Za-z0-9_]{36,}|ghs_[A-Za-z0-9_]{36,}|ghr_[A-Za-z0-9_]{36,}|github_pat_[A-Za-z0-9_]{85,})\b/g
+const GITHUB_TOKEN_RE = /\b(ghp_[A-Za-z0-9_]{36,}|gho_[A-Za-z0-9_]{36,}|ghu_[A-Za-z0-9_]{36,}|ghs_[A-Za-z0-9_]{36,}|ghr_[A-Za-z0-9_]{36,}|github_pat_[A-Za-z0-9_]{70,})\b/g
 const NPM_TOKEN_RE = /\b(npm_[A-Za-z0-9_]{36,})\b/g
 const SSH_PRIVATE_KEY_RE = /-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/g
-const SESSION_COOKIE_RE = /\b(session[\s_-]?(?:id|token|key)[\s:=]+["']?[A-Za-z0-9+/=_-]{32,}["']?)/gi
+// Require 40+ chars for session token values and enforce a trailing word
+// boundary or quote to reduce false positives on long identifiers.
+const SESSION_COOKIE_RE = /\b(session[\s_-]?(?:id|token|key)[\s:=]+["']?[A-Za-z0-9+/=_-]{40,})(["']|(?:\s|$|,|[;`]))/gi
 const JWT_RE = /\b(eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)\b/g
 
 function zeroStats(inputTokens = 0, outputTokens = inputTokens): PromptMaskingStats {
@@ -116,9 +118,9 @@ export function redactSecrets(text: string): { text: string; stats: Pick<PromptM
     redactedSecrets += 1
     return "[REDACTED_NPM_TOKEN]"
   })
-  next = next.replace(SESSION_COOKIE_RE, (_match: string, full: string) => {
+  next = next.replace(SESSION_COOKIE_RE, (_match: string, full: string, delimiter: string) => {
     redactedSecrets += 1
-    return full.replace(/[A-Za-z0-9+/=_-]{8,}$/, "[REDACTED]")
+    return full.replace(/[A-Za-z0-9+/=_-]{8,}$/, "[REDACTED]") + delimiter
   })
   next = next.replace(JWT_RE, () => {
     redactedSecrets += 1

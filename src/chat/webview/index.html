@@ -233,6 +233,13 @@
           </svg>
           Prompt Stash
         </button>
+        <button class="settings-menu-item" id="model-routing-btn" role="menuitem" aria-label="Configure model routing">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="2"/>
+            <path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+          </svg>
+          Model Routing
+        </button>
       </div>
     </div>
 
@@ -1055,6 +1062,40 @@
           <div class="spinner"></div>
           <span>Syncing sessions...</span>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Model Routing Panel -->
+  <div id="model-routing-panel" class="model-manager-overlay hidden" role="dialog" aria-modal="true" aria-label="Model routing settings">
+    <div class="model-manager-content model-routing-content">
+      <div class="model-manager-header">
+        <div class="model-manager-header-text">
+          <h2>Model Routing</h2>
+          <p>Assign models to each orchestration phase. When a phase-specific model is set, prompts routed to that phase will use it instead of the default session model.</p>
+        </div>
+        <div class="model-manager-header-actions">
+          <button class="model-manager-close" id="model-routing-close" aria-label="Close model routing">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 6 6 18"/><path d="M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="model-routing-body" id="model-routing-body">
+        <div class="model-routing-fallback-info">
+          Each phase falls back through: <strong>phase model</strong> → <strong>mode model</strong> → <strong>session model</strong> → <strong>global default</strong>. Set a phase model to override the chain for that phase.
+        </div>
+        <div id="model-routing-list" class="model-routing-list"></div>
+        <div id="model-routing-global" class="model-routing-global">
+          <div class="model-routing-global-label">Active global default:</div>
+          <div class="model-routing-global-value" id="model-routing-global-value">—</div>
+        </div>
+        <div id="model-routing-status" class="model-routing-status hidden" role="status"></div>
+      </div>
+      <div class="model-routing-actions">
+        <button class="btn btn-secondary" id="model-routing-reset">Reset all to defaults</button>
+        <button class="btn btn-primary" id="model-routing-close-btn">Done</button>
       </div>
     </div>
   </div>

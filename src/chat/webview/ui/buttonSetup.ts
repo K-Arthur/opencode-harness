@@ -14,6 +14,7 @@ export interface ButtonSetupEls {
   changedFilesList: HTMLElement | null
   attachBtn: HTMLElement
   skillsBtn: HTMLElement | null
+  modelRoutingBtn: HTMLElement | null
 }
 
 export interface ButtonSetupDeps {
@@ -24,6 +25,7 @@ export interface ButtonSetupDeps {
   openThemeCustomizer: () => void
   openPermissionConfig: () => void
   openProviderPanel: () => void
+  openModelRouting: () => void
   getActiveSessionId: () => string | undefined
   skillsModalOpen: (() => void) | undefined
   /** Fired when the user toggles the todos panel via the toolbar button.
@@ -136,5 +138,10 @@ export function setupButtons(deps: ButtonSetupDeps): void {
 
   deps.els.attachBtn.addEventListener("click", () => {
     deps.postMessage({ type: "attach_files" })
+  })
+
+  deps.els.modelRoutingBtn?.addEventListener("click", () => {
+    deps.closeSettingsMenu()
+    deps.openModelRouting()
   })
 }

@@ -195,7 +195,7 @@ export class WebviewEventRouter {
   public webviewFullyInitialized = false
 
   private static readonly VALID_WEBVIEW_TYPES = new Set([
-    "create_tab", "send_prompt", "change_mode", "set_model", "set_variant", "abort", "cancel_tool",
+    "create_tab", "send_prompt", "change_mode", "set_model", "set_variant", "set_role_models", "abort", "cancel_tool",
     "close_tab", "switch_tab", "accept_diff", "reject_diff",
     "accept_permission", "mention_search", "list_sessions", "resume_session",
     "new_session", "new_temp_session", "get_models", "update_cost", "webview_ready", "init_ack", "rename_session", "webview_log",
@@ -766,6 +766,30 @@ export class WebviewEventRouter {
       if (sessionId && msg.variant) {
         this.opts.ensureLocalTab(sessionId)
         this.opts.sessionStore.updateVariant(sessionId, msg.variant as string)
+      }
+    }],
+    ["set_role_models", (msg: Record<string, unknown>) => {
+      const roleModels = msg.roleModels as Record<string, string> | undefined
+      if (!roleModels) return
+      // Persist role models to VS Code settings. Writing via the VS Code
+      // configuration API ensures workspace-level overrides take precedence
+      // and the change propagates to all surfaces (CLI, sibling windows).
+      const config = vscode.workspace.getConfiguration("opencode")
+      const existing = config.get<Record<string, string>>("roleModels", {})
+      const merged = { ...existing }
+      let changed = false
+      for (const [role, model] of Object.entries(roleModels)) {
+        if (model && model.trim()) {
+          if (merged[role] !== model.trim()) { merged[role] = model.trim(); changed = true }
+        } else {
+          if (merged[role]) { delete merged[role]; changed = true }
+        }
+      }
+      if (changed) {
+        void config.update("roleModels", merged, vscode.ConfigurationTarget.Workspace)
+        log.info(`Updated role models: ${JSON.stringify(merged)}`)
+        // Refresh the model list to surface any newly-routed models.
+        this.pushModelListToWebview()
       }
     }],
     ["mode_switch_request", async (msg: Record<string, unknown>, sessionId?: string) => {
