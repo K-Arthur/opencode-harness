@@ -95,27 +95,43 @@ See [CONVENTIONS.md](CONVENTIONS.md) for full details. Key rules:
 
 ## Pre-Commit Hooks
 
-The project uses Husky with the following pre-commit hooks in `.opencode/hooks/`:
-- `pre-commit-branch-check.sh` — Branch naming validation
-- `pre-commit-compile.sh` — Compilation check
-- `pre-commit-coverage.sh` — Coverage threshold check
-- `pre-commit-format.sh` — Formatting check
-- `pre-commit-function-length.sh` — Function length limit
-- `pre-commit-import-cycles.sh` — Circular dependency check
-- `pre-commit-prod-quality.sh` — Production code quality
-- `pre-commit-review.sh` — Review status check
-- `pre-commit-test.sh` — Unit tests must pass
-- `pre-commit-tdd-check.sh` — Test-driven development check
-- `pre-commit-clippy.sh` — Rust-style linting (for relevant code)
+The project uses [Husky](https://typicode.github.io/husky/) for local git hooks,
+initialized automatically after `npm install`:
+
+- **`pre-commit`** — runs `tsc --noEmit` to catch type errors before they reach CI.
+  Fast enough to run on every commit (~5-15s). Full test suite runs in CI.
+- **`commit-msg`** — runs `commitlint` to enforce [Conventional Commits](https://www.conventionalcommits.org/)
+  format (e.g. `feat:`, `fix:`, `chore:`, `ci:`, `refactor:`).
+
+Both hooks are in `.husky/`. To bypass temporarily (e.g. WIP commit):
+`git commit --no-verify -m "..."`.
 
 ## CI/CD Pipeline
 
-GitHub Actions (`.github/workflows/ci.yml`) with 3 jobs:
-1. **typecheck-and-unit**: Runs on Node 20.x & 22.x, runs typecheck, build, unit tests, architecture checks, ESLint
-2. **integration**: Runs VS Code integration tests with Xvfb
-3. **visual**: Runs Playwright visual regression tests
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push/PR to `main`/`master`:
 
-Triggers: push to `main`/`master`, pull requests to `main`/`master`
+| Job | What it does |
+|-----|-------------|
+| **typecheck** | `tsc --noEmit` + `eslint` on Node 20 and 22 (matrix) |
+| **build** | Production esbuild bundle + bundle size gate (`check-bundle-size.mjs`) |
+| **unit** | Behavioral tests (`node --test`), structural tests (`tsx --test`), TS tests |
+| **message-contract** | Webview message type contract validation |
+| **roundtrip** | Integration roundtrip message tests |
+| **architecture** | Layer-boundary import violation check (`check-architecture.mjs`) |
+| **integration** | VS Code Extension Dev Host tests under Xvfb |
+| **webview** | Playwright webview contract tests (`chromium-webview` project) |
+| **visual** | Playwright screenshot regression tests (`chromium` project) |
+| **screenshots-verify** | Validates fixture content + screenshots against baselines |
+
+All jobs must pass before merging. Failed Playwright jobs upload an artifact with
+the full report for offline debugging.
+
+### Additional CI
+
+- **[Dependabot](.github/dependabot.yml)** — weekly npm dependency updates (grouped
+  by `@types/` and devDeps), monthly GitHub Actions updates. PRs labelled `dependencies`.
+- **[CodeQL](.github/workflows/codeql.yml)** — `security-and-quality` static analysis
+  on every push/PR and weekly schedule. Runs against all JavaScript/TypeScript source.
 
 ## Pull Request Process
 

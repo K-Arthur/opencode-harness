@@ -8,6 +8,8 @@
 > [Limitations](#limitations) and [`docs/limitations.md`](docs/limitations.md)).
 
 [![GitHub stars](https://img.shields.io/github/stars/K-Arthur/opencode-harness?style=social)](https://github.com/K-Arthur/opencode-harness/stargazers)
+[![CI](https://github.com/K-Arthur/opencode-harness/actions/workflows/ci.yml/badge.svg)](https://github.com/K-Arthur/opencode-harness/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/K-Arthur/opencode-harness/actions/workflows/codeql.yml/badge.svg)](https://github.com/K-Arthur/opencode-harness/actions/workflows/codeql.yml)
 
 A VS Code extension that puts a chat panel, diff viewer, and multi-session tabs
 in front of the [opencode](https://opencode.ai) CLI agent. It starts
