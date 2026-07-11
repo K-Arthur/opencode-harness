@@ -114,6 +114,9 @@ Rules:
   create a temporary chat session. The tab strip and `/temp` slash command can
   also create local ephemeral tabs with a normal `create_tab` message carrying
   `ephemeral: true`.
+- `send_prompt.role` (Webview → Host, optional): The composer `Route` selector
+  sends `planning`, `implementation`, `review`, or `debugging` when the user
+  overrides automatic role inference for the next prompt.
 - `chat_dir_change` (Webview → Host): The user clicks the LTR/RTL toggle button.
   The webview sets `dir` on `<html>` immediately and posts this message so the
   host persists the choice to `globalState` via `persistChatDirection`.

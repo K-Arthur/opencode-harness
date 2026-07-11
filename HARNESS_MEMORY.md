@@ -45,6 +45,7 @@ Implement production-ready agent orchestration, temporary chats, intelligent mas
 - Wired prompt masking at host ingress for immediate and queued prompts; masking summaries are posted to the webview.
 - Added temporary chat creation paths from the host, tab strip, welcome screen, and `/temp` slash command.
 - Added route/masking status chips and temporary tab badges in the webview.
+- Added a composer `Route` selector that can send explicit planning/implementation/review/debugging roles.
 - Added VS Code settings for `opencode.roleModels` and `opencode.masking.*`.
 - Documented the architecture in `docs/architecture/orchestration-masking-ephemeral.md`.
 - Verified the backend foundation with `npm run typecheck`, `npm run build`, and `npm run test:unit` before commit `f674205`.

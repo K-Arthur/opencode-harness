@@ -254,6 +254,7 @@ const EXPECTED_UI_ELEMENT_IDS = [
   "mode-opt-plan",
   "mode-opt-build",
   "mode-opt-auto",
+  "role-route-select",
   "model-selector-btn",
   "variant-selector-btn",
   "steer-mode-queue",

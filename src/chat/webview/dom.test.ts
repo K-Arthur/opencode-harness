@@ -47,6 +47,11 @@ describe("dom.ts", () => {
     assert.ok(source.includes("agentStatusText: HTMLSpanElement"))
   })
 
+  it("ElementRefs contains roleRouteSelect", () => {
+    assert.ok(source.includes("roleRouteSelect: HTMLSelectElement"))
+    assert.ok(source.includes('requireElement<HTMLSelectElement>("role-route-select")'))
+  })
+
   it("ElementRefs contains quota bar elements", () => {
     assert.ok(source.includes("quotaBar:"), "must expose quota bar container")
     assert.ok(source.includes("quotaProgressBar:"), "must expose quota progress")

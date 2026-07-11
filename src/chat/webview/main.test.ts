@@ -125,8 +125,11 @@ describe("main.ts", () => {
   it("surfaces orchestration routing and masking status in the webview chrome", () => {
     assert.ok(indexHtml.includes('id="status-route"'), "status strip must include the routing chip")
     assert.ok(indexHtml.includes('id="status-masking"'), "status strip must include the masking chip")
+    assert.ok(indexHtml.includes('id="role-route-select"'), "composer must expose an explicit route selector")
     assert.ok(source.includes('["orchestration_route"'), "main.ts must handle route decisions from the host")
     assert.ok(source.includes('["masking_summary"'), "main.ts must handle masking summaries from the host")
+    assert.ok(sendMessageSource.includes("readSelectedAgentRole"), "send path must read the explicit route selector")
+    assert.ok(sendMessageSource.includes("{ role: selectedRole }"), "send path must include role in send_prompt when selected")
     assert.ok(source.includes("function renderRouteChip"), "main.ts must render the active route chip")
     assert.ok(source.includes("function renderMaskingChip"), "main.ts must render the active masking chip")
   })

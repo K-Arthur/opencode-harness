@@ -60,6 +60,10 @@ the SDK request and posts `orchestration_route` to the webview. The status strip
 renders the active session's role/model chip, so mid-session model switching is
 visible without changing the conversation transcript.
 
+The composer also exposes a compact `Route` selector. `Auto` uses prompt/mode
+inference; choosing `Plan`, `Build`, `Review`, or `Debug` sends an explicit
+`role` on the next prompt.
+
 ## Temporary Chats
 
 Temporary chats are represented by `ephemeral: true` on:

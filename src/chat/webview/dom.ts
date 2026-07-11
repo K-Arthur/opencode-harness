@@ -53,6 +53,7 @@ export interface ElementRefs {
   modeOptPlan: HTMLButtonElement
   modeOptAuto: HTMLButtonElement
   modeOptBuild: HTMLButtonElement
+  roleRouteSelect: HTMLSelectElement
   modelSelectorBtn: HTMLElement
   modelLabel: HTMLSpanElement
   variantSelectorBtn: HTMLElement
@@ -256,6 +257,7 @@ export function getElementRefs(): ElementRefs {
     modeOptPlan: requireElement<HTMLButtonElement>("mode-opt-plan"),
     modeOptAuto: requireElement<HTMLButtonElement>("mode-opt-auto"),
     modeOptBuild: requireElement<HTMLButtonElement>("mode-opt-build"),
+    roleRouteSelect: requireElement<HTMLSelectElement>("role-route-select"),
     modelSelectorBtn: requireElement("model-selector-btn"),
     modelLabel: requireElement<HTMLSpanElement>("model-label"),
     variantSelectorBtn: requireElement("variant-selector-btn"),

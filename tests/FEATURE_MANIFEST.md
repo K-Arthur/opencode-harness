@@ -320,6 +320,7 @@ All element IDs are in `src/chat/webview/index.html`.
 | FM-UI-046 | `mode-opt-plan` | Plan mode option | stable |
 | FM-UI-047 | `mode-opt-build` | Build mode option | stable |
 | FM-UI-048 | `mode-opt-auto` | Auto mode option | stable |
+| FM-UI-048a | `role-route-select` | Route next prompt to an orchestration role | stable |
 | FM-UI-049 | `model-selector-btn` | Select model | stable |
 | FM-UI-050 | `variant-selector-btn` | Select thinking level | stable |
 | FM-UI-051 | `steer-mode-queue` | Queue steer mode | stable |

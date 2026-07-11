@@ -7,6 +7,8 @@ import { shouldForceFocusOnSend } from "./sessionFocus"
 import type { SendLogicDeps, SendMessageDeps, StreamCapacityState } from "./sendTypes"
 import type { AttachedContextItem } from "./types"
 
+type SelectedAgentRole = "planning" | "implementation" | "review" | "debugging"
+
 /** G8: how long to wait for the host to ack a send_prompt before probing.
  *  The host normally posts `prompt_accepted` within ~1s and
  *  `streaming_state:true` within another second. 5s accommodates slow
@@ -43,6 +45,14 @@ export function handleNoModelSelected(
   openModelManager()
   els.promptInput.placeholder = "Select a model to continue..."
   updateSendButton()
+}
+
+export function readSelectedAgentRole(els: ElementRefs): SelectedAgentRole | undefined {
+  const value = els.roleRouteSelect.value
+  if (value === "planning" || value === "implementation" || value === "review" || value === "debugging") {
+    return value
+  }
+  return undefined
 }
 
 /** Trigger a host probe of the active run's status. Used when local state is
@@ -263,6 +273,7 @@ export function sendMessage(deps: SendMessageDeps): void {
 
   const sendVariant = stateManager.getState().sessions[active.id]?.variant || stateManager.getState().globalVariant || undefined
   const clientRequestId = createWebviewId("req")
+  const selectedRole = readSelectedAgentRole(els)
 
   vscode.postMessage({
     type: "send_prompt",
@@ -272,6 +283,7 @@ export function sendMessage(deps: SendMessageDeps): void {
     clientRequestId,
     model: sendModel,
     mode: active.mode,
+    ...(selectedRole ? { role: selectedRole } : {}),
     ...(sendVariant ? { variant: sendVariant } : {}),
     ...(imageAttachments.length > 0 ? { attachments: imageAttachments } : {}),
     ...(contextItems.length > 0 ? { contextItems } : {}),

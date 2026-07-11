@@ -1102,6 +1102,42 @@ body.chat-rtl #prompt-input {
   flex-wrap: wrap;
 }
 
+.role-route-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--size-target-comfortable);
+  max-width: 10rem;
+  padding: 0 var(--space-1-5);
+  border: 1px solid var(--oc-border);
+  border-radius: var(--radius-md);
+  background: var(--oc-editor-bg);
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.role-route-label {
+  color: var(--color-muted);
+}
+
+.role-route-select {
+  min-width: 0;
+  max-width: 6.5rem;
+  border: none;
+  background: transparent;
+  color: var(--oc-fg);
+  font: inherit;
+  cursor: pointer;
+  outline: none;
+}
+
+.role-route-selector:focus-within {
+  outline: 2px solid var(--oc-focus);
+  outline-offset: -2px;
+}
+
 .bottom-btn {
   display: flex;
   align-items: center;
@@ -4066,6 +4102,7 @@ button.modal-session-item:focus {
   .mode-dropdown-btn,
   .model-selector-btn,
   .variant-selector-btn,
+  .role-route-selector,
   .bottom-btn {
     padding: var(--space-0-5) var(--space-1);
     min-height: var(--size-target-min);
@@ -4083,6 +4120,10 @@ button.modal-session-item:focus {
     max-width: 6rem;
   }
 
+  .role-route-selector {
+    max-width: 7rem;
+  }
+
   .steer-mode-label {
     display: none;
   }
@@ -4092,6 +4133,10 @@ button.modal-session-item:focus {
   .model-selector-btn,
   .variant-selector-btn {
     max-width: 5rem;
+  }
+
+  .role-route-label {
+    display: none;
   }
 
   .send-btn {
@@ -4126,9 +4171,14 @@ button.modal-session-item:focus {
 
   .model-selector-btn,
   .variant-selector-btn,
-  .mode-dropdown-btn {
+  .mode-dropdown-btn,
+  .role-route-selector {
     width: var(--size-target-min);
     padding: var(--space-0-5);
+  }
+
+  .role-route-select {
+    max-width: 100%;
   }
 }
 

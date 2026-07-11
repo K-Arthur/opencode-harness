@@ -565,6 +565,16 @@
         </div>
 
         <div class="bottom-bar-right">
+        <label class="role-route-selector" for="role-route-select" title="Route the next prompt to a phase-specific model">
+          <span class="role-route-label">Route</span>
+          <select id="role-route-select" class="role-route-select" aria-label="Route next prompt">
+            <option value="">Auto</option>
+            <option value="planning">Plan</option>
+            <option value="implementation">Build</option>
+            <option value="review">Review</option>
+            <option value="debugging">Debug</option>
+          </select>
+        </label>
         <!-- Positioning container only. The mode picker is a button + listbox
              combobox (see #mode-dropdown-btn aria-haspopup="listbox" and
              #mode-dropdown-menu role="listbox"); a radiogroup role here was a

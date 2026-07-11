@@ -6,6 +6,7 @@ let dom: InstanceType<typeof JSDOM>
 let document: Document
 let promptInput: HTMLTextAreaElement
 let sendBtn: HTMLButtonElement
+let roleRouteSelect: HTMLSelectElement
 let inputArea: HTMLDivElement
 let tabPanels: HTMLDivElement
 let welcomeView: HTMLDivElement
@@ -15,7 +16,7 @@ let errorsReported: Array<{ sessionId: string; msg: string }>
 let agentStatus: string
 
 function makeEls() {
-  return { promptInput, sendBtn, inputArea, tabPanels, welcomeView } as any
+  return { promptInput, sendBtn, roleRouteSelect, inputArea, tabPanels, welcomeView } as any
 }
 
 function makeState(overrides?: {
@@ -78,6 +79,7 @@ beforeEach(() => {
   dom = new JSDOM(`<!doctype html>
     <textarea id="prompt-input"></textarea>
     <button id="send-btn"></button>
+    <select id="role-route-select"><option value=""></option><option value="review">Review</option></select>
     <div id="input-area"></div>
     <div id="tab-panels"></div>
     <div id="welcome-view" class="hidden"></div>
@@ -92,6 +94,7 @@ beforeEach(() => {
   ;(globalThis as any).cancelAnimationFrame = () => {}
   promptInput = document.getElementById("prompt-input") as HTMLTextAreaElement
   sendBtn = document.getElementById("send-btn") as HTMLButtonElement
+  roleRouteSelect = document.getElementById("role-route-select") as HTMLSelectElement
   inputArea = document.getElementById("input-area") as HTMLDivElement
   tabPanels = document.getElementById("tab-panels") as HTMLDivElement
   welcomeView = document.getElementById("welcome-view") as HTMLDivElement
@@ -111,6 +114,19 @@ describe("sendLogic - basic send", () => {
     assert.equal(posted.length, 1)
     assert.equal(posted[0]!.type, "send_prompt")
     assert.equal(posted[0]!.text, "Hello world")
+  })
+
+  it("includes an explicit role when the route selector chooses a phase", async () => {
+    const { createSendLogic } = await import("../../src/chat/webview/sendLogic")
+    const deps = makeDeps()
+    const logic = createSendLogic(deps)
+
+    promptInput.value = "Review the current diff"
+    roleRouteSelect.value = "review"
+    logic.sendMessage()
+
+    assert.equal(posted[0]!.type, "send_prompt")
+    assert.equal(posted[0]!.role, "review")
   })
 
   it("does nothing when input is empty", async () => {

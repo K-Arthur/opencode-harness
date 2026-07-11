@@ -165,6 +165,7 @@ All settings are under the `opencode.*` namespace and can be configured in VS Co
 - **Default**: `{}`
 - **Scope**: `window`
 - **Description**: Optional model overrides for orchestration roles. Role overrides take precedence over mode overrides, so planning, implementation, review, and debugging prompts can route to different models without changing the active conversation.
+- **UI**: The composer footer has a `Route` selector. `Auto` infers the role from the prompt and session mode; selecting `Plan`, `Build`, `Review`, or `Debug` sends that explicit role for the next prompt.
 - **Properties**: `planning`, `implementation`, `review`, `debugging`
 - **Example**:
   ```json
