@@ -9,7 +9,7 @@
   },
   "description": "[Beta · Independent/Unofficial] Open-source AI coding agent client for VS Code — a community-built GUI for the opencode CLI agent. Chat, refactor, debug, and write code using Claude, GPT, Gemini, and 75+ models. Includes cost tracking, custom themes, permission controls, and checkpoint rollback. Not developed by the OpenCode team.",
   "icon": "media/opencode-icon-256.png",
-  "version": "0.4.55",
+  "version": "0.4.58",
   "engines": {
     "vscode": "^1.98.0"
   },
@@ -1263,7 +1263,7 @@
     "typecheck": "tsc --noEmit",
     "bundle:check": "node scripts/check-bundle-size.mjs",
     "bundle:attribute": "node scripts/bundle-attribution.mjs",
-    "test:unit": "node --test 'tests/unit/*.test.mjs' && npx tsx --require ./tests/fixtures/vscode-stub.cjs --test 'src/**/*.test.ts' && npx tsx --test 'tests/unit/*.test.ts'",
+    "test:unit": "node --test --test-timeout=30000 'tests/unit/*.test.mjs' && npx tsx --require ./tests/fixtures/vscode-stub.cjs --test 'src/**/*.test.ts' && npx tsx --test 'tests/unit/*.test.ts'",
     "coverage": "c8 --reporter=text --include='**' --exclude='node_modules/**' --exclude='tests/**' --exclude='.git/**' --exclude='*.json' --exclude='*.md' --exclude='*.yaml' --exclude='*.html' node --test 'tests/unit/*.test.mjs'",
     "test:integration": "vscode-test",
     "test:visual": "playwright test",
@@ -1277,7 +1277,8 @@
     "screenshots:verify": "playwright test --project=screenshots-verify",
     "screenshots:update": "playwright test --project=screenshots-verify --update-snapshots",
     "screenshots:sync": "tsx scripts/screenshots/syncReadme.ts",
-    "screenshots:validate": "tsx scripts/screenshots/verify.ts"
+    "screenshots:validate": "tsx scripts/screenshots/verify.ts",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.5.3",
