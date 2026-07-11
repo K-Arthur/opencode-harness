@@ -195,6 +195,32 @@ export function createSlashCommandHandler(deps: SlashCommandDeps) {
         renderQueue(active.id)
         clearPromptInput()
         return
+      case "/plan":
+      case "/review":
+      case "/debug":
+      case "/debugging": {
+        const roleMap: Record<string, string> = {
+          plan: "planning",
+          review: "review",
+          debug: "debugging",
+          debugging: "debugging",
+        }
+        const role = roleMap[cmd.replace("/", "")] || "implementation"
+        if (commandArgs) {
+          vscode.postMessage({
+            type: "send_prompt",
+            text: commandArgs,
+            sessionId: active.id,
+            role,
+            model: active.model,
+            mode: active.mode,
+          })
+          clearPromptInput()
+        } else {
+          showSystemMessage(active.id, `Usage: ${cmd} <prompt> — forwards your text with the "${role}" role, routing to the model configured for that orchestration phase.`)
+        }
+        return
+      }
       case "/continue":
         vscode.postMessage({ type: "execute_command", command: "/continue", sessionId: active.id })
         clearPromptInput()

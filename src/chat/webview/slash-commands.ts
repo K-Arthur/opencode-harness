@@ -59,6 +59,9 @@ export const LOCAL_SLASH_COMMANDS: ReadonlyArray<LocalSlashCommand> = Object.fre
   { name: "export-text", description: "Export conversation as plain text",               insertText: "/export-text", category: "export" },
   { name: "copy",        description: "Copy conversation to clipboard",                  insertText: "/copy",        category: "export" },
   { name: "diagnose:generation", description: "Dump generation-tracking state to the output channel", insertText: "/diagnose:generation", category: "debug" },
+  { name: "plan",        description: "Set planning role — uses the planning-optimized model for the next prompt", insertText: "/plan ", category: "session", usage: "<prompt>" },
+  { name: "review",      description: "Set review role — uses the review-optimized model for the next prompt",   insertText: "/review ", category: "session", usage: "<prompt>" },
+  { name: "debug",       description: "Set debugging role — uses the debug-optimized model for the next prompt", insertText: "/debug ", category: "session", usage: "<prompt>", aliases: ["debugging"] },
   { name: "help",        description: "Show available slash commands",                   insertText: "/help",        category: "conversation" },
 ])
 

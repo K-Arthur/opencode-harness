@@ -1091,15 +1091,34 @@ export class WebviewEventRouter {
         this.opts.tabManager.clearRestorationState(sessionId)
       }
     }],
-    ["close_tab", (_: Record<string, unknown>, sessionId?: string) => {
+    ["close_tab", async (_: Record<string, unknown>, sessionId?: string) => {
       if (sessionId) {
         const tab = this.opts.tabManager.getTab(sessionId)
+        const session = this.opts.sessionStore.get(sessionId)
         const wasActive = this.opts.tabManager.getActiveId() === sessionId || this.opts.sessionStore.activeId === sessionId
         if (tab?.isStreaming) void this.opts.streamCoordinator.abort(sessionId, { postMessage: (m) => this.opts.postMessage(m), postRequestError: (m) => this.opts.postRequestError(m) }).catch(err => log.warn("Abort on close failed", err))
         // Clear the host queue for the closed session to prevent orphaned chips
         this.opts.hostQueue.clear(sessionId)
+        // Ephemeral cleanup: delete the server-side session when a temp tab closes.
+        // Temp sessions have cliSessionId set but should not persist server-side
+        // after the user dismisses them. Capture cliSessionId BEFORE closeTab
+        // clears it.
+        const cliId = tab?.cliSessionId ?? session?.cliSessionId
+        const isEphemeral = tab?.ephemeral === true || session?.ephemeral === true
         this.opts.tabManager.closeTab(sessionId)
-        this.opts.sessionStore.deleteIfEmpty(sessionId)
+        if (isEphemeral) {
+          // Delete from local store entirely (not just deleteIfEmpty) since
+          // ephemeral sessions have no persistence contract.
+          this.opts.sessionStore.delete(sessionId)
+          // Clean up the server-side session if one exists.
+          if (cliId && this.opts.sessionManager.isRunning) {
+            void this.opts.sessionManager.deleteSession(cliId).catch(err =>
+              log.warn(`Ephemeral server-side session cleanup failed for ${cliId}`, err)
+            )
+          }
+        } else {
+          this.opts.sessionStore.deleteIfEmpty(sessionId)
+        }
         if (wasActive) {
           const nextActiveId = this.opts.tabManager.getActiveId()
           if (nextActiveId) this.opts.sessionStore.setActive(nextActiveId)

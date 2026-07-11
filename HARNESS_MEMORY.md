@@ -1,60 +1,51 @@
-# OpenCode Harness Orchestration Refactor Memory
+# HARNESS_MEMORY.md
 
-This file is the working source of truth for the orchestration, ephemeral-session, and masking refactor. Update it whenever an architectural decision, edge case, or verification result changes.
+## Status: Phase 1 (ephemeral cleanup) + Phase 2 (role routing) + Phase 3 (masking patterns) complete
 
-## Current Objective
+## What was already in place
+- `ephemeral: true` property on `TabState`, `SessionData`, `SessionState`
+- `TabManager.persist()` filters ephemeral tabs
+- `buildPersistedSessions(snapshotWithCap)` filters from webview persistence
+- `TabManager.createTab()` accepts `ephemeral: true`
+- `welcome-temp-btn` + `.tab-temp-badge` CSS exists
+- `new_temp_session` webview message + host handler
+- `modelRouting.ts` with `resolveRoutedModel()`, `inferAgentRole()`, `AgentRole` type
+- `ModelManager.getRoutedModel()` wired into `StreamCoordinator.resolveModelAndAgentForPrompt()`
+- `opencode.roleModels` + `opencode.modeModels` settings in `package.json`
+- `opencode.masking.*` settings in `package.json`
+- `PromptMasker.maskPromptPayload()` wired into `WebviewEventRouter.preparePromptPayload()`
 
-Implement production-ready agent orchestration, temporary chats, intelligent masking, and matching webview UI for OpenCode Harness.
+## Phase 1: Ephemeral session cleanup (done)
+- **Problem**: Temp sessions created server-side sessions that were never cleaned up
+- **Fix**: `WebviewEventRouter.ts:close_tab` handler now deletes the server-side session when an ephemeral tab is closed
+- Implementation captures `cliSessionId` before `closeTab`, calls `sessionManager.deleteSession()` if ephemeral
+- Uses `sessionStore.delete()` (not `deleteIfEmpty`) for ephemeral to ensure full cleanup
 
-## Research Notes
+## Phase 2: Agent orchestration / role routing (done)
+- The model routing infrastructure was already complete: `resolveRoutedModel()` with 6-level priority fallback, `getRoutedModel()` reading from settings, `inferAgentRole()` with regex-based prompting
+- **Added**: `/plan`, `/review`, `/debug` (`/debugging`) slash commands in `slashCommands.ts`
+  - Sets the `role` field on `send_prompt` to `planning`/`review`/`debugging`
+  - Routes to the model configured for that orchestration phase via `opencode.roleModels`
+- **Added**: Commands registered in `LOCAL_SLASH_COMMANDS` in `slash-commands.ts` for /help + command palette
+- **UI note**: A `role-route-select` element already exists in the DOM; `readSelectedAgentRole(els)` reads from it
 
-- Claude Code subagents use separate context windows and configurable tools/permissions/model, which supports context isolation for side tasks and specialized review/planning flows.
-- Claude Code stores model choice on resumed sessions and exposes current model through status/model commands, so model changes must be explicit and inspectable.
-- Codex exposes `/new`, `/fork`, `/side`, `/model`, `/plan`, `/status`, and `/worktree`; `/side` is the closest peer pattern for a temporary side conversation that should not pollute the main thread.
-- Cline separates Plan and Act modes, supports distinct models per mode, and preserves context when switching.
-- Cline uses `/newtask` and `/compact` to start a fresh task with distilled context or reduce the current thread.
-- Kilo Code model precedence is session override, last picked per agent, per-agent config, global config, then automatic free routing. Its Auto Model also routes requests by difficulty and mode.
-- Kilo context condensing records goal, constraints, decisions, progress, and relevant files; this is the useful shape for future compaction metadata.
-- Windsurf Cascade exposes Code/Plan/Ask modes and persistent rules/memories. Temporary chats here should therefore explicitly avoid workspace memory and persisted tab/session state.
+## Phase 3: Context masking enhancements (done)
+- Added regex patterns for:
+  - `GITHUB_TOKEN_RE` - GitHub tokens (ghp_, gho_, ghu_, ghs_, ghr_, github_pat_)
+  - `NPM_TOKEN_RE` - npm tokens (npm_)
+  - `SSH_PRIVATE_KEY_RE` - RSA/EC/DSA/OPENSSH private keys
+  - `SESSION_COOKIE_RE` - session id/token assignments with values ≥32 chars
+  - `JWT_RE` - JSON Web Tokens (eyJ... format)
+- Expanded `AWS_ACCESS_KEY_RE` to cover all AWS key formats (AKIA + A[KIST]...)
+- All new patterns wired into `redactSecrets()` with descriptive placeholders
 
-## Architecture Decisions
-
-- Add a pure orchestration layer that resolves an `AgentRole` from explicit role, current mode, and prompt text. `ModelManager` will remain the host authority for configured model selection.
-- Model routing precedence will be role override, mode override, session model, current global model. This preserves existing mode-based behavior while enabling planning/review/debugging defaults.
-- Temporary chats are represented as `ephemeral: true` on host sessions, tabs, and webview session state. They are usable live but skipped by host persistence, tab restoration, and webview `setState` snapshots.
-- Prompt masking runs at host ingress in `WebviewEventRouter` before the user message is appended to `SessionStore` or queued. Queued and immediate prompts must share one masking path.
-- The masking layer redacts common secret shapes, masks excluded file mentions, drops excluded context items, and prunes over-budget prompt text with an explicit marker.
-- Webview UI should expose temporary chat creation, a temp badge in tabs, and lightweight route/masking status instead of hiding backend features.
-
-## Edge Cases
-
-- A prompt sent while another stream is active must be masked before entering the host queue.
-- A temporary chat that links to a server session must not be restored on reload.
-- Closing a non-empty temporary chat should remove it from host memory, unlike persistent sessions that are only deleted when empty.
-- If the webview reloads, local temporary sessions can be dropped; this is the intended "temporary" contract.
-- Masking must not mutate image attachments, but it should still redact prompt text and remove excluded context item references.
-- Prompt failures should echo the masked text back to the webview retry payload, not the original secret-bearing text.
-
-## Completed
-
-- Completed online research across Claude Code, Codex, Cline, Kilo Code, and Windsurf Cascade.
-- Mapped the existing model, session, prompt, and context code paths with read-only subagents.
-- Added pure routing and masking foundations with tests.
-- Added ephemeral session persistence semantics across `SessionStore`, `TabManager`, and webview state.
-- Wired role-aware routing through `ModelManager` and `StreamCoordinator`; route decisions are posted to the webview.
-- Wired prompt masking at host ingress for immediate and queued prompts; masking summaries are posted to the webview.
-- Added temporary chat creation paths from the host, tab strip, welcome screen, and `/temp` slash command.
-- Added route/masking status chips and temporary tab badges in the webview.
-- Added a composer `Route` selector that can send explicit planning/implementation/review/debugging roles.
-- Added VS Code settings for `opencode.roleModels` and `opencode.masking.*`.
-- Documented the architecture in `docs/architecture/orchestration-masking-ephemeral.md`.
-- Verified the backend foundation with `npm run typecheck`, `npm run build`, and `npm run test:unit` before commit `f674205`.
-- Verified the completed integration slice with:
-  - `npm run typecheck`
-  - `npm run build`
-  - `node --test tests/unit/css-design-tokens.test.mjs tests/unit/session-store.test.mjs && npx tsx --test src/chat/webview/css/cssCoverage.test.ts`
-  - `npm run test:unit`
+## Known edge cases / unresolved
+- **Stale session cookie detection**: SESSION_COOKIE_RE may FP on base64-encoded data that happens to start with "session"
+- **JWT detection**: Only catches uncompressed JWTs; compressed (signed-only) JWT strings are not captured
+- **SSH key format**: The multi-format SSH key regex is more permissive; could match other PEM-encoded certs
+- **Slash command edge case**: `/plan`, `/review`, `/debug` bypass the normal send flow and don't add optimistic local messages; the host adds them server-side
 
 ## Pending
-
-- Commit the completed integration slice without including pre-existing version-only changes.
+- Full `npm test` pass (some tests may be flaky in CI)
+- Webview UI for per-role model configuration (settings page)
+- Visual tests for temp tab badge
