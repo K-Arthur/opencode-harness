@@ -37,6 +37,18 @@ describe("package configuration schema", () => {
     assert.equal(schema.default, false)
   })
 
+  it("exposes role-based model routing and masking controls", () => {
+    const roleSchema = properties["opencode.roleModels"]
+    assert.ok(roleSchema, "opencode.roleModels must be contributed for orchestration routing")
+    assert.deepEqual(Object.keys(roleSchema.properties), ["planning", "implementation", "review", "debugging"])
+    assert.equal(roleSchema.additionalProperties, false)
+
+    assert.equal(properties["opencode.masking.enabled"].default, true)
+    assert.equal(properties["opencode.masking.maxPromptTokens"].type, "number")
+    assert.equal(properties["opencode.masking.reserveTokens"].type, "number")
+    assert.equal(properties["opencode.masking.exclude"].type, "array")
+  })
+
   it("contributes the Install CLI command", () => {
     const commands = pkg.contributes.commands
     assert.ok(

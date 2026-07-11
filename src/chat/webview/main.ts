@@ -1,4 +1,4 @@
-import type { ChatMessage, LegacyHostMessage, MentionItem, SessionSummary, ModelInfo, ContextChip, ToolCallState, UsageDelta, Todo, ContextUsage, RunActivitySnapshot, SubagentActivity, SessionState, ToolCallBlock, QuestionBlock } from "./types"
+import type { ChatMessage, LegacyHostMessage, MentionItem, SessionSummary, ModelInfo, ContextChip, ToolCallState, UsageDelta, Todo, ContextUsage, RunActivitySnapshot, SubagentActivity, SessionState, ToolCallBlock, QuestionBlock, OrchestrationRouteStatus, MaskingSummaryStats } from "./types"
 import type { AttachmentEls } from "./ui/attachments"
 import { timers } from "./timerRegistry"
 import { createState } from "./state"
@@ -754,6 +754,7 @@ function getVsCodeApi() {
         onTabSwitch: (tabId) => switchTab(tabId),
         onTabClose: (tabId) => closeTab(tabId),
         onTabNew: () => createNewTab(),
+        onTabNewTemp: () => createNewTab("Temporary chat", { ephemeral: true }),
       })
       modelDropdown = panelApi.modelDropdown
       modelManager = panelApi.modelManager
@@ -1416,9 +1417,9 @@ function setupTodoSkillAndSubagentPanels(): void {
     scrollAnchors.get(activeId)?.pauseForReflow(ms)
   }
 
-  function createNewTab(name?: string) {
+  function createNewTab(name?: string, options?: { ephemeral?: boolean }) {
     // Adopt the pending mode chosen on the welcome screen (defaults to "build").
-    const session = stateManager.createSession(name, undefined, stateManager.getPendingMode())
+    const session = stateManager.createSession(name, undefined, stateManager.getPendingMode(), options)
     createTabUI(session.id, session.name)
 
     // Always switch to the newly created tab — it's the user's current focus
@@ -1464,6 +1465,7 @@ function setupTodoSkillAndSubagentPanels(): void {
       onSwitch: (tabId) => switchTab(tabId),
       onClose: (tabId) => closeTab(tabId),
       onNew: () => createNewTab(),
+      onNewTemp: () => createNewTab("Temporary chat", { ephemeral: true }),
     })
     if (!view) return
 
@@ -1497,6 +1499,7 @@ function setupTodoSkillAndSubagentPanels(): void {
       name: session.name,
       model: session.model,
       mode: session.mode,
+      ephemeral: session.ephemeral === true,
     })
   }
 
@@ -1673,6 +1676,8 @@ function setupTodoSkillAndSubagentPanels(): void {
       ctxDropdownApi,
       updateContextUsageBar,
       renderMethodologyChip,
+      renderRouteChip,
+      renderMaskingChip,
       updateCostDisplay,
       updateTokenDisplay,
       updateContextBarFromSession,
@@ -1818,6 +1823,7 @@ function setupTodoSkillAndSubagentPanels(): void {
       name: s.name,
       model: s.model,
       isStreaming: s.isStreaming,
+      ephemeral: s.ephemeral,
     }))
     tabBar.renderTabs(tabs, activeId, getStreamCapacityState())
     // Re-apply attention indicators after the tab strip is rebuilt (renderTabs
@@ -3016,6 +3022,47 @@ function setupTodoSkillAndSubagentPanels(): void {
         // context usage history/statistics panel was removed — no-op
       }],
       ["server_status", (msg, sid) => { if (sid) handleServerStatus(sid, msg.status as string, msg.errorContext) }],
+      ["orchestration_route", (msg, sid) => {
+        if (!sid) return
+        const role = typeof msg.role === "string" ? msg.role : "implementation"
+        if (role !== "planning" && role !== "implementation" && role !== "review" && role !== "debugging") return
+        const route: OrchestrationRouteStatus = {
+          role,
+          mode: typeof msg.mode === "string" ? msg.mode : "build",
+          model: typeof msg.model === "string" ? msg.model : "",
+          agent: typeof msg.agent === "string" ? msg.agent : "build",
+          updatedAt: Date.now(),
+        }
+        routeBySession.set(sid, route)
+        const session = stateManager.getSession(sid)
+        if (session) {
+          session.orchestrationRoute = route
+          stateManager.save()
+        }
+        if (stateManager.getState().activeSessionId === sid) renderRouteChip(sid)
+      }],
+      ["masking_summary", (msg, sid) => {
+        if (!sid) return
+        const raw = (msg as Record<string, unknown>).stats as Record<string, unknown> | undefined
+        if (!raw) return
+        const stats: MaskingSummaryStats = {
+          redactedSecrets: Number(raw.redactedSecrets ?? 0),
+          maskedFileMentions: Number(raw.maskedFileMentions ?? 0),
+          maskedDocumentBlocks: Number(raw.maskedDocumentBlocks ?? 0),
+          removedContextItems: Number(raw.removedContextItems ?? 0),
+          truncatedTokens: Number(raw.truncatedTokens ?? 0),
+          inputTokens: Number(raw.inputTokens ?? 0),
+          outputTokens: Number(raw.outputTokens ?? 0),
+          updatedAt: Date.now(),
+        }
+        maskingBySession.set(sid, stats)
+        const session = stateManager.getSession(sid)
+        if (session) {
+          session.maskingStats = stats
+          stateManager.save()
+        }
+        if (stateManager.getState().activeSessionId === sid) renderMaskingChip(sid)
+      }],
       ["run_activity_update", (msg, sid) => {
         if (!sid) return
         const activity = msg.activity as RunActivitySnapshot | undefined
@@ -3098,6 +3145,30 @@ function setupTodoSkillAndSubagentPanels(): void {
         switchToTab(els, forkId)
         hideWelcomeView()
         updateTabBar()
+      }],
+      ["temp_session_created", (msg) => {
+        const raw = (msg as Record<string, unknown>).session as Partial<SessionState> | undefined
+        const tempId = typeof raw?.id === "string" ? raw.id : undefined
+        if (!tempId) return
+        const session = stateManager.ensureSession({
+          id: tempId,
+          name: typeof raw?.name === "string" ? raw.name : "Temporary chat",
+          model: typeof raw?.model === "string" ? raw.model : stateManager.getState().globalModel,
+          variant: typeof raw?.variant === "string" ? raw.variant : undefined,
+          mode: normalizeSessionMode(raw?.mode) || stateManager.getPendingMode() || "build",
+          messages: Array.isArray(raw?.messages) ? raw.messages as ChatMessage[] : [],
+          isStreaming: Boolean(raw?.isStreaming),
+          ephemeral: true,
+        })
+        createTabUI(session.id, session.name)
+        stateManager.setActiveSession(session.id)
+        switchToTab(els, session.id)
+        hideWelcomeView()
+        syncModeUI()
+        updateTabBar()
+        renderRecentSessionsList()
+        updateSendButton()
+        els.promptInput.focus()
       }],
       ["streaming_state", (msg, sid) => {
         if (!sid) return
@@ -4694,6 +4765,8 @@ function setupTodoSkillAndSubagentPanels(): void {
   // Rendered as a compact status-strip chip scoped to the active session so
   // selections from a background tab never bleed into the visible strip.
   const methodologyBySession = new Map<string, { label: string; strategy: string; taskType: string; auto: boolean }>()
+  const routeBySession = new Map<string, OrchestrationRouteStatus>()
+  const maskingBySession = new Map<string, MaskingSummaryStats>()
 
   function renderMethodologyChip(sessionId: string) {
     const info = methodologyBySession.get(sessionId)
@@ -4712,6 +4785,66 @@ function setupTodoSkillAndSubagentPanels(): void {
     els.statusMethodology.classList.remove("hidden")
   }
 
+  function shortModelName(model: string | undefined): string {
+    if (!model) return "default"
+    const parts = model.split("/")
+    return parts[parts.length - 1] ?? model
+  }
+
+  function roleLabel(role: OrchestrationRouteStatus["role"]): string {
+    switch (role) {
+      case "planning": return "Planning"
+      case "review": return "Review"
+      case "debugging": return "Debug"
+      case "implementation":
+      default: return "Build"
+    }
+  }
+
+  function renderRouteChip(sessionId: string) {
+    const session = stateManager.getSession(sessionId)
+    const info = session?.orchestrationRoute || routeBySession.get(sessionId)
+    if (!info) {
+      els.statusRoute.classList.add("hidden")
+      els.statusRoute.textContent = ""
+      return
+    }
+    const label = roleLabel(info.role)
+    const model = shortModelName(info.model)
+    els.statusRoute.textContent = `${label} · ${model}`
+    els.statusRoute.title = `Route: ${label}\nMode: ${info.mode || "build"}\nModel: ${info.model || "server default"}\nAgent: ${info.agent || "build"}`
+    els.statusRoute.setAttribute("aria-label", `Model route: ${label} using ${model}`)
+    els.statusRoute.classList.remove("hidden")
+    els.statusStrip.removeAttribute("hidden")
+  }
+
+  function renderMaskingChip(sessionId: string) {
+    const session = stateManager.getSession(sessionId)
+    const stats = session?.maskingStats || maskingBySession.get(sessionId)
+    if (!stats) {
+      els.statusMasking.classList.add("hidden")
+      els.statusMasking.textContent = ""
+      return
+    }
+    const actions = stats.redactedSecrets + stats.maskedFileMentions + stats.maskedDocumentBlocks + stats.removedContextItems + (stats.truncatedTokens > 0 ? 1 : 0)
+    if (actions <= 0) {
+      els.statusMasking.classList.add("hidden")
+      els.statusMasking.textContent = ""
+      return
+    }
+    els.statusMasking.textContent = actions > 1 ? `Masked ${actions}` : "Masked"
+    els.statusMasking.title =
+      `Prompt masking applied` +
+      `\nSecrets redacted: ${stats.redactedSecrets}` +
+      `\nFile mentions masked: ${stats.maskedFileMentions}` +
+      `\nDocument blocks masked: ${stats.maskedDocumentBlocks}` +
+      `\nContext items removed: ${stats.removedContextItems}` +
+      `\nTokens pruned: ${stats.truncatedTokens}`
+    els.statusMasking.setAttribute("aria-label", `Prompt masking applied: ${actions} action${actions === 1 ? "" : "s"}`)
+    els.statusMasking.classList.remove("hidden")
+    els.statusStrip.removeAttribute("hidden")
+  }
+
   function showSecondaryNav() {
     els.displayToggles.classList.remove("hidden")
     const activeId = stateManager.getState().activeSessionId
@@ -4724,6 +4857,8 @@ function setupTodoSkillAndSubagentPanels(): void {
       updateCostDisplay(activeId)
       const session = stateManager.getSession(activeId)
       if (session?.tokenUsage) updateTokenDisplay(session.tokenUsage)
+      renderRouteChip(activeId)
+      renderMaskingChip(activeId)
     }
   }
 
@@ -4918,6 +5053,8 @@ function setupTodoSkillAndSubagentPanels(): void {
     els.statusStrip.setAttribute("hidden", "")
     els.statusCost.classList.add("hidden")
     els.statusTokens.classList.add("hidden")
+    els.statusRoute.classList.add("hidden")
+    els.statusMasking.classList.add("hidden")
     els.quotaBar.classList.add("hidden")
     if (hasQuotaState && !isWelcomeVisible()) {
       els.statusStrip.removeAttribute("hidden")

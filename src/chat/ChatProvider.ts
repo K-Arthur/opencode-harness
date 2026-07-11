@@ -431,7 +431,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       handleInsertAtCursor: (code, lang) => this.handleInsertAtCursor(code, lang),
       handleCreateFileFromCode: (code, lang) => this.handleCreateFileFromCode(code, lang),
       handleServerEvent: (e) => this.handleServerEvent(e),
-      ensureLocalTab: (sId, name, model, mode) => this.ensureLocalTab(sId, name, model, mode),
+      ensureLocalTab: (sId, name, model, mode, options) => this.ensureLocalTab(sId, name, model, mode, options),
       handleConnectProvider: () => this.handleConnectProvider(),
       openOpenCodeConfigOrSettings: () => this.openOpenCodeConfigOrSettings(),
       replayLiveStreamsToWebview: () => this.replayLiveStreamsToWebview(),
@@ -1054,7 +1054,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
     return this.sessionLifecycle.openSessionInWebview(sessionId)
   }
 
-  private ensureLocalTab(sessionId: string, name?: string, model?: string, mode?: string): void {
+  private ensureLocalTab(sessionId: string, name?: string, model?: string, mode?: string, options?: { ephemeral?: boolean }): void {
     // Pass an empty name when the caller didn't supply one — the display
     // layer renders "Untitled session" until the first prompt produces a
     // real title (matches opencode CLI behaviour).
@@ -1062,7 +1062,8 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       sessionId,
       name?.trim() || "",
       model,
-      mode
+      mode,
+      options,
     )
     const tab = this.tabManager.getTab(sessionId)
     const nextModel = storeSession.model || model
@@ -1070,8 +1071,9 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
     if (tab) {
       if (nextModel && tab.model !== nextModel) this.tabManager.setModel(sessionId, nextModel)
       if (nextMode && tab.mode !== nextMode) this.tabManager.setMode(sessionId, nextMode)
+      if (options?.ephemeral === true && !tab.ephemeral) this.tabManager.setEphemeral(sessionId, true)
     } else {
-      this.tabManager.createTab(sessionId, storeSession.cliSessionId, nextModel, nextMode)
+      this.tabManager.createTab(sessionId, storeSession.cliSessionId, nextModel, nextMode, { ephemeral: storeSession.ephemeral === true || options?.ephemeral === true })
     }
   }
 
@@ -2354,7 +2356,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       // Empty sessions (messages.length === 0) ARE included now: they may be a
       // freshly-created tab the user is about to use, and excluding them caused
       // the welcome screen to cover an active streaming session.
-      if (!s || s.archived || !this.isSessionInCurrentWorkspace(s)) continue
+      if (!s || s.archived || s.ephemeral || !this.isSessionInCurrentWorkspace(s)) continue
       if (hasSeenRestorableSession(s, id)) continue
       restorable.push(s)
       markRestorableSession(s, id)
@@ -2364,9 +2366,10 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
     // of truth) even if it's not in restoredIds — this can happen if a tab was
     // created after the last persist (e.g. during this session's bootstrap).
     for (const tab of this.tabManager.getAllTabs()) {
+      if (tab.ephemeral) continue
       if (seen.has(tab.id)) continue
       const s = this.sessionStore.get(tab.id) || (tab.cliSessionId ? this.sessionStore.get(tab.cliSessionId) : undefined)
-      if (s && !s.archived && this.isSessionInCurrentWorkspace(s)) {
+      if (s && !s.archived && !s.ephemeral && this.isSessionInCurrentWorkspace(s)) {
         if (hasSeenRestorableSession(s, tab.id, tab.cliSessionId)) continue
         restorable.push(s)
         markRestorableSession(s, tab.id, tab.cliSessionId)
@@ -2385,7 +2388,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
         hydrating: isFirstHydration,
         activeHasOpenTab: !!storeActive && !!this.tabManager.getTab(storeActive.id),
       })
-    if (includeStoreActive && storeActive && !hasSeenRestorableSession(storeActive) && !storeActive.archived && this.isSessionInCurrentWorkspace(storeActive)) {
+    if (includeStoreActive && storeActive && !hasSeenRestorableSession(storeActive) && !storeActive.archived && !storeActive.ephemeral && this.isSessionInCurrentWorkspace(storeActive)) {
       restorable.push(storeActive)
       markRestorableSession(storeActive)
     }
@@ -2573,7 +2576,9 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
         model: config.model,
         smallModel: config.small_model,
         modelOverrides: config.modelOverrides,
+        roleModelOverrides: config.roleModelOverrides,
         ignore: config.ignore,
+        masking: config.masking,
         rules: config.rules,
         instructions: config.instructions,
       },

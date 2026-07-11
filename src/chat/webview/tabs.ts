@@ -6,6 +6,7 @@ export interface TabCallbacks {
   onSwitch: (tabId: string) => void
   onClose: (tabId: string) => void
   onNew: () => void
+  onNewTemp?: () => void
 }
 
 export function createTabBar(els: ElementRefs, callbacks: TabCallbacks) {
@@ -82,7 +83,7 @@ export function createTabBar(els: ElementRefs, callbacks: TabCallbacks) {
   })
 
   function renderTabs(
-    tabs: Array<{ id: string; name: string; isStreaming?: boolean }>,
+    tabs: Array<{ id: string; name: string; isStreaming?: boolean; ephemeral?: boolean }>,
     activeId: string,
     streamCapacity?: { activeStreams: number; maxStreams: number; isFull: boolean; reason?: string }
   ) {
@@ -117,6 +118,15 @@ export function createTabBar(els: ElementRefs, callbacks: TabCallbacks) {
       label.title = displayName
       btn.appendChild(label)
 
+      if (tab.ephemeral) {
+        const badge = document.createElement("span")
+        badge.className = "tab-temp-badge"
+        badge.textContent = "Temp"
+        badge.title = "Temporary chat"
+        badge.setAttribute("aria-label", "Temporary chat")
+        btn.appendChild(badge)
+      }
+
       const close = document.createElement("span")
       close.className = "tab-close"
       close.setAttribute("aria-label", `Close ${displayName}`)
@@ -148,6 +158,20 @@ export function createTabBar(els: ElementRefs, callbacks: TabCallbacks) {
       callbacks.onNew()
     }
     tabContainer.appendChild(newBtn)
+
+    if (callbacks.onNewTemp) {
+      const tempBtn = document.createElement("button")
+      tempBtn.id = "tab-bar-temp-btn"
+      tempBtn.className = "tab-new-integrated tab-new-temp"
+      tempBtn.title = "New temporary chat"
+      tempBtn.setAttribute("aria-label", "New temporary chat")
+      tempBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"/><path d="M12 8v4l3 2"/></svg>'
+      tempBtn.onclick = (e) => {
+        e.stopPropagation()
+        callbacks.onNewTemp?.()
+      }
+      tabContainer.appendChild(tempBtn)
+    }
 
     // Sync panels visibility and remove orphan panels
     const sessionIds = new Set(tabs.map(t => t.id))

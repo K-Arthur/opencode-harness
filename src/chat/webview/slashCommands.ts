@@ -18,7 +18,7 @@ export interface SlashCommandDeps {
     open(): void
   }
   clearPromptInput(): void
-  createNewTab(title?: string): void
+  createNewTab(title?: string, options?: { ephemeral?: boolean }): void
   showSystemMessage(sessionId: string, message: string): void
   syncModelViews(): void
   renderQueue(tabId: string): void
@@ -121,6 +121,11 @@ export function createSlashCommandHandler(deps: SlashCommandDeps) {
         return
       case "/new":
         createNewTab()
+        clearPromptInput()
+        return
+      case "/temp":
+      case "/temporary":
+        createNewTab("Temporary chat", { ephemeral: true })
         clearPromptInput()
         return
       case "/help":

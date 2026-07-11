@@ -492,6 +492,7 @@ const WEBVIEW_MESSAGE_VALIDATORS: Record<string, MessageValidator> = {
   resume_stream: () => true,
   decline_resume: () => true,
   new_session: () => true,
+  new_temp_session: () => true,
   open_settings: () => true,
   connect_provider: () => true,
   open_mcp_settings: () => true,

@@ -115,11 +115,19 @@ describe("ModelManager.ts", () => {
     assert.ok(source.includes("config.model"), "must read model from workspace config")
     assert.ok(source.includes("config.small_model"), "must read small_model from workspace config")
     assert.ok(source.includes("config.modelOverrides"), "must read modelOverrides from workspace config")
+    assert.ok(source.includes("config.roleModelOverrides"), "must read roleModelOverrides from workspace config")
   })
 
   it("has getModeModel method that consults workspace overrides", () => {
     assert.ok(source.includes("getModeModel("), "must expose getModeModel")
     assert.ok(source.includes("_workspaceModelOverrides"), "must consult workspace overrides")
+  })
+
+  it("has getRoutedModel method that consults role overrides before mode overrides", () => {
+    assert.ok(source.includes("getRoutedModel("), "must expose getRoutedModel")
+    assert.ok(source.includes("_workspaceRoleModelOverrides"), "must store workspace role overrides")
+    assert.ok(source.includes("resolveRoutedModel"), "must delegate routing precedence to the pure modelRouting helper")
+    assert.ok(source.indexOf("workspaceRoleModels") < source.indexOf("workspaceModeModels"), "role overrides must be supplied before mode overrides")
   })
 
   it("has workspaceSmallModel getter", () => {

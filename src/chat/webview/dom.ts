@@ -152,6 +152,8 @@ export interface ElementRefs {
   statusStrip: HTMLElement
   statusModel: HTMLSpanElement
   statusMethodology: HTMLSpanElement
+  statusRoute: HTMLSpanElement
+  statusMasking: HTMLSpanElement
   statusCost: HTMLSpanElement
   statusTokens: HTMLSpanElement
   quotaBar: HTMLDivElement
@@ -164,6 +166,7 @@ export interface ElementRefs {
   welcomeModelName: HTMLSpanElement
   welcomeContinueBtn: HTMLButtonElement | null
   welcomeNewBtn: HTMLButtonElement
+  welcomeTempBtn: HTMLButtonElement | null
 
   // Token/cost display (Phase 5 — hidden outside header, kept for compatibility)
   tokenDisplay: HTMLElement | null
@@ -348,6 +351,8 @@ export function getElementRefs(): ElementRefs {
     statusStrip: requireElement("status-strip"),
     statusModel: requireElement<HTMLSpanElement>("status-model"),
     statusMethodology: requireElement<HTMLSpanElement>("status-methodology"),
+    statusRoute: requireElement<HTMLSpanElement>("status-route"),
+    statusMasking: requireElement<HTMLSpanElement>("status-masking"),
     statusCost: requireElement<HTMLSpanElement>("status-cost"),
     statusTokens: requireElement<HTMLSpanElement>("status-tokens"),
     quotaBar: requireElement<HTMLDivElement>("quota-bar"),
@@ -360,6 +365,7 @@ export function getElementRefs(): ElementRefs {
     welcomeModelName: requireElement<HTMLSpanElement>("welcome-model-name"),
     welcomeContinueBtn: optionalElement<HTMLButtonElement>("welcome-continue-btn"),
     welcomeNewBtn: requireElement<HTMLButtonElement>("welcome-new-btn"),
+    welcomeTempBtn: optionalElement<HTMLButtonElement>("welcome-temp-btn"),
 
     // Token/cost display (Phase 5 — hidden outside header, kept for compatibility)
     tokenDisplay: optionalElement("token-display"),

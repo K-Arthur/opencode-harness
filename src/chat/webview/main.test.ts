@@ -106,6 +106,7 @@ describe("main.ts", () => {
     assert.ok(withComposer.includes('"/clear"'))
     assert.ok(withComposer.includes('"/model"'))
     assert.ok(withComposer.includes('"/help"'))
+    assert.ok(withComposer.includes('"/temp"'))
   })
 
   it("sends webview_ready message", () => {
@@ -119,6 +120,22 @@ describe("main.ts", () => {
   it("dispatches host_message_batch envelopes item by item", () => {
     assert.ok(source.includes('msg?.type === "host_message_batch"'), "must recognize host message batch envelopes")
     assert.ok(source.includes("dispatchHostMessage(item as LegacyHostMessage)"), "must dispatch each batched message through normal handlers")
+  })
+
+  it("surfaces orchestration routing and masking status in the webview chrome", () => {
+    assert.ok(indexHtml.includes('id="status-route"'), "status strip must include the routing chip")
+    assert.ok(indexHtml.includes('id="status-masking"'), "status strip must include the masking chip")
+    assert.ok(source.includes('["orchestration_route"'), "main.ts must handle route decisions from the host")
+    assert.ok(source.includes('["masking_summary"'), "main.ts must handle masking summaries from the host")
+    assert.ok(source.includes("function renderRouteChip"), "main.ts must render the active route chip")
+    assert.ok(source.includes("function renderMaskingChip"), "main.ts must render the active masking chip")
+  })
+
+  it("handles temporary chat creation from both welcome and host paths", () => {
+    assert.ok(indexHtml.includes('id="welcome-temp-btn"'), "welcome screen must expose a temporary chat action")
+    assert.ok(welcomeViewSource.includes('type: "new_temp_session"'), "welcome action must ask the host for a temporary session")
+    assert.ok(source.includes('["temp_session_created"'), "main.ts must handle host-created temporary sessions")
+    assert.ok(source.includes("createNewTab(\"Temporary chat\", { ephemeral: true })"), "local temp tab action must create ephemeral sessions")
   })
 
   it("rate-limits rendered stream ACKs and forces a final ACK", () => {
@@ -790,7 +807,7 @@ it("unified modal: server session items send resume_server_session on click", ()
       // activated so a previously-displayed tab's totals don't bleed in.
       const fnIdx = tabSwitcherSource.indexOf("function switchTabImpl(")
       assert.ok(fnIdx >= 0, "switchTabImpl must exist in tabSwitcher.ts")
-      const body = tabSwitcherSource.slice(fnIdx, fnIdx + 3000)
+      const body = tabSwitcherSource.slice(fnIdx, fnIdx + 4000)
       assert.ok(body.includes("updateTokenDisplay("), "switchTab must call updateTokenDisplay")
       assert.ok(
         body.includes(".tokenUsage") || body.includes("selectDisplayedUsage("),
@@ -863,7 +880,7 @@ it("unified modal: server session items send resume_server_session on click", ()
 
       const hideIdx = source.indexOf("function hideStatusStrip()")
       assert.ok(hideIdx >= 0, "hideStatusStrip must exist")
-      const hideBlock = source.slice(hideIdx, hideIdx + 450)
+      const hideBlock = source.slice(hideIdx, hideIdx + 750)
       assert.ok(hideBlock.includes("els.contextUsage.classList.add(\"hidden\")"), "hideStatusStrip must hide the context chip")
       assert.ok(hideBlock.includes("ctx-window-unknown-chip"), "hideStatusStrip must hide the unknown-context chip")
     })

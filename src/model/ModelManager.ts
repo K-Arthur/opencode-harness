@@ -5,6 +5,7 @@ import { resolveContextWindow, resolveModelOutputLimit } from "./contextWindowRe
 import { fetchOpenRouterModels, isCacheFresh as isOpenRouterCacheFresh } from "./openRouterMetadata"
 import { fetchModelsDevModels, isCacheFresh as isModelsDevCacheFresh, type ModelsDevEntry } from "./modelsDevMetadata"
 import type { WorkspaceConfig } from "../config/types"
+import { resolveRoutedModel, type AgentRole } from "../orchestration/modelRouting"
 
 interface ServerProvider {
   id: string
@@ -53,6 +54,7 @@ export class ModelManager {
   private _disabledModels: Set<string> = new Set()
   private _recentModels: string[] = []
   private _workspaceModelOverrides: Map<string, string> = new Map()
+  private _workspaceRoleModelOverrides: Map<AgentRole, string> = new Map()
   private _workspaceSmallModel: string | undefined
   private static readonly RECENT_MODELS_CAP = 10
   /**
@@ -107,11 +109,22 @@ export class ModelManager {
       this._workspaceSmallModel = config.small_model.trim()
     }
 
+    this._workspaceModelOverrides.clear()
     if (config.modelOverrides && typeof config.modelOverrides === "object" && !Array.isArray(config.modelOverrides)) {
-      this._workspaceModelOverrides.clear()
       for (const [mode, modelId] of Object.entries(config.modelOverrides)) {
         if (typeof modelId === "string" && modelId.trim()) {
           this._workspaceModelOverrides.set(mode, modelId.trim())
+        }
+      }
+    }
+
+    this._workspaceRoleModelOverrides.clear()
+    if (config.roleModelOverrides && typeof config.roleModelOverrides === "object" && !Array.isArray(config.roleModelOverrides)) {
+      for (const [role, modelId] of Object.entries(config.roleModelOverrides)) {
+        if (typeof modelId !== "string" || !modelId.trim()) continue
+        const normalized = role.trim().toLowerCase()
+        if (normalized === "planning" || normalized === "implementation" || normalized === "review" || normalized === "debugging") {
+          this._workspaceRoleModelOverrides.set(normalized, modelId.trim())
         }
       }
     }
@@ -392,6 +405,26 @@ export class ModelManager {
       return override
     }
     return (fallbackModel && fallbackModel.trim()) || this._current
+  }
+
+  /**
+   * Get the model for an inferred orchestration role. Role overrides are
+   * checked before mode overrides so planning/review/debugging can route to
+   * dedicated models even inside a long-lived build session.
+   */
+  getRoutedModel(role: AgentRole, mode: string, fallbackModel?: string): string {
+    const roleModels = vscode.workspace.getConfiguration("opencode").get<Partial<Record<AgentRole, string>>>("roleModels", {})
+    const modeModels = vscode.workspace.getConfiguration("opencode").get<Record<string, string>>("modeModels", {})
+    return resolveRoutedModel({
+      role,
+      mode,
+      sessionModel: fallbackModel,
+      currentModel: this._current,
+      workspaceRoleModels: Object.fromEntries(this._workspaceRoleModelOverrides) as Partial<Record<AgentRole, string>>,
+      settingsRoleModels: roleModels,
+      workspaceModeModels: Object.fromEntries(this._workspaceModelOverrides),
+      settingsModeModels: modeModels,
+    })
   }
 
   /**

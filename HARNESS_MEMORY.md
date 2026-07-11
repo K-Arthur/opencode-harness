@@ -39,11 +39,21 @@ Implement production-ready agent orchestration, temporary chats, intelligent mas
 
 - Completed online research across Claude Code, Codex, Cline, Kilo Code, and Windsurf Cascade.
 - Mapped the existing model, session, prompt, and context code paths with read-only subagents.
+- Added pure routing and masking foundations with tests.
+- Added ephemeral session persistence semantics across `SessionStore`, `TabManager`, and webview state.
+- Wired role-aware routing through `ModelManager` and `StreamCoordinator`; route decisions are posted to the webview.
+- Wired prompt masking at host ingress for immediate and queued prompts; masking summaries are posted to the webview.
+- Added temporary chat creation paths from the host, tab strip, welcome screen, and `/temp` slash command.
+- Added route/masking status chips and temporary tab badges in the webview.
+- Added VS Code settings for `opencode.roleModels` and `opencode.masking.*`.
+- Documented the architecture in `docs/architecture/orchestration-masking-ephemeral.md`.
+- Verified the backend foundation with `npm run typecheck`, `npm run build`, and `npm run test:unit` before commit `f674205`.
+- Verified the completed integration slice with:
+  - `npm run typecheck`
+  - `npm run build`
+  - `node --test tests/unit/css-design-tokens.test.mjs tests/unit/session-store.test.mjs && npx tsx --test src/chat/webview/css/cssCoverage.test.ts`
+  - `npm run test:unit`
 
 ## Pending
 
-- Add pure TDD tests and implementations for routing and masking.
-- Add ephemeral persistence tests and implementation.
-- Wire host prompt masking and orchestration metadata.
-- Wire webview temporary-chat controls and status surfaces.
-- Update architecture docs and run verification.
+- Commit the completed integration slice without including pre-existing version-only changes.

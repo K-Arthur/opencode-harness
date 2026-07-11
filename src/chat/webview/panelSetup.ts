@@ -25,6 +25,7 @@ export interface PanelSetupDeps {
   onTabSwitch: (tabId: string) => void
   onTabClose: (tabId: string) => void
   onTabNew: () => void
+  onTabNewTemp?: () => void
 }
 
 export interface PanelSetupAPI {
@@ -126,6 +127,7 @@ export function setupPanels(deps: PanelSetupDeps): PanelSetupAPI {
     onSwitch: (tabId) => deps.onTabSwitch(tabId),
     onClose: (tabId) => deps.onTabClose(tabId),
     onNew: () => deps.onTabNew(),
+    onNewTemp: deps.onTabNewTemp ? () => deps.onTabNewTemp?.() : undefined,
   })
 
   const mcpConfig = setupMcpConfig(els, {

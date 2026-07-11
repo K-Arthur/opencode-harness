@@ -3,7 +3,7 @@
  *
  * Supports the opencode CLI schema (`model`, `small_model`, `provider`, `mcp`,
  * `plugin`) plus extension-specific keys for workspace-aware behavior:
- * - `models` / `modelOverrides`: control the model selector and mode-based overrides
+ * - `models` / `modelOverrides` / `roleModelOverrides`: control the model selector and routing overrides
  * - `ignore` / `exclude`: glob patterns to filter out of the file index
  * - `rules` / `instructions`: behavioral rules appended to system prompts
  *
@@ -18,6 +18,15 @@ export interface WorkspaceConfig {
   models?: Record<string, unknown>
   /** Mode → modelId overrides (e.g. `{ "plan": "anthropic/claude-..." }`). */
   modelOverrides?: Record<string, string>
+  /** Agent role → modelId overrides (e.g. `{ "review": "anthropic/claude-..." }`). */
+  roleModelOverrides?: Record<string, string>
+  /** Prompt masking defaults for this workspace. */
+  masking?: {
+    enabled?: boolean
+    maxPromptTokens?: number
+    reserveTokens?: number
+    exclude?: string[]
+  }
   /** Glob patterns to exclude from the workspace file index. */
   ignore?: string[]
   /** Alias for `ignore` — merged with `ignore` if both present. */

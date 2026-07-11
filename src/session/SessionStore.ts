@@ -56,6 +56,8 @@ export interface OpenCodeSession {
   forkedAtTurn?: number
   /** Set by migrateStalePlanModes when a pre-0.2.20 'plan' session is converted to 'build'. */
   modeMigratedAt?: number
+  /** Temporary chats are live-only and skipped by durable persistence/restoration. */
+  ephemeral?: boolean
 }
 
 export interface SessionContextBreakdown {
@@ -84,6 +86,8 @@ export interface CreateSessionOptions {
   cliSessionId?: string
   /** Mark the session as needing a server link on next connect. */
   pendingServerLink?: boolean
+  /** Mark the session as temporary/live-only. */
+  ephemeral?: boolean
 }
 
 export type ServerSessionForImport = ServerSessionSnapshot
@@ -277,6 +281,10 @@ export class SessionStore {
   deleteIfEmpty(id: string): boolean {
     const session = this.sessions.get(id)
     if (!session) return false
+    if (session.ephemeral) {
+      this.delete(id)
+      return true
+    }
     const exempt = session.needsBackfill === true
     if (session.messages.length > 0 || exempt) return false
     this.delete(id)
@@ -619,7 +627,7 @@ create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
     return true
   }
 
-  ensure(id: string, name?: string, model?: string, mode?: string): OpenCodeSession {
+  ensure(id: string, name?: string, model?: string, mode?: string, options?: { ephemeral?: boolean }): OpenCodeSession {
     const existing = this.sessions.get(id)
     if (existing) {
       // Only overwrite name with a non-empty value — passing "" means the
@@ -627,13 +635,19 @@ create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
       if (typeof name === "string" && name.trim() && existing.name !== name) existing.name = name
       if (model !== undefined && existing.model !== model) existing.model = model
       if (mode !== undefined && existing.mode !== mode) existing.mode = mode === "normal" ? "build" : mode
+      if (options?.ephemeral === true) existing.ephemeral = true
       existing.lastActiveAt = Date.now()
       this.save()
       this._onSessionsChanged.fire()
       return existing
     }
 
-    const session = this.create(name, isLocalPlaceholderSessionId(id) ? { id, pendingServerLink: true } : id)
+    const session = this.create(
+      name,
+      isLocalPlaceholderSessionId(id)
+        ? { id, pendingServerLink: true, ephemeral: options?.ephemeral }
+        : { id, ephemeral: options?.ephemeral },
+    )
     // Set model/mode before persisting — create() already called save(),
     // but these fields weren't set yet. Single follow-up save is needed.
     let needsSave = false

@@ -53,6 +53,8 @@ export interface TabSwitcherDeps {
   ctxDropdownApi: { updateUsage: (data: Record<string, unknown>) => void } | null
   updateContextUsageBar: (pct: number, tokens: number, maxTokens: number) => void
   renderMethodologyChip: (sessionId: string) => void
+  renderRouteChip: (sessionId: string) => void
+  renderMaskingChip: (sessionId: string) => void
   updateCostDisplay: (sessionId: string) => void
   updateTokenDisplay: (usage?: { prompt: number; completion: number; total: number; reasoning?: number; cacheRead?: number; cacheWrite?: number }) => void
   updateContextBarFromSession: (sessionId: string) => void
@@ -100,6 +102,8 @@ export function switchTabImpl(deps: TabSwitcherDeps, tabId: string, notifyHost =
     ctxDropdownApi,
     updateContextUsageBar,
     renderMethodologyChip,
+    renderRouteChip,
+    renderMaskingChip,
     updateCostDisplay,
     updateTokenDisplay,
     updateContextBarFromSession,
@@ -163,6 +167,8 @@ export function switchTabImpl(deps: TabSwitcherDeps, tabId: string, notifyHost =
   // Refresh cost/token displays for the new tab — pull from the tab's
   // own stored usage so a previously-displayed tab's totals don't bleed in.
   renderMethodologyChip(tabId)
+  renderRouteChip(tabId)
+  renderMaskingChip(tabId)
   updateCostDisplay(tabId)
   const session = stateManager.getSession(tabId)
   const displayed = selectDisplayedUsage(stateManager.getState().sessions, tabId)

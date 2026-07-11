@@ -93,7 +93,7 @@ export interface ComposerDeps {
   switchTab: (id: string) => void
   switchToTab: (id: string) => void
   createTabUI: (id: string, name: string) => void
-  createNewTab: (name?: string) => { id: string; name: string; mode?: string } | undefined
+  createNewTab: (name?: string, options?: { ephemeral?: boolean }) => { id: string; name: string; mode?: string } | undefined
   closeTab: (id: string) => void
   updateAgentStatus: (status: string) => void
   syncModelViews: (models?: ModelInfo[]) => void

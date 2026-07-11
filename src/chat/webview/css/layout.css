@@ -578,6 +578,21 @@
   transition: color var(--duration-fast) var(--ease-out);
 }
 
+.tab-temp-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--oc-info-border, var(--vscode-badge-background, var(--color-border)));
+  border-radius: var(--radius-sm);
+  background: var(--oc-info-subtle, var(--vscode-badge-background, transparent));
+  color: var(--oc-info, var(--vscode-badge-foreground, var(--color-muted)));
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
 .tab-btn .tab-indicator {
   width: var(--size-status-led, 8px);
   height: var(--size-status-led, 8px);
@@ -694,6 +709,14 @@
   opacity: 1;
   color: var(--color-fg);
   background: var(--oc-list-hover);
+}
+
+.tab-new-temp {
+  border-left: 1px solid var(--color-border);
+}
+
+.tab-new-temp:hover {
+  color: var(--oc-info, var(--color-fg));
 }
 
 .tab-new-integrated svg {
@@ -3785,7 +3808,9 @@ button.modal-session-item:focus {
   color: var(--color-muted);
 }
 
-.status-strip-methodology {
+.status-strip-methodology,
+.status-strip-route,
+.status-strip-masking {
   color: var(--color-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3793,7 +3818,25 @@ button.modal-session-item:focus {
   flex-shrink: 1;
 }
 
-.status-strip-methodology.hidden {
+.status-strip-route,
+.status-strip-masking {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 32ch;
+}
+
+.status-strip-route {
+  color: var(--oc-info, var(--color-muted));
+}
+
+.status-strip-masking {
+  color: var(--oc-warning, var(--color-muted));
+}
+
+.status-strip-methodology.hidden,
+.status-strip-route.hidden,
+.status-strip-masking.hidden {
   display: none;
 }
 

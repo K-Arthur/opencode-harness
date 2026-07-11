@@ -48,6 +48,13 @@ describe("tabs.ts", () => {
     assert.ok(source.includes("els.newTabBtn.addEventListener"))
   })
 
+  it("renders temporary session affordances in the tab strip", () => {
+    assert.ok(source.includes("ephemeral?: boolean"), "tabs must accept ephemeral session metadata")
+    assert.ok(source.includes("tab-temp-badge"), "temporary tabs must show a compact badge")
+    assert.ok(source.includes("tab-bar-temp-btn"), "tab strip must expose a temporary chat button")
+    assert.ok(source.includes("onNewTemp"), "temporary chat button must be callback-driven")
+  })
+
   it("tab close uses closest() so SVG/path clicks inside .tab-close still fire", () => {
     // Regression: clicks on the inner SVG <path> of the close button used to
     // miss the classList.contains("tab-close") check and fall through to the

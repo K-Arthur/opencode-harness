@@ -6,7 +6,7 @@ import type { TabManager } from "./TabManager"
 import type { StatePushService } from "./StatePushService"
 import type { SessionLifecycleService } from "./SessionLifecycleService"
 import type { CommandExecutionService } from "./CommandExecutionService"
-import type { SessionStore } from "../session/SessionStore"
+import { SessionStore } from "../session/SessionStore"
 import type { SessionManager } from "../session/SessionManager"
 import type { DiffLine } from "./webview/types"
 import { sdkFileContentToDiffLines, type SdkFileContentLike } from "./diff/sdkFileContentToDiffLines"
@@ -46,6 +46,8 @@ import { normalizeSessionMode, resolvePlanPermission } from "./modePolicy"
 import { normalizeTodoList } from "../session/eventHandlers/TodoUpdatedHandler"
 import { categorizeQuestionReplyError } from "./QuestionExpiryDetector"
 import { isLocalPlaceholderSessionId } from "../session/sessionUtils"
+import { maskPromptPayload, type MaskableContextItem, type PromptMaskingPolicy, type PromptMaskingStats } from "../context/PromptMasker"
+import { normalizeAgentRole, type AgentRole } from "../orchestration/modelRouting"
 
 const crypto = globalThis.crypto
 
@@ -112,7 +114,7 @@ export interface WebviewEventRouterOptions {
   handleInsertAtCursor: (code: string, language: string) => Promise<void>
   handleCreateFileFromCode: (code: string, language: string) => Promise<void>
   handleServerEvent: (event: { type: string; sessionId?: string; data?: unknown }) => void
-  ensureLocalTab: (sessionId: string, name?: string, model?: string, mode?: string) => void
+  ensureLocalTab: (sessionId: string, name?: string, model?: string, mode?: string, options?: { ephemeral?: boolean }) => void
   handleConnectProvider: () => Promise<void>
   openOpenCodeConfigOrSettings: () => Promise<void>
   replayLiveStreamsToWebview: () => void
@@ -196,7 +198,7 @@ export class WebviewEventRouter {
     "create_tab", "send_prompt", "change_mode", "set_model", "set_variant", "abort", "cancel_tool",
     "close_tab", "switch_tab", "accept_diff", "reject_diff",
     "accept_permission", "mention_search", "list_sessions", "resume_session",
-    "new_session", "get_models", "update_cost", "webview_ready", "init_ack", "rename_session", "webview_log",
+    "new_session", "new_temp_session", "get_models", "update_cost", "webview_ready", "init_ack", "rename_session", "webview_log",
     "open_settings", "connect_provider", "open_mcp_settings", "open_mcp_config", "attach_files", "export_chat", "export_chat_json", "export_chat_text", "copy_chat", "stash_prompt", "list_stashes", "delete_stash",     "add_provider", "list_providers", "update_provider", "delete_provider",
     // Prompt templates + changed-file reverts: handlers exist for all of these,
     // but they were absent from this gate, so the messages were rejected before
@@ -284,11 +286,13 @@ export class WebviewEventRouter {
   private readonly webviewHandlers: Map<string, (msg: Record<string, unknown>, sessionId?: string) => void | Promise<void>> = new Map([
     ["create_tab", (msg: Record<string, unknown>, sessionId?: string) => {
       if (sessionId) {
+        const ephemeral = msg.ephemeral === true
         this.opts.ensureLocalTab(
           sessionId,
           typeof msg.name === "string" ? msg.name : undefined,
           typeof msg.model === "string" ? msg.model : undefined,
-          typeof msg.mode === "string" ? msg.mode : undefined
+          typeof msg.mode === "string" ? msg.mode : undefined,
+          { ephemeral },
         )
       }
     }],
@@ -327,7 +331,8 @@ export class WebviewEventRouter {
           // Queue at host layer instead of silently dropping.
           // Persist the user message to SessionStore immediately so it's not lost
           // even if the queue never drains (tab close, stream timeout, etc.).
-          const text = this.getPromptText(msg)
+          const prepared = this.preparePromptPayload(msg, sessionId)
+          const text = prepared.text
           const validatedAttachments = this.validateAttachments(msg.attachments)
           if (validatedAttachments === null) {
             this.opts.postMessage({ type: "prompt_rejected", sessionId, reason: "invalid_attachments" })
@@ -354,6 +359,7 @@ export class WebviewEventRouter {
             mode: "queue",
             isSteerPrompt: false,
             userMessageId,
+            agentRole: this.getRequestedAgentRole(msg),
           })
           if (id) {
             log.info(`send_prompt queued (in-flight): ${sessionId}, item=${id}`)
@@ -365,6 +371,7 @@ export class WebviewEventRouter {
           return
         }
         this.promptsInFlight.add(sessionId)
+        let promptTextForRetry = this.getPromptText(msg)
         const safetyTimer = setTimeout(() => {
           if (this.promptsInFlight.has(sessionId)) {
             log.warn(`promptsInFlight safety timeout for ${sessionId} — clearing stale entry`)
@@ -374,12 +381,14 @@ export class WebviewEventRouter {
         }, WebviewEventRouter.PROMPT_SAFETY_TIMEOUT_MS)
         this.promptSafetyTimers.set(sessionId, safetyTimer)
         try {
-          const text = this.getPromptText(msg)
+          const prepared = this.preparePromptPayload(msg, sessionId)
+          const text = prepared.text
+          promptTextForRetry = text
           const model = (msg.model as string | undefined) || this.opts.modelManager.model
           if (!model) { throw new Error("No model selected. Please select a model and try again.") }
           const attachmentCount = Array.isArray(msg.attachments) ? msg.attachments.length : 0
           log.info(`send_prompt processing: sessionId=${sessionId}, textLength=${text.length}, attachments=${attachmentCount}, model=${model}`)
-          this.opts.ensureLocalTab(sessionId, msg.name as string | undefined, model, msg.mode as string | undefined)
+          this.opts.ensureLocalTab(sessionId, msg.name as string | undefined, model, msg.mode as string | undefined, { ephemeral: msg.ephemeral === true })
           const variant = typeof msg.variant === "string" ? msg.variant : undefined
           const userMessageId = (msg.messageId as string) || generateUserMessageId()
           const clientRequestId = typeof msg.clientRequestId === "string" ? msg.clientRequestId : undefined
@@ -403,18 +412,18 @@ export class WebviewEventRouter {
             },
             variant,
             attachments,
+            routeRole: this.getRequestedAgentRole(msg),
             identity: { userMessageId, clientRequestId },
           })
         } catch (err) {
           log.error("send_prompt failed", err)
-          const text = typeof msg.text === "string" ? msg.text : ""
           const reason = err instanceof Error ? err.message : "Failed to send prompt"
           this.opts.postMessage({
             type: "prompt_send_failed",
             sessionId,
             messageId: typeof msg.messageId === "string" ? msg.messageId : undefined,
             clientRequestId: typeof msg.clientRequestId === "string" ? msg.clientRequestId : undefined,
-            text,
+            text: promptTextForRetry,
             reason,
             attachments: Array.isArray(msg.attachments) ? msg.attachments : [],
           })
@@ -1160,6 +1169,30 @@ export class WebviewEventRouter {
         this.opts.sessionStore.updateModel(session.id, currentModel)
       }
       await this.opts.sessionLifecycle.openSessionInWebview(session.id)
+    }],
+    ["new_temp_session", async () => {
+      const session = this.opts.sessionStore.create("Temporary chat", { ephemeral: true })
+      const currentModel = this.opts.modelManager.model
+      if (currentModel) {
+        this.opts.sessionStore.updateModel(session.id, currentModel)
+        session.model = currentModel
+      }
+      this.opts.ensureLocalTab(session.id, session.name, session.model, session.mode, { ephemeral: true })
+      this.opts.tabManager.switchTab(session.id)
+      this.opts.sessionStore.setActive(session.id)
+      this.opts.postMessage({
+        type: "temp_session_created",
+        activeSessionId: session.id,
+        session: {
+          id: session.id,
+          name: SessionStore.displayName(session),
+          model: session.model,
+          mode: session.mode,
+          messages: [],
+          isStreaming: false,
+          ephemeral: true,
+        },
+      })
     }],
     ["get_models", () => { this.pushModelListToWebview() }],
     ["update_cost", (msg: Record<string, unknown>, sessionId?: string) => {
@@ -2603,6 +2636,7 @@ export class WebviewEventRouter {
     attachments: import("./webview/types").Attachment[]
     isSteerPrompt?: boolean
     userMessageId?: string
+    agentRole?: AgentRole
   }): Promise<void> {
     try {
       const userMessageId = item.userMessageId || generateUserMessageId()
@@ -2628,6 +2662,7 @@ export class WebviewEventRouter {
           postRequestError: (m) => this.opts.postRequestError(m),
         },
         attachments: item.attachments,
+        routeRole: item.agentRole,
         identity: { userMessageId, clientRequestId },
       })
       this.opts.hostQueue.confirmCompleted(sessionId, item.id)
@@ -2828,6 +2863,50 @@ export class WebviewEventRouter {
 
   private getPromptText(msg: Record<string, unknown>): string {
     return typeof msg.text === "string" ? msg.text : ""
+  }
+
+  private getRequestedAgentRole(msg: Record<string, unknown>): AgentRole | undefined {
+    return normalizeAgentRole(typeof msg.role === "string" ? msg.role : typeof msg.agentRole === "string" ? msg.agentRole : undefined)
+  }
+
+  private getPromptMaskingPolicy(): PromptMaskingPolicy {
+    const config = vscode.workspace.getConfiguration("opencode")
+    return {
+      enabled: config.get<boolean>("masking.enabled", true),
+      maxPromptTokens: config.get<number>("masking.maxPromptTokens", 64_000),
+      reserveTokens: config.get<number>("masking.reserveTokens", 2_000),
+      excludedPathGlobs: config.get<string[]>("masking.exclude", []),
+    }
+  }
+
+  private readContextItems(msg: Record<string, unknown>): MaskableContextItem[] | undefined {
+    if (!Array.isArray(msg.contextItems)) return undefined
+    return msg.contextItems.filter((item): item is MaskableContextItem => !!item && typeof item === "object")
+  }
+
+  private hasMaskingAction(stats: PromptMaskingStats): boolean {
+    return stats.redactedSecrets > 0 ||
+      stats.maskedFileMentions > 0 ||
+      stats.maskedDocumentBlocks > 0 ||
+      stats.removedContextItems > 0 ||
+      stats.truncatedTokens > 0
+  }
+
+  private preparePromptPayload(msg: Record<string, unknown>, sessionId: string): { text: string; contextItems?: MaskableContextItem[]; stats: PromptMaskingStats } {
+    const result = maskPromptPayload({
+      text: this.getPromptText(msg),
+      contextItems: this.readContextItems(msg),
+    }, this.getPromptMaskingPolicy())
+
+    if (this.hasMaskingAction(result.stats)) {
+      this.opts.postMessage({ type: "masking_summary", sessionId, stats: result.stats })
+      log.info(
+        `Prompt masking applied: session=${sessionId}, secrets=${result.stats.redactedSecrets}, ` +
+          `mentions=${result.stats.maskedFileMentions}, docs=${result.stats.maskedDocumentBlocks}, ` +
+          `contextItems=${result.stats.removedContextItems}, prunedTokens=${result.stats.truncatedTokens}`,
+      )
+    }
+    return result
   }
 
   private hasPromptContent(msg: Record<string, unknown>): boolean {

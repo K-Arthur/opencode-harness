@@ -1,6 +1,7 @@
 export interface WelcomeViewEls {
   welcomeView: HTMLElement
   welcomeNewBtn: HTMLButtonElement
+  welcomeTempBtn?: HTMLButtonElement | null
   welcomeModelCtx: HTMLElement | null
   welcomeContinueBtn: HTMLButtonElement | null
   welcomeModelName: HTMLElement | null
@@ -74,6 +75,9 @@ export function renderWelcomeContext(deps: WelcomeViewDeps): void {
 export function setupWelcomeActions(deps: WelcomeViewDeps): void {
   deps.els.welcomeNewBtn.addEventListener("click", () => {
     deps.postMessage({ type: "new_session" })
+  })
+  deps.els.welcomeTempBtn?.addEventListener("click", () => {
+    deps.postMessage({ type: "new_temp_session" })
   })
   if (deps.els.welcomeModelCtx) {
     const openModelPicker = () => {

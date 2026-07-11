@@ -94,6 +94,13 @@ describe("StreamCoordinator.ts", () => {
     assert.ok(source.includes('this.onQueueDrain(tabId, "completed")'), "finalize must drain the host queue on completion")
   })
 
+  it("resolves routed role models and reports the route to the webview", () => {
+    assert.ok(source.includes("inferAgentRole"), "startPrompt path must infer an orchestration role")
+    assert.ok(source.includes("getRoutedModel"), "model resolution must use role-aware routing")
+    assert.ok(source.includes('type: "orchestration_route"'), "stream coordinator must post route decisions")
+    assert.ok(source.includes("routeRole?: AgentRole"), "StartPromptConfig must accept an explicit role override")
+  })
+
   it("has guarded finalization for multi-message tool turns", () => {
 	    assert.ok(
 	      source.includes("async maybeFinalizeStream(tabId: string, callbacks: StreamCallbacks"),

@@ -23,6 +23,7 @@ describe("welcomeView.ts", () => {
   function createDeps() {
     const dom = new JSDOM(`
       <button id="welcome-new-btn"></button>
+      <button id="welcome-temp-btn"></button>
       <div class="welcome-search-wrapper">
         <div id="welcome-search-input">
           <span class="search-icon"></span>
@@ -43,6 +44,7 @@ describe("welcomeView.ts", () => {
       els: {
         welcomeView: document.createElement("div"),
         welcomeNewBtn: document.getElementById("welcome-new-btn") as HTMLButtonElement,
+        welcomeTempBtn: document.getElementById("welcome-temp-btn") as HTMLButtonElement,
         welcomeModelCtx: document.getElementById("welcome-model-ctx"),
         welcomeContinueBtn: null,
         welcomeModelName: null,
@@ -69,6 +71,15 @@ describe("welcomeView.ts", () => {
     setupWelcomeActions(deps)
     return { dom, deps, messages, renderedQueries, openModelCalls, input: deps.els.welcomeSearchInput!.querySelector("input")! }
   }
+
+  it("starts a temporary chat from the welcome action", () => {
+    const { dom, messages } = createDeps()
+    const tempBtn = document.getElementById("welcome-temp-btn") as HTMLButtonElement
+
+    tempBtn.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }))
+
+    assert.deepEqual(messages, [{ type: "new_temp_session" }])
+  })
 
   it("submits the trimmed session search when Enter is pressed with no local result", () => {
     const { dom, messages, renderedQueries, input } = createDeps()

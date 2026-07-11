@@ -132,6 +132,11 @@
 | FM-CFG-037 | `opencode.sessions.processIdleTimeoutMinutes` | number | `5` | window | stable |
 | FM-CFG-039 | `opencode.defaultMode` | enum | `"build"` | window | stable |
 | FM-CFG-040 | `opencode.modeModels` | object | `{}` | window | stable |
+| FM-CFG-040a | `opencode.roleModels` | object | `{}` | window | stable |
+| FM-CFG-040b | `opencode.masking.enabled` | boolean | `true` | window | stable |
+| FM-CFG-040c | `opencode.masking.maxPromptTokens` | number | `64000` | window | stable |
+| FM-CFG-040d | `opencode.masking.reserveTokens` | number | `2000` | window | stable |
+| FM-CFG-040e | `opencode.masking.exclude` | array | `[]` | window | stable |
 | FM-CFG-041 | `opencode.voice.enabled` | boolean | `true` | window | stable |
 | FM-CFG-042 | `opencode.voice.autoSend` | boolean | `false` | window | stable |
 | FM-CFG-043 | `opencode.voice.language` | string | `"auto"` | window | stable |
@@ -283,6 +288,8 @@ All element IDs are in `src/chat/webview/index.html`.
 | FM-UI-031 | `context-usage` | Context usage bar | stable |
 | FM-UI-032 | `quota-bar` | Provider quota bar | stable |
 | FM-UI-033 | `status-methodology` | Methodology indicator | stable |
+| FM-UI-033a | `status-route` | Orchestration model route indicator | stable |
+| FM-UI-033b | `status-masking` | Prompt masking indicator | stable |
 | FM-UI-034 | `status-branch` | Git branch display | stable |
 
 ### 7f. Input Area
@@ -327,6 +334,7 @@ All element IDs are in `src/chat/webview/index.html`.
 | FM-UI-055 | `welcome-view` | Welcome container | stable |
 | FM-UI-056 | `welcome-continue-btn` | Continue last session | stable |
 | FM-UI-057 | `welcome-new-btn` | Start new session | stable |
+| FM-UI-057a | `welcome-temp-btn` | Start temporary chat | stable |
 | FM-UI-058 | `welcome-search-input` | Search sessions | stable |
 | FM-UI-059 | `welcome-recent-sessions` | Recent sessions list | stable |
 | FM-UI-060 | `welcome-shortcuts-btn` | View keyboard shortcuts | stable |

@@ -1132,6 +1132,66 @@
           },
           "additionalProperties": false
         },
+        "opencode.roleModels": {
+          "type": "object",
+          "scope": "window",
+          "default": {},
+          "description": "Assign AI models to orchestration roles. Role settings take precedence over mode settings, so planning, implementation, review, and debugging prompts can route to different models without changing the tab's conversation context.",
+          "properties": {
+            "planning": {
+              "type": "string",
+              "default": "",
+              "description": "Model to use for planning prompts. Empty uses the mode or session default model."
+            },
+            "implementation": {
+              "type": "string",
+              "default": "",
+              "description": "Model to use for implementation prompts. Empty uses the mode or session default model."
+            },
+            "review": {
+              "type": "string",
+              "default": "",
+              "description": "Model to use for review/code-diving prompts. Empty uses the mode or session default model."
+            },
+            "debugging": {
+              "type": "string",
+              "default": "",
+              "description": "Model to use for debugging prompts. Empty uses the mode or session default model."
+            }
+          },
+          "additionalProperties": false
+        },
+        "opencode.masking.enabled": {
+          "type": "boolean",
+          "scope": "window",
+          "default": true,
+          "description": "Enable intelligent prompt masking before prompts are sent to opencode. Masks likely secrets, noisy file/document context, and oversized prompt payloads while keeping the visible transcript readable."
+        },
+        "opencode.masking.maxPromptTokens": {
+          "type": "number",
+          "scope": "window",
+          "default": 64000,
+          "minimum": 4000,
+          "maximum": 1000000,
+          "description": "Approximate maximum prompt token budget after masking. The masker prunes dynamic context first and then trims prompt text only when necessary."
+        },
+        "opencode.masking.reserveTokens": {
+          "type": "number",
+          "scope": "window",
+          "default": 2000,
+          "minimum": 0,
+          "maximum": 200000,
+          "description": "Approximate token reserve kept free for model output and tool chatter when masking oversized prompts."
+        },
+        "opencode.masking.exclude": {
+          "type": "array",
+          "scope": "window",
+          "default": [],
+          "description": "Path fragments or glob-like strings that should be removed from attached prompt context before sending.",
+          "items": {
+            "type": "string"
+          }
+        },
         "opencode.voice.enabled": {
           "type": "boolean",
           "scope": "window",

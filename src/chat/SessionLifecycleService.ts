@@ -32,12 +32,13 @@ export interface SessionLifecycleOptions {
 export class SessionLifecycleService {
   constructor(private opts: SessionLifecycleOptions) {}
 
-  private ensureLocalTab(sessionId: string, name?: string, model?: string, mode?: string): void {
+  private ensureLocalTab(sessionId: string, name?: string, model?: string, mode?: string, options?: { ephemeral?: boolean }): void {
     const storeSession = this.opts.sessionStore.ensure(
       sessionId,
       name?.trim() || "",
       model,
-      mode
+      mode,
+      options,
     )
     const tab = this.opts.tabManager.getTab(sessionId)
     const nextModel = storeSession.model || model
@@ -45,8 +46,9 @@ export class SessionLifecycleService {
     if (tab) {
       if (nextModel && tab.model !== nextModel) this.opts.tabManager.setModel(sessionId, nextModel)
       if (nextMode && tab.mode !== nextMode) this.opts.tabManager.setMode(sessionId, nextMode)
+      if (options?.ephemeral === true && !tab.ephemeral) this.opts.tabManager.setEphemeral(sessionId, true)
     } else {
-      this.opts.tabManager.createTab(sessionId, storeSession.cliSessionId, nextModel, nextMode)
+      this.opts.tabManager.createTab(sessionId, storeSession.cliSessionId, nextModel, nextMode, { ephemeral: storeSession.ephemeral === true || options?.ephemeral === true })
     }
   }
 

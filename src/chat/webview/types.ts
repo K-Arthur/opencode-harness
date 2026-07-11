@@ -313,6 +313,27 @@ export interface SessionState {
   tags?: string[]
   /** Message ids of user prompts pinned to the top of this session's prompt rail. */
   pinnedPrompts?: string[]
+  orchestrationRoute?: OrchestrationRouteStatus
+  maskingStats?: MaskingSummaryStats
+}
+
+export interface OrchestrationRouteStatus {
+  role: "planning" | "implementation" | "review" | "debugging"
+  mode: string
+  model: string
+  agent: string
+  updatedAt?: number
+}
+
+export interface MaskingSummaryStats {
+  redactedSecrets: number
+  maskedFileMentions: number
+  maskedDocumentBlocks: number
+  removedContextItems: number
+  truncatedTokens: number
+  inputTokens: number
+  outputTokens: number
+  updatedAt?: number
 }
 
 export interface RevertEntry {
@@ -687,6 +708,9 @@ export type HostMessage =
   | { type: "message"; sessionId: string; message: ChatMessage }
   | { type: "prompt_accepted"; sessionId: string; messageId: string; clientRequestId?: string }
   | { type: "prompt_send_failed"; sessionId: string; messageId?: string; clientRequestId?: string; text: string; reason: string; attachments?: Attachment[] }
+  | { type: "orchestration_route"; sessionId: string; role: "planning" | "implementation" | "review" | "debugging"; mode: string; model: string; agent: string }
+  | { type: "masking_summary"; sessionId: string; stats: { redactedSecrets: number; maskedFileMentions: number; maskedDocumentBlocks: number; removedContextItems: number; truncatedTokens: number; inputTokens: number; outputTokens: number } }
+  | { type: "temp_session_created"; activeSessionId: string; session: SessionState }
   | { type: "unknown_server_event"; sessionId?: string; eventType: string; classification: "unclassified" | "safe_ignored"; preview?: string }
   | { type: "session_compacted"; sessionId: string }
   | { type: "compaction_started"; sessionId: string }
@@ -814,7 +838,9 @@ export interface WorkspaceConfigPayload {
   model?: string
   smallModel?: string
   modelOverrides?: Record<string, string>
+  roleModelOverrides?: Record<string, string>
   ignore?: string[]
+  masking?: { enabled?: boolean; maxPromptTokens?: number; reserveTokens?: number; exclude?: string[] }
   rules?: string[]
   instructions?: string
 }
@@ -890,8 +916,8 @@ export interface SteerPrompt {
 export type WebviewMessage =
   | { type: "webview_ready" }
   | { type: "init_ack" }
-  | { type: "create_tab" }
-  | { type: "send_prompt"; sessionId: string; text: string; messageId: string; clientRequestId?: string; model: string; mode?: string; variant?: string; attachments?: Attachment[]; isSteerPrompt?: boolean; contextItems?: AttachedContextItem[] }
+  | { type: "create_tab"; sessionId?: string; name?: string; model?: string; mode?: string; ephemeral?: boolean }
+  | { type: "send_prompt"; sessionId: string; text: string; messageId: string; clientRequestId?: string; model: string; mode?: string; variant?: string; attachments?: Attachment[]; isSteerPrompt?: boolean; contextItems?: AttachedContextItem[]; role?: string; agentRole?: string; ephemeral?: boolean }
   | { type: "send_steer_prompt"; id: string; text: string; attachments: Attachment[]; mode: "interrupt" | "queue"; sessionId: string; userMessageId?: string }
   | { type: "change_mode"; mode: string; sessionId: string }
   | { type: "set_model"; model: string; sessionId?: string }
@@ -921,6 +947,7 @@ export type WebviewMessage =
   | { type: "list_sessions"; limit?: number; query?: string }
   | { type: "resume_session"; sessionId: string }
   | { type: "new_session" }
+  | { type: "new_temp_session" }
   | { type: "get_models" }
   | { type: "update_cost"; cost: number; sessionId?: string }
   | { type: "webview_log"; level?: string; message?: string }

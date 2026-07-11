@@ -1,5 +1,6 @@
 import * as vscode from "vscode"
 import type { Attachment } from "./webview/types"
+import type { AgentRole } from "../orchestration/modelRouting"
 
 const crypto = globalThis.crypto
 
@@ -17,6 +18,8 @@ export interface QueuedPrompt {
   error?: string
   /** ID of the user message in SessionStore, set at queue-time for dedup at drain-time. */
   userMessageId?: string
+  /** Optional orchestration role requested when the prompt was queued. */
+  agentRole?: AgentRole
 }
 
 /**

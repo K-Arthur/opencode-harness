@@ -99,6 +99,21 @@ Rules:
   any workspace `rules`/`instructions` in the instructions editor panel.
   Sent during `pushAllStateToWebview` and whenever the config file changes
   (hot-reloaded via a file system watcher).
+- `orchestration_route` pushes `{ sessionId, role, mode, model, agent }` after
+  the host resolves a role-aware model route for a prompt. The webview stores
+  it per session and renders the active route in `#status-route`.
+- `masking_summary` pushes `{ sessionId, stats }` whenever host-side prompt
+  masking changed a payload. `stats` includes redacted secrets, masked file
+  mentions, masked document blocks, removed context items, token estimates, and
+  truncated tokens. The webview renders the active summary in `#status-masking`.
+- `temp_session_created` pushes `{ activeSessionId, session }` after the host
+  creates an ephemeral session for the welcome-screen temporary chat action.
+  The session carries `ephemeral: true` and is intentionally skipped by host,
+  tab, and webview persistence.
+- `new_temp_session` (Webview → Host): The welcome screen asks the host to
+  create a temporary chat session. The tab strip and `/temp` slash command can
+  also create local ephemeral tabs with a normal `create_tab` message carrying
+  `ephemeral: true`.
 - `chat_dir_change` (Webview → Host): The user clicks the LTR/RTL toggle button.
   The webview sets `dir` on `<html>` immediately and posts this message so the
   host persists the choice to `globalState` via `persistChatDirection`.

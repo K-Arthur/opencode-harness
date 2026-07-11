@@ -29,6 +29,7 @@ import { mapRunError, type RunErrorContext } from "./runErrorMapper"
 import { logStreamTrace } from "../../session/streamTrace"
 import { modeToAgent } from "../modePolicy"
 import { createStreamingLog, type StreamingLogSink } from "./StreamingLog"
+import { inferAgentRole, type AgentRole } from "../../orchestration/modelRouting"
 
 import type { StreamCallbacks, ToolEndResult, ToolPartialInput, StreamLifecycleState, ActiveRunMetrics } from "./StreamCoordinatorTypes"
 export type { StreamCallbacks, ToolEndResult, ToolPartialInput, StreamLifecycleState, ActiveRunMetrics }
@@ -59,6 +60,7 @@ export interface StartPromptConfig {
   callbacks: StreamCallbacks
   variant?: string
   attachments?: Array<{ data: string; mimeType: string }>
+  routeRole?: AgentRole
   identity?: PromptRunIdentity
 }
 
@@ -81,6 +83,7 @@ interface ActiveStreamRun {
   serverMessageId?: string
   mode?: string
   agent?: string
+  role?: AgentRole
   model?: string
   startedAt: number
   state: ActiveRunState
@@ -984,7 +987,7 @@ export class StreamCoordinator {
   }
 
   async startPrompt(config: StartPromptConfig): Promise<void> {
-    const { tabId, text, callbacks, variant, attachments = [], identity = {} } = config
+    const { tabId, text, callbacks, variant, attachments = [], identity = {}, routeRole } = config
     const tab = this.tabManager.getTab(tabId)
     if (!tab) {
       callbacks.postRequestError("Tab not found")
@@ -1057,7 +1060,15 @@ export class StreamCoordinator {
 
       this.emitStreamStartAndArmWatchdogs(tabId, callbacks, streamMessageId)
 
-      const { modelRef, agent } = await this.resolveModelAndAgentForPrompt(tabId, tab)
+      const { modelRef, agent, role, resolvedModel } = await this.resolveModelAndAgentForPrompt(tabId, tab, text, routeRole)
+      callbacks.postMessage({
+        type: "orchestration_route",
+        sessionId: tabId,
+        role,
+        mode: tab.mode || "build",
+        model: resolvedModel,
+        agent,
+      })
 
       // Inject per-tab instructions as a prepended text part on the first turn
       // only. injectedInstructionsSessions tracks which CLI sessions have
@@ -1244,14 +1255,17 @@ export class StreamCoordinator {
   private async resolveModelAndAgentForPrompt(
     tabId: string,
     tab: TabState,
-  ): Promise<{ modelRef: { providerID: string; modelID: string } | undefined; agent: "plan" | "build" }> {
+    text: string,
+    requestedRole?: AgentRole,
+  ): Promise<{ modelRef: { providerID: string; modelID: string } | undefined; agent: "plan" | "build"; role: AgentRole; resolvedModel: string }> {
     await this.refreshModelsIfMissing(tab)
 
-    // Resolve the model for this session mode. If the user has configured
-    // `opencode.modeModels`, the mode-specific override is used; otherwise
-    // falls back to the session's default model. Pattern: Cline per-mode
-    // model selector, Copilot per-agent model config.
-    const resolvedModel = this.modelManager.getModeModel(tab.mode || "", tab.model)
+    // Resolve the model for this inferred orchestration role and session mode.
+    // Role-specific overrides win over mode-specific overrides so planning,
+    // review, and debugging can each use a dedicated model without losing the
+    // current session context.
+    const role = inferAgentRole({ explicitRole: requestedRole, mode: tab.mode || "", promptText: text })
+    const resolvedModel = this.modelManager.getRoutedModel(role, tab.mode || "", tab.model)
     const modelRef = resolvedModel ? parseModelRef(resolvedModel) : undefined
 
     // Pass the corresponding OpenCode primary agent for mode-specific
@@ -1268,10 +1282,11 @@ export class StreamCoordinator {
     const activeRunForMode = this.activeRuns.get(tabId)
     if (activeRunForMode) {
       activeRunForMode.agent = agent
+      activeRunForMode.role = role
       activeRunForMode.model = resolvedModel
       activeRunForMode.mode = tab.mode
     }
-    return { modelRef, agent }
+    return { modelRef, agent, role, resolvedModel }
   }
 
   private armPostAcceptLifecycle(

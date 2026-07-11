@@ -250,6 +250,8 @@
         <span id="status-model" class="status-strip-model"></span>
         <span id="status-branch" class="status-strip-branch hidden" aria-label="Current branch"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="6" cy="17" r="2"/><path d="M18 11a8 8 0 0 1-8 8"/><circle cx="18" cy="11" r="2"/></svg> <span class="status-strip-branch-name"></span></span>
         <span id="status-methodology" class="status-strip-methodology hidden" role="status" aria-label="Selected methodology"></span>
+        <span id="status-route" class="status-strip-route hidden" role="status" aria-label="Model route"></span>
+        <span id="status-masking" class="status-strip-masking hidden" role="status" aria-label="Prompt masking status"></span>
         <span id="status-cost" class="status-strip-cost hidden"></span>
         <span id="status-tokens" class="status-strip-tokens hidden"></span>
         <!-- Disclosure button (not a progressbar): it has no aria-valuenow and its
@@ -739,6 +741,10 @@
           <button class="welcome-action-btn welcome-action-secondary" id="welcome-new-btn" aria-label="Start new session">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
             New session
+          </button>
+          <button class="welcome-action-btn welcome-action-secondary" id="welcome-temp-btn" aria-label="Start temporary chat">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 8v4l3 2"/></svg>
+            Temp chat
           </button>
         </div>
 

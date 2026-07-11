@@ -50,6 +50,39 @@ describe("WebviewEventRouter context usage routing", () => {
   })
 })
 
+describe("WebviewEventRouter orchestration and masking integration", () => {
+  it("masks prompt text before appending or queueing user messages", () => {
+    const handler = blockBetween('["send_prompt"', '["change_mode"')
+    const prepareIdx = handler.indexOf("this.preparePromptPayload(msg, sessionId)")
+    const appendIdx = handler.indexOf("this.opts.sessionStore.appendMessage")
+    const queueIdx = handler.indexOf("this.opts.hostQueue.enqueue")
+
+    assert.ok(prepareIdx >= 0, "send_prompt must call preparePromptPayload")
+    assert.ok(prepareIdx < appendIdx, "prompt masking must run before appendMessage")
+    assert.ok(prepareIdx < queueIdx, "prompt masking must run before enqueue")
+    assert.ok(handler.includes("promptTextForRetry = text"), "retry payloads must use the masked text")
+  })
+
+  it("threads requested agent role into immediate and queued prompt sends", () => {
+    const handler = blockBetween('["send_prompt"', '["change_mode"')
+
+    assert.ok(handler.includes("agentRole: this.getRequestedAgentRole(msg)"), "queued prompts must preserve requested agent role")
+    assert.ok(handler.includes("routeRole: this.getRequestedAgentRole(msg)"), "immediate prompts must pass requested role to StreamCoordinator")
+  })
+
+  it("creates temporary sessions as ephemeral host sessions", () => {
+    const handler = blockBetween('["new_temp_session"', '["get_models"')
+
+    assert.ok(handler.includes('{ ephemeral: true }'), "new_temp_session must create an ephemeral session")
+    assert.ok(handler.includes("temp_session_created"), "new_temp_session must notify the webview")
+    assert.ok(handler.includes("ensureLocalTab"), "new_temp_session must create a live tab")
+  })
+
+  it("accepts new_temp_session through the validator", () => {
+    assert.equal(validate({}, "new_temp_session"), true)
+  })
+})
+
 describe("WebviewEventRouter dead-wire guard", () => {
   // The inbound gate rejects any message whose type isn't in VALID_WEBVIEW_TYPES
   // *before* dispatch. A handler that isn't also allowlisted is therefore dead

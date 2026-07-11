@@ -9,6 +9,7 @@ let posted: Array<Record<string, unknown>>
 let handler: any
 let serverCommands: Array<{ name: string; source?: string; origin?: string }>
 let systemMessages: Array<{ sessionId: string; message: string }>
+let createNewTabCalls: Array<{ title?: string; options?: { ephemeral?: boolean } }>
 
 beforeEach(async () => {
   const dom = new JSDOM(`<!doctype html><body></body>`)
@@ -18,6 +19,7 @@ beforeEach(async () => {
 
   posted = []
   systemMessages = []
+  createNewTabCalls = []
   serverCommands = [
     { name: "triage", source: "mcp", origin: "jcodemunch" },
     { name: "index_folder", source: "mcp", origin: "jcodemunch" },
@@ -37,11 +39,27 @@ beforeEach(async () => {
     modelDropdown: { setCurrentModel: () => {}, open: () => {} },
     commandsModal: { open: () => {} },
     clearPromptInput: () => {},
-    createNewTab: () => {},
+    createNewTab: (title?: string, options?: { ephemeral?: boolean }) => {
+      createNewTabCalls.push({ title, options })
+    },
     showSystemMessage: (sessionId: string, message: string) => { systemMessages.push({ sessionId, message }) },
     syncModelViews: () => {},
     renderQueue: () => {},
     getServerCommands: () => serverCommands,
+  })
+})
+
+describe("slash command handler — temporary sessions", () => {
+  it("creates an ephemeral tab for /temp", () => {
+    handler.runSlashCommandText("/temp", { id: "tab-1", isStreaming: false })
+
+    assert.deepEqual(createNewTabCalls, [{ title: "Temporary chat", options: { ephemeral: true } }])
+  })
+
+  it("creates an ephemeral tab for /temporary", () => {
+    handler.runSlashCommandText("/temporary", { id: "tab-1", isStreaming: false })
+
+    assert.deepEqual(createNewTabCalls, [{ title: "Temporary chat", options: { ephemeral: true } }])
   })
 })
 

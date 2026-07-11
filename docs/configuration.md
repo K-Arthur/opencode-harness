@@ -145,6 +145,54 @@ All settings are under the `opencode.*` namespace and can be configured in VS Co
   }
   ```
 
+### `opencode.modeModels`
+- **Type**: `object`
+- **Default**: `{}`
+- **Scope**: `window`
+- **Description**: Optional model overrides for session modes (`plan`, `build`, `auto`). Empty values fall back to the session/global model.
+- **Example**:
+  ```json
+  {
+    "opencode.modeModels": {
+      "plan": "anthropic/claude-sonnet-4-20250514",
+      "build": "openai/gpt-5-codex"
+    }
+  }
+  ```
+
+### `opencode.roleModels`
+- **Type**: `object`
+- **Default**: `{}`
+- **Scope**: `window`
+- **Description**: Optional model overrides for orchestration roles. Role overrides take precedence over mode overrides, so planning, implementation, review, and debugging prompts can route to different models without changing the active conversation.
+- **Properties**: `planning`, `implementation`, `review`, `debugging`
+- **Example**:
+  ```json
+  {
+    "opencode.roleModels": {
+      "planning": "anthropic/claude-sonnet-4-20250514",
+      "review": "openai/gpt-5-codex"
+    }
+  }
+  ```
+
+### `opencode.masking.*`
+- **Description**: Controls host-side prompt masking before prompts are appended, queued, or sent. Masking redacts common secret shapes, removes excluded file/document context, and prunes oversized prompts.
+- **Settings**:
+  | Setting | Type | Default | Description |
+  |---------|------|---------|-------------|
+  | `opencode.masking.enabled` | boolean | `true` | Enable prompt masking. |
+  | `opencode.masking.maxPromptTokens` | number | `64000` | Approximate maximum prompt token budget after masking. |
+  | `opencode.masking.reserveTokens` | number | `2000` | Approximate token reserve for model output and tool chatter. |
+  | `opencode.masking.exclude` | string[] | `[]` | Path fragments or glob-like strings to remove from attached prompt context. |
+- **Example**:
+  ```json
+  {
+    "opencode.masking.exclude": ["secrets/", ".env"],
+    "opencode.masking.maxPromptTokens": 96000
+  }
+  ```
+
 ## OpenCode MCP Configuration
 
 MCP servers are now read from OpenCode config files first, not only from VS Code settings.
@@ -225,6 +273,8 @@ The extension checks these locations (first found wins, `OPENCODE_CONFIG` overri
 | `model` | `string` | Default model ID in `provider/model` format. Applied to `ModelManager` on load and on change. |
 | `small_model` | `string` | Small/fast model ID for lightweight tasks. Stored in `ModelManager.workspaceSmallModel`. |
 | `modelOverrides` | `Record<string, string>` | Mode-to-model overrides (e.g. `{ "build": "anthropic/claude-sonnet-4", "plan": "openai/o3" }`). Consulted by `getModeModel()` before VS Code settings. |
+| `roleModelOverrides` | `Record<string, string>` | Role-to-model overrides for `planning`, `implementation`, `review`, and `debugging`. Consulted before mode overrides. |
+| `masking` | `object` | Workspace masking defaults: `enabled`, `maxPromptTokens`, `reserveTokens`, and `exclude`. |
 | `ignore` | `string[]` | Glob patterns for files to exclude from workspace file indexing (e.g. `["dist/**", "*.test.ts"]`). Merged with `exclude`. |
 | `exclude` | `string[]` | Additional glob exclusion patterns, same as `ignore`. Both are merged and applied via `minimatch`. |
 | `rules` | `string[]` | Workspace-specific rules injected into system prompts (e.g. `["Always use TypeScript strict mode", "Write tests first"]`). |
@@ -266,10 +316,24 @@ webview containing the parsed config payload, status, and file path. The webview
   // Small model for lightweight tasks
   "small_model": "anthropic/claude-haiku-3-5",
 
-  // Mode-specific overrides (highest priority)
+  // Mode-specific overrides
   "modelOverrides": {
     "build": "anthropic/claude-sonnet-4-20250514",
     "plan": "openai/o3"
+  },
+
+  // Role-specific overrides take precedence over mode overrides
+  "roleModelOverrides": {
+    "review": "openai/gpt-5-codex",
+    "debugging": "anthropic/claude-sonnet-4-20250514"
+  },
+
+  // Host-side prompt masking defaults for this workspace
+  "masking": {
+    "enabled": true,
+    "maxPromptTokens": 64000,
+    "reserveTokens": 2000,
+    "exclude": ["secrets/", ".env"]
   },
 
   // Exclude these from workspace file indexing
