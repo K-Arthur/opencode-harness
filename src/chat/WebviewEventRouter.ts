@@ -195,7 +195,7 @@ export class WebviewEventRouter {
   public webviewFullyInitialized = false
 
   private static readonly VALID_WEBVIEW_TYPES = new Set([
-    "create_tab", "send_prompt", "change_mode", "set_model", "set_variant", "set_role_models", "abort", "cancel_tool",
+    "create_tab", "send_prompt", "change_mode", "set_model", "set_variant", "set_role_models", "get_role_models", "abort", "cancel_tool",
     "close_tab", "switch_tab", "accept_diff", "reject_diff",
     "accept_permission", "mention_search", "list_sessions", "resume_session",
     "new_session", "new_temp_session", "get_models", "update_cost", "webview_ready", "init_ack", "rename_session", "webview_log",
@@ -770,28 +770,41 @@ export class WebviewEventRouter {
     }],
     ["set_role_models", (msg: Record<string, unknown>) => {
       const roleModels = msg.roleModels as Record<string, string> | undefined
-      if (!roleModels) return
+      const enabled = typeof msg.enabled === "boolean" ? msg.enabled : undefined
       // Persist role models to VS Code settings. Writing via the VS Code
       // configuration API ensures workspace-level overrides take precedence
       // and the change propagates to all surfaces (CLI, sibling windows).
       const config = vscode.workspace.getConfiguration("opencode")
-      const existing = config.get<Record<string, string>>("roleModels", {})
-      const merged = { ...existing }
       let changed = false
-      for (const [role, model] of Object.entries(roleModels)) {
-        if (model && model.trim()) {
-          if (merged[role] !== model.trim()) { merged[role] = model.trim(); changed = true }
-        } else {
-          if (merged[role]) { delete merged[role]; changed = true }
+      if (roleModels) {
+        const existing = config.get<Record<string, string>>("roleModels", {})
+        const merged = { ...existing }
+        for (const [role, model] of Object.entries(roleModels)) {
+          if (model && model.trim()) {
+            if (merged[role] !== model.trim()) { merged[role] = model.trim(); changed = true }
+          } else {
+            if (merged[role]) { delete merged[role]; changed = true }
+          }
+        }
+        if (changed) {
+          void config.update("roleModels", merged, vscode.ConfigurationTarget.Workspace)
+          log.info(`Updated role models: ${JSON.stringify(merged)}`)
         }
       }
+      if (enabled !== undefined && enabled !== config.get<boolean>("roleModelsEnabled", true)) {
+        void config.update("roleModelsEnabled", enabled, vscode.ConfigurationTarget.Workspace)
+        log.info(`Model routing enabled: ${enabled}`)
+        changed = true
+      }
       if (changed) {
-        void config.update("roleModels", merged, vscode.ConfigurationTarget.Workspace)
-        log.info(`Updated role models: ${JSON.stringify(merged)}`)
-        // Refresh the model list to surface any newly-routed models.
+        // Refresh the model list to surface any newly-routed models, and echo
+        // the merged config back so the panel reflects what actually saved
+        // (fixes the settings UI silently resetting on every open).
         this.pushModelListToWebview()
       }
+      this.pushRoleModelsToWebview()
     }],
+    ["get_role_models", () => { this.pushRoleModelsToWebview() }],
     ["mode_switch_request", async (msg: Record<string, unknown>, sessionId?: string) => {
       const sid = typeof msg.sessionId === "string" ? msg.sessionId : sessionId
       const targetMode = typeof msg.targetMode === "string" ? msg.targetMode : undefined
@@ -3051,6 +3064,19 @@ export class WebviewEventRouter {
     this.opts.messageRouter.getModelList({
       postMessage: (m) => this.opts.statePush.postMessage(m),
       postRequestError: (m) => this.opts.statePush.postRequestError(m),
+    })
+  }
+
+  /** Echo the current role-routing config back to the webview so the Model
+   * Routing settings panel reflects what's actually saved (workspace +
+   * global settings), rather than always rendering as blank/reset. */
+  private pushRoleModelsToWebview(): void {
+    const config = vscode.workspace.getConfiguration("opencode")
+    this.opts.postMessage({
+      type: "role_models_config",
+      roleModels: config.get<Record<string, string>>("roleModels", {}),
+      modeModels: config.get<Record<string, string>>("modeModels", {}),
+      enabled: config.get<boolean>("roleModelsEnabled", true),
     })
   }
 

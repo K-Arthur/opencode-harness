@@ -4,6 +4,16 @@ export interface RoleInferenceInput {
   explicitRole?: string
   mode?: string
   promptText?: string
+  /**
+   * When false, skip the keyword-based sniffing of `promptText` (the
+   * DEBUGGING_RE/REVIEW_RE/PLANNING_RE checks below) — an ordinary message
+   * that happens to contain a word like "bug" or "review" must not silently
+   * reroute to a different model. An explicit role (from the per-message
+   * route selector) or the session mode still applies; only the implicit,
+   * invisible inference is suppressed. Defaults to true for callers that
+   * don't pass it (back-compat).
+   */
+  enableTextInference?: boolean
 }
 
 export interface RoutedModelInput {
@@ -15,6 +25,14 @@ export interface RoutedModelInput {
   settingsRoleModels?: Partial<Record<AgentRole, string>>
   workspaceModeModels?: Record<string, string>
   settingsModeModels?: Record<string, string>
+  /**
+   * Master switch for role-based routing (the Model Routing settings
+   * panel). When false, role overrides are ignored entirely and resolution
+   * falls straight through to mode/session/current model — matching what
+   * happens when the user has configured no role models at all. Defaults to
+   * true for callers that don't pass it (back-compat).
+   */
+  roleRoutingEnabled?: boolean
 }
 
 const ROLE_ALIASES: Record<string, AgentRole> = {
@@ -57,6 +75,8 @@ export function inferAgentRole(input: RoleInferenceInput): AgentRole {
   const modeRole = normalizeAgentRole(input.mode)
   if (modeRole && modeRole !== "implementation") return modeRole
 
+  if (input.enableTextInference === false) return modeRole ?? "implementation"
+
   const promptText = input.promptText ?? ""
   if (DEBUGGING_RE.test(promptText)) return "debugging"
   if (REVIEW_RE.test(promptText)) return "review"
@@ -75,9 +95,10 @@ function lookupModel(map: Record<string, string> | Partial<Record<AgentRole, str
 }
 
 export function resolveRoutedModel(input: RoutedModelInput): string {
+  const roleRoutingEnabled = input.roleRoutingEnabled !== false
   return (
-    lookupModel(input.workspaceRoleModels, input.role) ??
-    lookupModel(input.settingsRoleModels, input.role) ??
+    (roleRoutingEnabled ? lookupModel(input.workspaceRoleModels, input.role) : undefined) ??
+    (roleRoutingEnabled ? lookupModel(input.settingsRoleModels, input.role) : undefined) ??
     lookupModel(input.workspaceModeModels, input.mode) ??
     lookupModel(input.settingsModeModels, input.mode) ??
     cleanModel(input.sessionModel) ??

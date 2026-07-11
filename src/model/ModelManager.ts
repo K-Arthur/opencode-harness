@@ -413,8 +413,9 @@ export class ModelManager {
    * dedicated models even inside a long-lived build session.
    */
   getRoutedModel(role: AgentRole, mode: string, fallbackModel?: string): string {
-    const roleModels = vscode.workspace.getConfiguration("opencode").get<Partial<Record<AgentRole, string>>>("roleModels", {})
-    const modeModels = vscode.workspace.getConfiguration("opencode").get<Record<string, string>>("modeModels", {})
+    const config = vscode.workspace.getConfiguration("opencode")
+    const roleModels = config.get<Partial<Record<AgentRole, string>>>("roleModels", {})
+    const modeModels = config.get<Record<string, string>>("modeModels", {})
     return resolveRoutedModel({
       role,
       mode,
@@ -424,7 +425,13 @@ export class ModelManager {
       settingsRoleModels: roleModels,
       workspaceModeModels: Object.fromEntries(this._workspaceModelOverrides),
       settingsModeModels: modeModels,
+      roleRoutingEnabled: this.isRoleRoutingEnabled(),
     })
+  }
+
+  /** Master on/off switch for role-based routing — see `opencode.roleModelsEnabled`. */
+  isRoleRoutingEnabled(): boolean {
+    return vscode.workspace.getConfiguration("opencode").get<boolean>("roleModelsEnabled", true)
   }
 
   /**

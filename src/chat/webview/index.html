@@ -1083,6 +1083,13 @@
         </div>
       </div>
       <div class="model-routing-body" id="model-routing-body">
+        <label class="model-routing-master-toggle" for="model-routing-enabled-checkbox">
+          <input type="checkbox" id="model-routing-enabled-checkbox" checked>
+          <span class="model-routing-master-toggle-text">
+            <span class="model-routing-master-toggle-title">Enable model routing</span>
+            <span class="model-routing-master-toggle-desc">When off, every prompt uses your selected model exactly as picked — phase overrides below and automatic phase detection from prompt wording are both ignored.</span>
+          </span>
+        </label>
         <div class="model-routing-fallback-info">
           Each phase falls back through: <strong>phase model</strong> → <strong>mode model</strong> → <strong>session model</strong> → <strong>global default</strong>. Set a phase model to override the chain for that phase.
         </div>

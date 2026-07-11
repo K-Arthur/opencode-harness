@@ -1264,7 +1264,12 @@ export class StreamCoordinator {
     // Role-specific overrides win over mode-specific overrides so planning,
     // review, and debugging can each use a dedicated model without losing the
     // current session context.
-    const role = inferAgentRole({ explicitRole: requestedRole, mode: tab.mode || "", promptText: text })
+    const role = inferAgentRole({
+      explicitRole: requestedRole,
+      mode: tab.mode || "",
+      promptText: text,
+      enableTextInference: this.modelManager.isRoleRoutingEnabled(),
+    })
     const resolvedModel = this.modelManager.getRoutedModel(role, tab.mode || "", tab.model)
     const modelRef = resolvedModel ? parseModelRef(resolvedModel) : undefined
 

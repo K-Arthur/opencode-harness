@@ -64,6 +64,17 @@ The composer also exposes a compact `Route` selector. `Auto` uses prompt/mode
 inference; choosing `Plan`, `Build`, `Review`, or `Debug` sends an explicit
 `role` on the next prompt.
 
+`opencode.roleModelsEnabled` (default `true`) is a master switch, checked by
+`ModelManager.isRoleRoutingEnabled()`. When `false`: step 3/4 above (role
+overrides) are skipped by `resolveRoutedModel()`, and the prompt-text
+inference in step 2 is also suppressed (`inferAgentRole()`'s
+`enableTextInference` flag) — an explicit `Route` selection still wins, but
+nothing reroutes silently based on prompt wording. Toggle it via the
+"Enable model routing" checkbox at the top of the Model Routing settings
+panel (`modelRoutingPanel.ts`), which also round-trips the panel's state
+against the host via `get_role_models` / `role_models_config` so it reflects
+what's actually saved instead of always rendering blank.
+
 ## Temporary Chats
 
 Temporary chats are represented by `ephemeral: true` on:

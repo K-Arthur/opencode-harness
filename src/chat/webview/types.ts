@@ -709,6 +709,7 @@ export type HostMessage =
   | { type: "prompt_accepted"; sessionId: string; messageId: string; clientRequestId?: string }
   | { type: "prompt_send_failed"; sessionId: string; messageId?: string; clientRequestId?: string; text: string; reason: string; attachments?: Attachment[] }
   | { type: "orchestration_route"; sessionId: string; role: "planning" | "implementation" | "review" | "debugging"; mode: string; model: string; agent: string }
+  | { type: "role_models_config"; roleModels: Record<string, string>; modeModels: Record<string, string>; enabled: boolean }
   | { type: "masking_summary"; sessionId: string; stats: { redactedSecrets: number; maskedFileMentions: number; maskedDocumentBlocks: number; removedContextItems: number; truncatedTokens: number; inputTokens: number; outputTokens: number } }
   | { type: "temp_session_created"; activeSessionId: string; session: SessionState }
   | { type: "unknown_server_event"; sessionId?: string; eventType: string; classification: "unclassified" | "safe_ignored"; preview?: string }

@@ -101,6 +101,13 @@ describe("StreamCoordinator.ts", () => {
     assert.ok(source.includes("routeRole?: AgentRole"), "StartPromptConfig must accept an explicit role override")
   })
 
+  it("gates implicit keyword-based role inference on the master model-routing switch", () => {
+    assert.ok(
+      source.includes("enableTextInference: this.modelManager.isRoleRoutingEnabled()"),
+      "must suppress silent prompt-text role sniffing when the user has disabled model routing"
+    )
+  })
+
   it("has guarded finalization for multi-message tool turns", () => {
 	    assert.ok(
 	      source.includes("async maybeFinalizeStream(tabId: string, callbacks: StreamCallbacks"),

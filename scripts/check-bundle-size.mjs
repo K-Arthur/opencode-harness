@@ -5,7 +5,7 @@
 // load synchronously into the host process or the chat webview:
 //
 //   dist/extension.js                  ≤ 786KB
-//   dist/chat/webview/main.js          ≤ 835KB  (paydown target: 600KB)
+//   dist/chat/webview/main.js          ≤ 838KB  (paydown target: 600KB)
 //   dist/chat/webview/markdownWorker.js ≤ 500KB  (advisory)
 //
 // IMPORTANT: these limits describe the **production (minified) build**
@@ -252,6 +252,13 @@
 // panel UI (modelRoutingPanel.ts, HTML dialog + CSS, button wiring, host
 // set_role_models handler). Production build measures 833.9KB webview.
 // +2KB keeps ~0.2% headroom.
+//
+// 2026-07-11 re-baseline (webview 835KB -> 838KB): model-routing bug-fix
+// pass — master enable/disable toggle, free-text input replaced with a real
+// <select> populated from the live model list, get_role_models/
+// role_models_config round trip so the panel reflects saved state, plus the
+// blank-session filtering fix in recent-sessions.ts/sessionListRenderer.ts.
+// Production build measures 835.1KB webview. +3KB keeps ~0.3% headroom.
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -262,7 +269,7 @@ const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
   { path: "dist/extension.js", limitBytes: 786 * 1024, label: "extension host" },
-  { path: "dist/chat/webview/main.js", limitBytes: 835 * 1024, label: "chat webview" },
+  { path: "dist/chat/webview/main.js", limitBytes: 838 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
 

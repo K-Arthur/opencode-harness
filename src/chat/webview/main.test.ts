@@ -213,6 +213,41 @@ describe("main.ts", () => {
     assert.ok(source.includes("prepareLocalRecentSessions"))
   })
 
+  it("wires welcomeTempBtn into welcomeViewDeps.els so the welcome-screen temp-chat button actually binds a click handler", () => {
+    // Regression: welcomeView.ts's setupWelcomeActions() only attaches the
+    // click listener when deps.els.welcomeTempBtn is provided (it uses
+    // `?.addEventListener`), so leaving it out of the deps object here made
+    // the button a silent no-op even though the element and handler code
+    // both existed.
+    assert.ok(source.includes("welcomeTempBtn: els.welcomeTempBtn"), "welcomeViewDeps.els must include welcomeTempBtn")
+  })
+
+  it("requests get_role_models when opening the Model Routing panel so it doesn't render as reset", () => {
+    const idx = source.indexOf("openModelRouting: () => {")
+    assert.ok(idx >= 0, "openModelRouting callback must exist")
+    const block = source.slice(idx, idx + 200)
+    assert.ok(block.includes("modelRoutingPanel.open()"))
+    assert.ok(block.includes('vscode.postMessage({ type: "get_role_models" })'))
+  })
+
+  it("wires the Model Routing panel to the real model list and cached role/mode config instead of stub empties", () => {
+    // Regression: these were hardcoded to () => [] / () => ({}) so the panel
+    // could never show real available models or reflect a saved config —
+    // it always rendered as if nothing had ever been set.
+    assert.ok(source.includes("getModels: () => modelManager.getAllModels()"), "must supply the real available-models list")
+    assert.ok(source.includes("getRoleModels: () => roleModelsConfig.roleModels"))
+    assert.ok(source.includes("getModeModels: () => roleModelsConfig.modeModels"))
+    assert.ok(source.includes("getRoutingEnabled: () => roleModelsConfig.enabled"))
+  })
+
+  it("handles role_models_config by updating the cache and refreshing the open panel", () => {
+    const idx = source.indexOf('["role_models_config"')
+    assert.ok(idx >= 0, "must register a role_models_config handler")
+    const block = source.slice(idx, idx + 600)
+    assert.ok(block.includes("roleModelsConfig = { roleModels, modeModels, enabled }"))
+    assert.ok(block.includes("modelRoutingPanel.applyConfig({ roleModels, modeModels, enabled })"))
+  })
+
   it("setupButtons does not add duplicate newTabBtn listener", () => {
     const setupButtonsMatch = source.match(/els\.newTabBtn\.addEventListener/g)
     assert.ok(setupButtonsMatch === null || setupButtonsMatch.length <= 1,

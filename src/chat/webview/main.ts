@@ -243,6 +243,13 @@ function getVsCodeApi() {
   let mcpConfig!: ReturnType<typeof setupMcpConfig>
   let syncModelViews!: () => void
   let modelRoutingPanel!: ReturnType<typeof createModelRoutingPanel>
+  // Cache of the last role-routing config pushed by the host (in reply to
+  // get_role_models / after a save) — the panel reads it via getRoleModels /
+  // getModeModels / getRoutingEnabled so it renders saved state instead of
+  // always looking reset. Defaults to enabled=true to match the setting's
+  // default before the host round-trip resolves.
+  let roleModelsConfig: { roleModels: Record<string, string>; modeModels: Record<string, string>; enabled: boolean } =
+    { roleModels: {}, modeModels: {}, enabled: true }
 
   // Created by wire functions inside setupPanels
   let streamOrchestrator!: import("./streamOrchestrator").StreamOrchestratorAPI
@@ -776,13 +783,15 @@ function getVsCodeApi() {
           modelRoutingGlobal: els.modelRoutingGlobal,
           modelRoutingGlobalValue: els.modelRoutingGlobalValue,
           modelRoutingStatus: els.modelRoutingStatus,
+          modelRoutingEnabledCheckbox: els.modelRoutingEnabledCheckbox,
         },
         vscode,
-        getModels: () => [],
-        getRoleModels: () => ({}),
-        getModeModels: () => ({}),
+        getModels: () => modelManager.getAllModels(),
+        getRoleModels: () => roleModelsConfig.roleModels,
+        getModeModels: () => roleModelsConfig.modeModels,
         getGlobalModel: () => stateManager.getState().globalModel || "",
         getSessionModel: () => stateManager.getActiveSession()?.model,
+        getRoutingEnabled: () => roleModelsConfig.enabled,
       })
 
       setCompsErrorActionHandler(errorActionHandler)
@@ -1054,6 +1063,7 @@ function getVsCodeApi() {
       openThemeCustomizer: () => themeOrchestrator.open(),
       openModelRouting: () => {
         modelRoutingPanel.open()
+        vscode.postMessage({ type: "get_role_models" })
       },
       openPermissionConfig: () => {
         const active = stateManager.getActiveSession()
@@ -1250,6 +1260,7 @@ function setupTodoSkillAndSubagentPanels(): void {
     els: {
       welcomeView: els.welcomeView,
       welcomeNewBtn: els.welcomeNewBtn,
+      welcomeTempBtn: els.welcomeTempBtn,
       welcomeModelCtx: els.welcomeModelCtx,
       welcomeContinueBtn: els.welcomeContinueBtn,
       welcomeModelName: els.welcomeModelName,
@@ -1312,7 +1323,7 @@ function setupTodoSkillAndSubagentPanels(): void {
 
     if (hostSessions) {
       renderRecentSessions(
-        prepareHostRecentSessions(hostSessions),
+        prepareHostRecentSessions(hostSessions, filterQuery),
         recentContainer,
         () => vscode.postMessage({ type: "list_sessions", query: filterQuery.trim() }),
         (sessionId) => openSession(sessionId),
@@ -3048,6 +3059,13 @@ function setupTodoSkillAndSubagentPanels(): void {
         // context usage history/statistics panel was removed — no-op
       }],
       ["server_status", (msg, sid) => { if (sid) handleServerStatus(sid, msg.status as string, msg.errorContext) }],
+      ["role_models_config", (msg) => {
+        const roleModels = (msg.roleModels && typeof msg.roleModels === "object" ? msg.roleModels : {}) as Record<string, string>
+        const modeModels = (msg.modeModels && typeof msg.modeModels === "object" ? msg.modeModels : {}) as Record<string, string>
+        const enabled = typeof msg.enabled === "boolean" ? msg.enabled : true
+        roleModelsConfig = { roleModels, modeModels, enabled }
+        modelRoutingPanel.applyConfig({ roleModels, modeModels, enabled })
+      }],
       ["orchestration_route", (msg, sid) => {
         if (!sid) return
         const role = typeof msg.role === "string" ? msg.role : "implementation"

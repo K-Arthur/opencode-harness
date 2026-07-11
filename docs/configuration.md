@@ -177,6 +177,13 @@ All settings are under the `opencode.*` namespace and can be configured in VS Co
   }
   ```
 
+### `opencode.roleModelsEnabled`
+- **Type**: `boolean`
+- **Default**: `true`
+- **Scope**: `window`
+- **Description**: Master switch for orchestration role routing. When `false`, `opencode.roleModels` overrides are ignored and the implicit keyword-based role inference (matching words like "bug" or "review" in the prompt) is skipped — every prompt uses the session/mode model exactly as selected, with no silent rerouting. Mode overrides (`opencode.modeModels`) still apply.
+- **UI**: Toggle via the "Enable model routing" checkbox at the top of Settings → Configure → Model Routing.
+
 ### `opencode.masking.*`
 - **Description**: Controls host-side prompt masking before prompts are appended, queued, or sent. Masking redacts common secret shapes, removes excluded file/document context, and prunes oversized prompts.
 - **Settings**:

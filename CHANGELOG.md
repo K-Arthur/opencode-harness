@@ -17,6 +17,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.62] — 2026-07-11
+
+### Fixed
+
+- **Model routing had no off switch**: every prompt was silently passed
+  through keyword-based role inference (`inferAgentRole()` scanning the
+  prompt text for words like "bug" or "review"), even when the user never
+  touched the "Route next prompt" selector — so a configured role model
+  could reroute a message the user expected to go to their picked model,
+  with no way to disable it. Added `opencode.roleModelsEnabled` (default
+  `true`) and a master "Enable model routing" toggle in the Model Routing
+  settings panel. When off, `resolveRoutedModel()` ignores role overrides
+  entirely and `inferAgentRole()` skips the prompt-text sniffing, falling
+  back to the mode/session/global model exactly as picked.
+- **Model Routing settings panel always looked reset**: `getModels`,
+  `getRoleModels`, and `getModeModels` were hardcoded stubs (`() => []` /
+  `() => ({})`) — the panel never received the real available-models list
+  or the already-saved role/mode config, so every open looked blank even
+  after a successful save. Added a `get_role_models` webview message and a
+  `role_models_config` host push (via `pushRoleModelsToWebview()`) so the
+  panel now round-trips the actual saved settings, and wired `getModels` to
+  the live model list (`modelManager.getAllModels()`).
+- **Model Routing panel had no way to pick from available models**: each
+  phase row was a free-text `<input>` with a static "not found in available
+  models" warning that could never resolve, since the model list was never
+  supplied. Replaced with a real `<select>` populated from the live model
+  list (plus an "Auto (use fallback)" option and, if a previously-saved
+  model is no longer available, a labeled fallback option so the setting
+  isn't silently dropped).
+- **"New temporary chat" button on the welcome screen did nothing**:
+  `#welcome-temp-btn`'s click handler was implemented in `welcomeView.ts`
+  but the element was never passed into `welcomeViewDeps.els` in `main.ts`,
+  so `addEventListener` was never called. The tab-strip's temp-chat button
+  used a separate, correctly-wired path and worked fine.
+- **Session History showed a blank/just-opened tab pinned above real
+  history**: a new tab's session is registered (and its `lastActiveAt` set
+  to "now") the instant the tab is created, before any prompt is sent. The
+  History modal and the welcome screen's host-backed "Recent" list didn't
+  filter these out, so opening a new tab and then History showed an
+  "Untitled" entry outranking every real conversation. Both now hide
+  zero-message local sessions unless pinned or matched by an active search
+  (mirrors the filter the welcome screen's local-state "Recent" list
+  already had).
+
 ## [0.4.60] — 2026-07-10
 
 ### Added

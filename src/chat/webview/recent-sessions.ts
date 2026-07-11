@@ -33,9 +33,15 @@ function sessionMatchesQuery(session: WelcomeLocalSession, query: string): boole
   return false
 }
 
-export function prepareHostRecentSessions(sessions: SessionSummary[]): SessionSummary[] {
+export function prepareHostRecentSessions(sessions: SessionSummary[], filterQuery: string = ""): SessionSummary[] {
+  const query = normalizeRecentSessionQuery(filterQuery)
   return sessions
-    .slice()
+    // A freshly created blank tab is registered server-side immediately
+    // (see ChatProvider.ensureLocalTab) and reports lastActiveAt = now, so
+    // without this it would sort above every real conversation in "Recent".
+    // Mirrors the messages.length > 0 guard in prepareLocalRecentSessions —
+    // still let an explicit name search surface a renamed empty session.
+    .filter((s) => (s.messageCount ?? 0) > 0 || (!!query && (s.title || "").toLowerCase().includes(query)))
     .sort((a, b) => (b.time ?? 0) - (a.time ?? 0))
 }
 

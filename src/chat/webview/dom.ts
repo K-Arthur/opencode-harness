@@ -75,6 +75,7 @@ export interface ElementRefs {
   modelRoutingGlobal: HTMLDivElement
   modelRoutingGlobalValue: HTMLSpanElement
   modelRoutingStatus: HTMLDivElement
+  modelRoutingEnabledCheckbox: HTMLInputElement
 
   modelDropdown: HTMLDivElement
   variantDropdown: HTMLDivElement
@@ -331,6 +332,7 @@ export function getElementRefs(): ElementRefs {
     modelRoutingGlobal: requireElement<HTMLDivElement>("model-routing-global"),
     modelRoutingGlobalValue: requireElement<HTMLSpanElement>("model-routing-global-value"),
     modelRoutingStatus: requireElement<HTMLDivElement>("model-routing-status"),
+    modelRoutingEnabledCheckbox: requireElement<HTMLInputElement>("model-routing-enabled-checkbox"),
 
     welcomeView: requireElement<HTMLDivElement>("welcome-view"),
     welcomeModelEmptyBanner: document.getElementById("welcome-model-empty-banner"),

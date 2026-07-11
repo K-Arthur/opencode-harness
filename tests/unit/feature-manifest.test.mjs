@@ -128,6 +128,7 @@ const EXPECTED_CONFIG_KEYS = [
   "opencode.defaultMode",
   "opencode.modeModels",
   "opencode.roleModels",
+  "opencode.roleModelsEnabled",
   "opencode.masking.enabled",
   "opencode.masking.maxPromptTokens",
   "opencode.masking.reserveTokens",

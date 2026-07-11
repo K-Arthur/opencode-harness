@@ -77,4 +77,32 @@ describe("modelRouting", () => {
       currentModel: "anthropic/global",
     }), "anthropic/global")
   })
+
+  it("ignores role overrides (but still honors mode overrides) when roleRoutingEnabled is false", () => {
+    assert.equal(resolveRoutedModel({
+      role: "review",
+      mode: "build",
+      sessionModel: "anthropic/session",
+      currentModel: "anthropic/global",
+      workspaceRoleModels: { review: "anthropic/reviewer" },
+      settingsRoleModels: { review: "openai/settings-reviewer" },
+      workspaceModeModels: { build: "anthropic/build" },
+      roleRoutingEnabled: false,
+    }), "anthropic/build")
+
+    assert.equal(resolveRoutedModel({
+      role: "review",
+      mode: "build",
+      sessionModel: "anthropic/session",
+      currentModel: "anthropic/global",
+      workspaceRoleModels: { review: "anthropic/reviewer" },
+      roleRoutingEnabled: false,
+    }), "anthropic/session")
+  })
+
+  it("skips keyword-based prompt sniffing when enableTextInference is false, but still honors an explicit role or mode", () => {
+    assert.equal(inferAgentRole({ promptText: "tests are failing with a stack trace", enableTextInference: false }), "implementation")
+    assert.equal(inferAgentRole({ mode: "plan", promptText: "tests are failing", enableTextInference: false }), "planning")
+    assert.equal(inferAgentRole({ explicitRole: "debugging", promptText: "add a toolbar button", enableTextInference: false }), "debugging")
+  })
 })

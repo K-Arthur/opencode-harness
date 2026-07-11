@@ -77,15 +77,34 @@ describe("recent-sessions.ts", () => {
 
   it("prepares host sessions newest first without mutating input", () => {
     const sessions = [
-      { id: "old", time: 10 },
-      { id: "new", time: 30 },
-      { id: "middle", time: 20 },
+      { id: "old", time: 10, messageCount: 1 },
+      { id: "new", time: 30, messageCount: 1 },
+      { id: "middle", time: 20, messageCount: 1 },
     ]
 
     const prepared = prepareHostRecentSessions(sessions)
 
     assert.deepEqual(prepared.map((s) => s.id), ["new", "middle", "old"])
     assert.deepEqual(sessions.map((s) => s.id), ["old", "new", "middle"])
+  })
+
+  it("excludes blank (zero-message) host sessions so a freshly created tab doesn't outrank real history", () => {
+    const sessions = [
+      { id: "blank", time: 999, messageCount: 0, title: "Untitled" },
+      { id: "real", time: 10, messageCount: 3, title: "Fix the bug" },
+    ]
+
+    const prepared = prepareHostRecentSessions(sessions)
+
+    assert.deepEqual(prepared.map((s) => s.id), ["real"])
+  })
+
+  it("still surfaces a blank host session when its title matches an active search", () => {
+    const sessions = [{ id: "blank", time: 999, messageCount: 0, title: "My draft" }]
+
+    const prepared = prepareHostRecentSessions(sessions, "draft")
+
+    assert.deepEqual(prepared.map((s) => s.id), ["blank"])
   })
 
   it("prepares local sessions with active exclusion and text/name filtering", () => {

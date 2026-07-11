@@ -42,8 +42,8 @@ describe("sessionListRenderer — pinning", () => {
 
   it("sorts pinned sessions above more-recent unpinned ones", () => {
     setUnifiedLocalSessions([
-      { id: "a", title: "Recent unpinned", time: 1000, pinned: false },
-      { id: "b", title: "Old pinned", time: 10, pinned: true },
+      { id: "a", title: "Recent unpinned", time: 1000, messageCount: 1, pinned: false },
+      { id: "b", title: "Old pinned", time: 10, messageCount: 1, pinned: true },
     ])
     renderUnifiedSessionList()
     assert.deepEqual(rowNames(), ["Old pinned", "Recent unpinned"])
@@ -51,8 +51,8 @@ describe("sessionListRenderer — pinning", () => {
 
   it("renders a pinned marker and --pinned class on pinned rows only", () => {
     setUnifiedLocalSessions([
-      { id: "a", title: "Plain", time: 1000, pinned: false },
-      { id: "b", title: "Pinned", time: 900, pinned: true },
+      { id: "a", title: "Plain", time: 1000, messageCount: 1, pinned: false },
+      { id: "b", title: "Pinned", time: 900, messageCount: 1, pinned: true },
     ])
     renderUnifiedSessionList()
     assert.equal(document.querySelectorAll(".modal-session-item--pinned").length, 1)
@@ -62,7 +62,7 @@ describe("sessionListRenderer — pinning", () => {
   it("the more-menu pin action posts pin_session with the toggled state", () => {
     const posted: Record<string, unknown>[] = []
     setSessionListPostMessage((m) => posted.push(m as Record<string, unknown>))
-    setUnifiedLocalSessions([{ id: "a", title: "Plain", time: 1000, pinned: false }])
+    setUnifiedLocalSessions([{ id: "a", title: "Plain", time: 1000, messageCount: 1, pinned: false }])
     renderUnifiedSessionList()
     const moreBtn = document.querySelector<HTMLButtonElement>(".modal-session-more-btn")!
     assert.ok(moreBtn, "more-menu button must exist for local sessions")
@@ -79,7 +79,7 @@ describe("sessionListRenderer — pinning", () => {
   })
 
   it("a pinned session's Pin menu item reflects the pinned state", () => {
-    setUnifiedLocalSessions([{ id: "b", title: "Pinned", time: 900, pinned: true }])
+    setUnifiedLocalSessions([{ id: "b", title: "Pinned", time: 900, messageCount: 1, pinned: true }])
     renderUnifiedSessionList()
     const moreBtn = document.querySelector<HTMLButtonElement>(".modal-session-more-btn")!
     moreBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true }))
@@ -93,7 +93,7 @@ describe("sessionListRenderer — pinning", () => {
   it("inline rename from more-menu posts rename_session on Enter", () => {
     const posted: Record<string, unknown>[] = []
     setSessionListPostMessage((m) => posted.push(m as Record<string, unknown>))
-    setUnifiedLocalSessions([{ id: "a", title: "Old name", time: 1000 }])
+    setUnifiedLocalSessions([{ id: "a", title: "Old name", time: 1000, messageCount: 1 }])
     renderUnifiedSessionList()
     const moreBtn = document.querySelector<HTMLButtonElement>(".modal-session-more-btn")!
     moreBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true }))
@@ -114,7 +114,7 @@ describe("sessionListRenderer — pinning", () => {
   it("inline rename from more-menu cancels on Escape without posting", () => {
     const posted: Record<string, unknown>[] = []
     setSessionListPostMessage((m) => posted.push(m as Record<string, unknown>))
-    setUnifiedLocalSessions([{ id: "a", title: "Keep me", time: 1000 }])
+    setUnifiedLocalSessions([{ id: "a", title: "Keep me", time: 1000, messageCount: 1 }])
     renderUnifiedSessionList()
     const moreBtn = document.querySelector<HTMLButtonElement>(".modal-session-more-btn")!
     moreBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true }))
@@ -134,7 +134,7 @@ describe("sessionListRenderer — pinning", () => {
   it("renders existing tag chips and edits tags from more-menu", () => {
     const posted: Record<string, unknown>[] = []
     setSessionListPostMessage((m) => posted.push(m as Record<string,unknown>))
-    setUnifiedLocalSessions([{ id: "a", title: "Tagged", time: 1000, tags: ["wip"] }])
+    setUnifiedLocalSessions([{ id: "a", title: "Tagged", time: 1000, messageCount: 1, tags: ["wip"] }])
     renderUnifiedSessionList()
     assert.deepEqual(Array.from(document.querySelectorAll(".modal-session-tag")).map((e) => e.textContent), ["wip"])
     const moreBtn = document.querySelector<HTMLButtonElement>(".modal-session-more-btn")!
@@ -165,7 +165,7 @@ describe("sessionListRenderer — action icons", () => {
   })
 
   it("renders a more-menu button with SVG icon for session actions", () => {
-    setUnifiedLocalSessions([{ id: "a", title: "Has actions", time: 1000 }])
+    setUnifiedLocalSessions([{ id: "a", title: "Has actions", time: 1000, messageCount: 1 }])
     renderUnifiedSessionList()
     const moreBtn = document.querySelector<HTMLButtonElement>(".modal-session-more-btn")
     assert.ok(moreBtn, ".modal-session-more-btn must be present")
@@ -175,7 +175,7 @@ describe("sessionListRenderer — action icons", () => {
   })
 
   it("more-menu reveals action items on click", () => {
-    setUnifiedLocalSessions([{ id: "a", title: "Clickable", time: 1000 }])
+    setUnifiedLocalSessions([{ id: "a", title: "Clickable", time: 1000, messageCount: 1 }])
     renderUnifiedSessionList()
     const moreBtn = document.querySelector<HTMLButtonElement>(".modal-session-more-btn")!
     assert.equal(moreBtn.getAttribute("aria-expanded"), "false")
@@ -187,7 +187,7 @@ describe("sessionListRenderer — action icons", () => {
   })
 
   it("more-menu contains all expected action items", () => {
-    setUnifiedLocalSessions([{ id: "a", title: "Full", time: 1000 }])
+    setUnifiedLocalSessions([{ id: "a", title: "Full", time: 1000, messageCount: 1 }])
     renderUnifiedSessionList()
     const moreBtn = document.querySelector<HTMLButtonElement>(".modal-session-more-btn")!
     moreBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true }))
@@ -201,7 +201,7 @@ describe("sessionListRenderer — action icons", () => {
   })
 
   it("more-menu items have accessible labels", () => {
-    setUnifiedLocalSessions([{ id: "a", title: "Test", time: 1000 }])
+    setUnifiedLocalSessions([{ id: "a", title: "Test", time: 1000, messageCount: 1 }])
     renderUnifiedSessionList()
     const moreBtn = document.querySelector<HTMLButtonElement>(".modal-session-more-btn")!
     assert.equal(moreBtn.getAttribute("aria-label"), "More session actions")
@@ -215,5 +215,51 @@ describe("sessionListRenderer — action icons", () => {
       assert.ok(item.getAttribute("aria-label"), "each menu item must have aria-label")
       assert.equal(item.getAttribute("role"), "menuitem")
     }
+  })
+})
+
+describe("sessionListRenderer — blank session filtering", () => {
+  beforeEach(() => {
+    setupDom()
+    setUnifiedServerSessions([])
+    setUnifiedSessionQuery("")
+  })
+  afterEach(() => {
+    console.warn = warn
+  })
+
+  it("hides a blank (zero-message) local session so a freshly opened tab doesn't clutter History", () => {
+    setUnifiedLocalSessions([
+      { id: "blank", title: "Untitled", time: 999999, messageCount: 0 },
+      { id: "real", title: "Fix the bug", time: 10, messageCount: 3 },
+    ])
+    renderUnifiedSessionList()
+    assert.deepEqual(rowNames(), ["Fix the bug"])
+  })
+
+  it("still shows a pinned blank session", () => {
+    setUnifiedLocalSessions([
+      { id: "blank", title: "Untitled", time: 999999, messageCount: 0, pinned: true },
+    ])
+    renderUnifiedSessionList()
+    assert.deepEqual(rowNames(), ["Untitled"])
+  })
+
+  it("surfaces a blank session when the user is searching for its title", () => {
+    setUnifiedLocalSessions([
+      { id: "blank", title: "My draft", time: 999999, messageCount: 0 },
+    ])
+    setUnifiedSessionQuery("draft")
+    renderUnifiedSessionList()
+    assert.deepEqual(rowNames(), ["My draft"])
+  })
+
+  it("shows an empty state when the only session is blank and unqueried", () => {
+    setUnifiedLocalSessions([
+      { id: "blank", title: "Untitled", time: 999999, messageCount: 0 },
+    ])
+    renderUnifiedSessionList()
+    assert.equal(rowNames().length, 0)
+    assert.ok(document.querySelector(".modal-empty"), "must show the empty-state message")
   })
 })

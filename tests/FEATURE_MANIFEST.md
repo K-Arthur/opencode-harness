@@ -133,6 +133,7 @@
 | FM-CFG-039 | `opencode.defaultMode` | enum | `"build"` | window | stable |
 | FM-CFG-040 | `opencode.modeModels` | object | `{}` | window | stable |
 | FM-CFG-040a | `opencode.roleModels` | object | `{}` | window | stable |
+| FM-CFG-040a1 | `opencode.roleModelsEnabled` | boolean | `true` | window | stable |
 | FM-CFG-040b | `opencode.masking.enabled` | boolean | `true` | window | stable |
 | FM-CFG-040c | `opencode.masking.maxPromptTokens` | number | `64000` | window | stable |
 | FM-CFG-040d | `opencode.masking.reserveTokens` | number | `2000` | window | stable |

@@ -111,6 +111,13 @@ function buildUnifiedSessionItems(): UnifiedSessionItem[] {
         tags: local.tags,
       })
     } else {
+      // A blank tab (new/temp session with no prompt sent yet) is registered
+      // in the session store the instant its tab is created, with
+      // lastActiveAt = now — so left unfiltered it outranks every real
+      // conversation at the top of History. Skip it unless the user pinned
+      // it or is searching for it by (renamed) title.
+      const isBlank = !local.messageCount && !local.pinned
+      if (isBlank && !_query) continue
       items.push({
         type: "local",
         localId: local.id,

@@ -81,6 +81,31 @@ describe("WebviewEventRouter orchestration and masking integration", () => {
   it("accepts new_temp_session through the validator", () => {
     assert.equal(validate({}, "new_temp_session"), true)
   })
+
+  it("persists the model-routing master switch and echoes config back to the webview", () => {
+    const handler = blockBetween('["set_role_models"', '["mode_switch_request"')
+
+    assert.ok(handler.includes('config.get<boolean>("roleModelsEnabled"'), "must read the current enabled flag before deciding whether it changed")
+    assert.ok(handler.includes('config.update("roleModelsEnabled", enabled'), "toggling the checkbox must persist opencode.roleModelsEnabled")
+    assert.ok(handler.includes("this.pushRoleModelsToWebview()"), "save must echo the merged config back so the panel doesn't look reset")
+  })
+
+  it("exposes a get_role_models handler that pushes the current config on panel open", () => {
+    const handler = blockBetween('["get_role_models"', '["mode_switch_request"')
+    assert.ok(handler.includes("this.pushRoleModelsToWebview()"), "get_role_models must push role_models_config back to the webview")
+  })
+
+  it("pushRoleModelsToWebview posts the roleModels/modeModels/enabled config", () => {
+    const method = blockBetween("private pushRoleModelsToWebview(): void {", "private pushMcpServersToWebview")
+    assert.ok(method.includes('type: "role_models_config"'))
+    assert.ok(method.includes('config.get<Record<string, string>>("roleModels"'))
+    assert.ok(method.includes('config.get<Record<string, string>>("modeModels"'))
+    assert.ok(method.includes('config.get<boolean>("roleModelsEnabled"'))
+  })
+
+  it("accepts get_role_models through the validator (falls back to accept-by-default like its set_role_models sibling)", () => {
+    assert.equal(validate({}, "get_role_models"), true)
+  })
 })
 
 describe("WebviewEventRouter dead-wire guard", () => {

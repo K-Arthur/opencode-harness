@@ -8,6 +8,12 @@ const ROLES = [
   { id: "debugging", label: "Debugging", description: "Bug investigation, error analysis, and fixes" },
 ] as const
 
+export interface ModelRoutingConfig {
+  roleModels: Partial<Record<string, string>>
+  modeModels: Record<string, string>
+  enabled: boolean
+}
+
 export interface ModelRoutingDeps {
   els: {
     modelRoutingPanel: HTMLElement
@@ -19,6 +25,7 @@ export interface ModelRoutingDeps {
     modelRoutingGlobal: HTMLElement
     modelRoutingGlobalValue: HTMLElement
     modelRoutingStatus: HTMLElement
+    modelRoutingEnabledCheckbox: HTMLInputElement
   }
   vscode: {
     postMessage(msg: Record<string, unknown>): void
@@ -28,6 +35,12 @@ export interface ModelRoutingDeps {
   getModeModels(): Record<string, string>
   getGlobalModel(): string
   getSessionModel(): string | undefined
+  /** Master routing switch — see `opencode.roleModelsEnabled`. Defaults to true until the host's `role_models_config` reply arrives. */
+  getRoutingEnabled(): boolean
+}
+
+function modelRef(model: ModelInfo): string {
+  return `${model.provider}/${model.id}`
 }
 
 export function createModelRoutingPanel(deps: ModelRoutingDeps) {
@@ -39,6 +52,7 @@ export function createModelRoutingPanel(deps: ModelRoutingDeps) {
   let currentSessionModel: string | undefined
   let currentModeModels: Record<string, string> = {}
   let currentModels: ModelInfo[] = []
+  let pendingEnabled = true
 
   function open() {
     if (isOpen) return
@@ -49,6 +63,8 @@ export function createModelRoutingPanel(deps: ModelRoutingDeps) {
     currentGlobalModel = deps.getGlobalModel()
     currentSessionModel = deps.getSessionModel()
     currentModels = deps.getModels()
+    pendingEnabled = deps.getRoutingEnabled()
+    deps.els.modelRoutingEnabledCheckbox.checked = pendingEnabled
     deps.els.modelRoutingPanel.classList.remove("hidden")
     render()
     deps.els.modelRoutingStatus.classList.add("hidden")
@@ -67,6 +83,22 @@ export function createModelRoutingPanel(deps: ModelRoutingDeps) {
     }
   }
 
+  /**
+   * Apply config pushed from the host (in reply to `get_role_models`, or
+   * echoed back after a save). The panel opens synchronously on click but
+   * the real saved settings arrive a tick later over postMessage — without
+   * this the panel would render as blank/reset on every open even though
+   * the settings were saved correctly last time.
+   */
+  function applyConfig(config: ModelRoutingConfig) {
+    currentRoleModels = { ...config.roleModels }
+    pendingRoleModels = { ...config.roleModels }
+    currentModeModels = { ...config.modeModels }
+    pendingEnabled = config.enabled
+    deps.els.modelRoutingEnabledCheckbox.checked = pendingEnabled
+    if (isOpen) render()
+  }
+
   function resetAll() {
     pendingRoleModels = {}
     render()
@@ -77,9 +109,10 @@ export function createModelRoutingPanel(deps: ModelRoutingDeps) {
     deps.vscode.postMessage({
       type: "set_role_models",
       roleModels: pendingRoleModels,
+      enabled: pendingEnabled,
     })
     currentRoleModels = { ...pendingRoleModels }
-    showStatus("Model routing updated", "success")
+    showStatus(pendingEnabled ? "Model routing updated" : "Model routing disabled — every prompt now uses your selected model as-is", "success")
   }
 
   function showStatus(message: string, kind: "info" | "success" | "error") {
@@ -110,15 +143,9 @@ export function createModelRoutingPanel(deps: ModelRoutingDeps) {
     return chain
   }
 
-  function isModelAvailable(modelId: string): boolean {
-    if (!modelId || modelId === "—") return true
-    return currentModels.some((m) => m.id === modelId || m.displayName === modelId)
-  }
-
-  function handleModelInput(roleId: string, value: string) {
-    const trimmed = value.trim()
-    if (trimmed) {
-      pendingRoleModels[roleId] = trimmed
+  function handleModelSelect(roleId: string, value: string) {
+    if (value) {
+      pendingRoleModels[roleId] = value
     } else {
       delete pendingRoleModels[roleId]
     }
@@ -138,9 +165,45 @@ export function createModelRoutingPanel(deps: ModelRoutingDeps) {
     }
   }
 
+  function buildModelOptions(select: HTMLSelectElement, selectedValue: string | undefined) {
+    select.innerHTML = ""
+    const auto = document.createElement("option")
+    auto.value = ""
+    auto.textContent = "Auto (use fallback)"
+    select.appendChild(auto)
+
+    const seen = new Set<string>()
+    const sorted = currentModels
+      .filter((m) => m.enabled !== false)
+      .sort((a, b) => a.displayName.localeCompare(b.displayName))
+    for (const model of sorted) {
+      const ref = modelRef(model)
+      seen.add(ref)
+      const option = document.createElement("option")
+      option.value = ref
+      option.textContent = `${model.displayName} (${model.provider})`
+      select.appendChild(option)
+    }
+
+    // A previously-saved model that's no longer in the available list (e.g.
+    // the provider was disabled) must still appear as a selectable option —
+    // otherwise opening the panel silently drops the user's setting the
+    // moment they touch the dropdown.
+    if (selectedValue && !seen.has(selectedValue)) {
+      const stale = document.createElement("option")
+      stale.value = selectedValue
+      stale.textContent = `${selectedValue} (not in available models)`
+      select.appendChild(stale)
+    }
+
+    select.value = selectedValue || ""
+  }
+
   function render() {
     const list = deps.els.modelRoutingList
     list.innerHTML = ""
+    list.classList.toggle("model-routing-list--disabled", !pendingEnabled)
+
     for (const role of ROLES) {
       const row = document.createElement("div")
       row.className = "model-routing-row"
@@ -163,28 +226,15 @@ export function createModelRoutingPanel(deps: ModelRoutingDeps) {
       const inputGroup = document.createElement("div")
       inputGroup.className = "model-routing-row-input-group"
 
-      const input = document.createElement("input")
-      input.type = "text"
-      input.className = "model-routing-row-input"
-      input.id = `model-routing-input-${role.id}`
-      input.placeholder = "Auto (use fallback)"
-      input.value = pendingRoleModels[role.id] || ""
-      input.setAttribute("aria-label", `Model for ${role.label} phase`)
-      input.addEventListener("input", () => handleModelInput(role.id, input.value))
+      const select = document.createElement("select")
+      select.className = "model-routing-row-select"
+      select.id = `model-routing-input-${role.id}`
+      select.disabled = !pendingEnabled
+      select.setAttribute("aria-label", `Model for ${role.label} phase`)
+      buildModelOptions(select, pendingRoleModels[role.id])
+      select.addEventListener("change", () => handleModelSelect(role.id, select.value))
 
-      const clearBtn = document.createElement("button")
-      clearBtn.className = "model-routing-clear-btn"
-      clearBtn.textContent = "×"
-      clearBtn.title = `Clear model for ${role.label}`
-      clearBtn.setAttribute("aria-label", `Clear ${role.label} model`)
-      clearBtn.addEventListener("click", () => {
-        input.value = ""
-        handleModelInput(role.id, "")
-        input.focus()
-      })
-
-      inputGroup.appendChild(input)
-      inputGroup.appendChild(clearBtn)
+      inputGroup.appendChild(select)
       header.appendChild(inputGroup)
       row.appendChild(header)
 
@@ -207,13 +257,6 @@ export function createModelRoutingPanel(deps: ModelRoutingDeps) {
         row.appendChild(chainEl)
       }
 
-      if (pendingRoleModels[role.id] && !isModelAvailable(pendingRoleModels[role.id]!)) {
-        const warn = document.createElement("div")
-        warn.className = "model-routing-row-warning"
-        warn.textContent = `⚠ "${pendingRoleModels[role.id]}" not found in available models. Verify the provider/model ID.`
-        row.appendChild(warn)
-      }
-
       list.appendChild(row)
     }
 
@@ -231,6 +274,10 @@ export function createModelRoutingPanel(deps: ModelRoutingDeps) {
     close()
   })
   deps.els.modelRoutingReset.addEventListener("click", resetAll)
+  deps.els.modelRoutingEnabledCheckbox.addEventListener("change", () => {
+    pendingEnabled = deps.els.modelRoutingEnabledCheckbox.checked
+    render()
+  })
   deps.els.modelRoutingPanel.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       e.preventDefault()
@@ -241,5 +288,5 @@ export function createModelRoutingPanel(deps: ModelRoutingDeps) {
     if (e.target === deps.els.modelRoutingPanel) close()
   })
 
-  return { open, close }
+  return { open, close, applyConfig }
 }

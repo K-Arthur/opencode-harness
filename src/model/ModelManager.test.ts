@@ -133,4 +133,10 @@ describe("ModelManager.ts", () => {
   it("has workspaceSmallModel getter", () => {
     assert.ok(source.includes("get workspaceSmallModel"), "must expose workspaceSmallModel getter")
   })
+
+  it("has isRoleRoutingEnabled method gated on opencode.roleModelsEnabled, consulted by getRoutedModel", () => {
+    assert.ok(source.includes("isRoleRoutingEnabled("), "must expose isRoleRoutingEnabled")
+    assert.ok(source.includes('"roleModelsEnabled"'), "must read the roleModelsEnabled setting")
+    assert.ok(source.includes("roleRoutingEnabled: this.isRoleRoutingEnabled()"), "getRoutedModel must pass the master switch through to resolveRoutedModel")
+  })
 })

@@ -56,7 +56,7 @@ describe("sessionListRenderer — more-menu regression", () => {
   })
 
   it("more-menu is portaled to <body>, not nested in the actions cell", () => {
-    setUnifiedLocalSessions([{ id: "a", title: "Alpha", time: 1000 }])
+    setUnifiedLocalSessions([{ id: "a", title: "Alpha", time: 1000, messageCount: 1 }])
     renderUnifiedSessionList()
     const menu = document.querySelector<HTMLElement>(".modal-session-more-menu")
     assert.ok(menu, "menu must be in the DOM")
@@ -74,7 +74,7 @@ describe("sessionListRenderer — more-menu regression", () => {
   })
 
   it("more-menu is positioned with fixed coordinates anchored to the trigger button", () => {
-    setUnifiedLocalSessions([{ id: "a", title: "Alpha", time: 1000 }])
+    setUnifiedLocalSessions([{ id: "a", title: "Alpha", time: 1000, messageCount: 1 }])
     renderUnifiedSessionList()
     const moreBtn = document.querySelector<HTMLButtonElement>(".modal-session-more-btn")!
     moreBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true }))
@@ -90,7 +90,7 @@ describe("sessionListRenderer — more-menu regression", () => {
   })
 
   it("more-menu does not get re-added on every render (no leak)", () => {
-    setUnifiedLocalSessions([{ id: "a", title: "Alpha", time: 1000 }])
+    setUnifiedLocalSessions([{ id: "a", title: "Alpha", time: 1000, messageCount: 1 }])
     renderUnifiedSessionList()
     renderUnifiedSessionList()
     renderUnifiedSessionList()
@@ -103,7 +103,7 @@ describe("sessionListRenderer — more-menu regression", () => {
   it("Pin / Archive / Rename / Edit tags / Delete all reachable via the more menu", () => {
     const posted: Record<string, unknown>[] = []
     setSessionListPostMessage((m) => posted.push(m as Record<string, unknown>))
-    setUnifiedLocalSessions([{ id: "a", title: "Full", time: 1000 }])
+    setUnifiedLocalSessions([{ id: "a", title: "Full", time: 1000, messageCount: 1 }])
     renderUnifiedSessionList()
     const moreBtn = document.querySelector<HTMLButtonElement>(".modal-session-more-btn")!
     moreBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true }))
@@ -128,7 +128,7 @@ describe("sessionListRenderer — more-menu regression", () => {
   })
 
   it("clicking outside the menu closes it", () => {
-    setUnifiedLocalSessions([{ id: "a", title: "Alpha", time: 1000 }])
+    setUnifiedLocalSessions([{ id: "a", title: "Alpha", time: 1000, messageCount: 1 }])
     renderUnifiedSessionList()
     const moreBtn = document.querySelector<HTMLButtonElement>(".modal-session-more-btn")!
     moreBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true }))
@@ -167,8 +167,8 @@ describe("sessionListRenderer — more-menu regression", () => {
 
   it("disposePortaledMoreMenus() removes every portaled menu", () => {
     setUnifiedLocalSessions([
-      { id: "a", title: "A", time: 1000 },
-      { id: "b", title: "B", time: 900 },
+      { id: "a", title: "A", time: 1000, messageCount: 1 },
+      { id: "b", title: "B", time: 900, messageCount: 1 },
     ])
     renderUnifiedSessionList()
     assert.equal(document.querySelectorAll(".modal-session-more-menu").length, 2)
