@@ -1,0 +1,4 @@
+--container-architecture linux/amd64
+--env NODE_VERSION=22
+--platform ubuntu-latest=catthehacker/ubuntu:act-latest
+--artifact-server-path /tmp/act-artifacts

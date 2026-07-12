@@ -1,0 +1,17 @@
+name: Setup Node.js with cache
+description: Checkout, setup Node with npm cache, install deps
+inputs:
+  node-version:
+    description: Node.js version
+    required: false
+    default: "22"
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+    - run: npm ci
+      shell: bash

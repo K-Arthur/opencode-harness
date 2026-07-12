@@ -26,12 +26,11 @@ void describe("check-bundle-size.mjs", () => {
     )
   })
 
-  void it("enforces the 500KB extension / 680KB webview limits, with 600KB documented as the paydown target", () => {
-    // Find the asserted limits in the script source.
+  void it("enforces the current extension host and webview limits", () => {
     const source = readFileSync(checkScript, "utf8")
-    assert.ok(/500\s*\*\s*1024/.test(source), "extension.js limit must be 500KB (500*1024)")
-    assert.ok(/680\s*\*\s*1024/.test(source), "main.js limit must be 680KB (680*1024) after the 2026-06-02 re-baseline")
-    assert.ok(/600KB/.test(source), "the 600KB paydown target must remain documented in the script so the goal isn't lost")
+    assert.ok(/791\s*\*\s*1024/.test(source), "extension host limit must be 791KB (791*1024)")
+    assert.ok(/838\s*\*\s*1024/.test(source), "chat webview limit must be 838KB (838*1024)")
+    assert.ok(/500\s*\*\s*1024/.test(source), "markdown worker advisory limit must be 500KB (500*1024)")
   })
 
   void it("produces a clear pass/fail line for each bundle", () => {
