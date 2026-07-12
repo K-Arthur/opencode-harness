@@ -1,1 +1,1 @@
-npx --no-install tsc --noEmit
+npx --no-install -p typescript tsc --noEmit 2>/dev/null || npx --yes -p typescript tsc --noEmit
