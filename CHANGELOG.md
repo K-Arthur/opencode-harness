@@ -17,6 +17,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Three-axis capability profiles**: `ModelCapabilities` extended with
+  `autonomy` (process self-supervision), `throughput` (task competence/cost
+  efficiency), and `visualJudgment` (design quality — separate from raw vision
+  support). Each axis tracks its provenance (`confidenceSources`: verified /
+  declared / inferred / fallback). New `src/orchestration/capabilityProfiles.ts`
+  provides composite scoring, role suitability computation, capability
+  threshold gating, autonomy tier guidance (S/A/B/C with delegation
+  scaffolding), and canary-probe infrastructure for empirical capability
+  assessment of unfamiliar models. (#§1)
+
+- **Visual-QA orchestration gate**: Deterministic, no-vision-model-needed
+  frontend quality checks in `src/orchestration/visualQaGate.ts`: design-token
+  compliance (no raw color literals, 4px grid enforcement), WCAG accessibility
+  heuristics (<12px font detection, low-opacity contrast warnings), and layout
+  sanity checks (overflow, zero-size, z-index). Exposes a `QualityGate`-
+  compatible interface (`createVisualQaGate()`) for the methodology pipeline
+  and a `buildVisualReviewPrompt()` to hand off to a vision-capable reviewer
+  for a bounded revise loop. (#§1.5)
+
+- **`visualReview` AgentRole**: New orchestration role for visual design
+  review, with prompt-text inference (`VISUAL_REVIEW_RE`), aliases
+  (`visual-review`, `ui-review`, `design-review`), and capability gating
+  via `resolveCapabilityAwareModel()`. (#§6)
+
+### Fixed
+
+- **`HeartbeatService.test.ts` pre-existing failure**: structural test was
+  blocked by transitive `vscode` import through `outputChannel.ts`. Applied
+  the same CJS shim pattern used in `SteerPromptHandler.test.ts` — hooks
+  `Module._resolveFilename` to redirect `vscode` to a minimal stub, then
+  uses CJS `require()` (which respects `_resolveFilename`) instead of ESM
+  `import`. All 5 heartbeat tests now pass.
+
 ## [0.4.62] — 2026-07-11
 
 ### Fixed
