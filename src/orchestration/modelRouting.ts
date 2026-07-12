@@ -1,4 +1,7 @@
-export type AgentRole = "planning" | "implementation" | "review" | "debugging"
+import type { ModelCapabilities } from "../methodology/types"
+import { isCapableForRole, scaffoldingForRole, type AutonomyGuidance } from "./capabilityProfiles"
+
+export type AgentRole = "planning" | "implementation" | "review" | "debugging" | "visualReview"
 
 export interface RoleInferenceInput {
   explicitRole?: string
@@ -39,7 +42,6 @@ const ROLE_ALIASES: Record<string, AgentRole> = {
   plan: "planning",
   planning: "planning",
   planner: "planning",
-  design: "planning",
   architecture: "planning",
   build: "implementation",
   code: "implementation",
@@ -56,11 +58,20 @@ const ROLE_ALIASES: Record<string, AgentRole> = {
   debugger: "debugging",
   debugging: "debugging",
   fix: "debugging",
+  "visual-review": "visualReview",
+  visualreview: "visualReview",
+  "visual review": "visualReview",
+  "ui-review": "visualReview",
+  uireview: "visualReview",
+  design: "planning",
+  "design-review": "visualReview",
+  designreview: "visualReview",
 }
 
 const DEBUGGING_RE = /\b(debug|bug|failing|failure|failed|error|exception|stack trace|regression|flaky|crash|timeout)\b/i
 const REVIEW_RE = /\b(review|audit|security|pr|pull request|diff|regression risk|code health|quality pass)\b/i
 const PLANNING_RE = /\b(plan|design|architecture|strategy|break down|scope|proposal|approach|roadmap)\b/i
+const VISUAL_REVIEW_RE = /\b(visual|design review|ui review|appearance|screenshot|layout|css review|style check|responsive|frontend review)\b/i
 
 export function normalizeAgentRole(value: string | undefined): AgentRole | undefined {
   const key = value?.trim().toLowerCase()
@@ -78,6 +89,7 @@ export function inferAgentRole(input: RoleInferenceInput): AgentRole {
   if (input.enableTextInference === false) return modeRole ?? "implementation"
 
   const promptText = input.promptText ?? ""
+  if (VISUAL_REVIEW_RE.test(promptText)) return "visualReview"
   if (DEBUGGING_RE.test(promptText)) return "debugging"
   if (REVIEW_RE.test(promptText)) return "review"
   if (PLANNING_RE.test(promptText)) return "planning"
@@ -105,4 +117,67 @@ export function resolveRoutedModel(input: RoutedModelInput): string {
     cleanModel(input.currentModel) ??
     ""
   )
+}
+
+// ─── Capability-Aware Routing ─────────────────────────────────────────────
+
+export interface CapabilityAwareInput extends RoutedModelInput {
+  /** The model's capability profile, if known */
+  capabilities?: ModelCapabilities
+  /** Whether to gate on capability thresholds (default false) */
+  enableCapabilityGating?: boolean
+  /** Whether to return autonomy scaffolding guidance */
+  enableAutonomyGuidance?: boolean
+}
+
+export interface CapabilityAwareResult {
+  /** The resolved model ID (empty string if none found) */
+  model: string
+  /** Whether capability gating was applied */
+  capabilityGated: boolean
+  /** Capability check result */
+  capabilityCheck: { capable: boolean; reason?: string }
+  /** Autonomy guidance for structuring delegated prompts */
+  autonomyGuidance: AutonomyGuidance | null
+  /** Suggested prompt prefix for scaffolding */
+  promptPrefix: string
+}
+
+/**
+ * Resolve a model with capability-aware checks.
+ * Extends the standard `resolveRoutedModel` with:
+ * 1. Capability gating: checks whether the resolved model has sufficient
+ *    capabilities for the role before allowing it.
+ * 2. Autonomy scaffolding: when a lower-autonomy model is selected,
+ *    returns guidance on how to structure the delegated prompt.
+ */
+export function resolveCapabilityAwareModel(input: CapabilityAwareInput): CapabilityAwareResult {
+  const model = resolveRoutedModel(input)
+  const enableGating = input.enableCapabilityGating === true
+  const enableScaffolding = input.enableAutonomyGuidance !== false
+
+  // Default: assume capable if no gating or no capabilities data
+  let capabilityCheck: { capable: boolean; reason?: string } = { capable: true }
+  let autonomyGuidance: AutonomyGuidance | null = null
+  let promptPrefix = ''
+
+  if (input.capabilities && enableGating) {
+    capabilityCheck = isCapableForRole(input.capabilities, input.role)
+  }
+
+  if (input.capabilities && enableScaffolding) {
+    const scaffold = scaffoldingForRole(input.capabilities, input.role)
+    autonomyGuidance = scaffold.guidance
+    promptPrefix = scaffold.promptPrefix
+  }
+
+  const result: CapabilityAwareResult = {
+    model,
+    capabilityGated: enableGating,
+    capabilityCheck,
+    autonomyGuidance,
+    promptPrefix,
+  }
+
+  return result
 }

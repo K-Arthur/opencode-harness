@@ -121,6 +121,49 @@ export interface ModelCapabilities {
   toolUse: number;
   vision: number;
   contextUtilization: number;
+  /**
+   * Process autonomy / self-supervision reliability (0.0-1.0).
+   * How well the model sustains a long-horizon plan, notices when it's stuck,
+   * verifies its own work, recovers from partial failure, and asks for help
+   * appropriately. Models strong here are trustworthy for open-ended,
+   * low-supervision work.
+   */
+  autonomy: number;
+  /**
+   * Raw task competence / throughput / cost efficiency (0.0-1.0).
+   * How well the model performs a well-specified, bounded task once it's
+   * clearly scoped, and how cheaply/quickly. High-throughput models can be
+   * excellent executors for narrowly-scoped work.
+   */
+  throughput: number;
+  /**
+   * Visual/design judgment (0.0-1.0).
+   * How reliable the model is as a visual design critic — separate from
+   * raw vision capability. A model may be able to see images (vision > 0)
+   * without being a reliable design reviewer (visualJudgment may still be
+   * low). Tracked as a separate axis because frontend code that compiles
+   * and passes tests can still be visually wrong.
+   */
+  visualJudgment: number;
+  /**
+   * Confidence source for each axis.
+   * 'verified' = from provider metadata / OpenCode model registry,
+   * 'declared' = user override,
+   * 'inferred' = from canary probe or empirical run history,
+   * 'fallback' = used when nothing else is available.
+   * Maps capability field name to source.
+   */
+  confidenceSources: Partial<Record<keyof ModelCapabilities, 'verified' | 'declared' | 'inferred' | 'fallback'>>;
+  /**
+   * Canary probe score (0.0-1.0) from running a bounded, verifiable task
+   * to test the model's actual autonomy/reliability before trusting it in
+   * an unsupervised multi-step role. undefined = not yet probed.
+   */
+  canaryScore?: number;
+  /** ISO timestamp of last canary probe, if any */
+  canaryProbedAt?: string;
+  /** Whether the model has reliable vision (from provider metadata, not inferred) */
+  hasReliableVision?: boolean;
 }
 
 export interface ModelPerformance {
@@ -148,6 +191,11 @@ export interface ModelProfile {
   taskPerformance: Partial<Record<TaskType, TaskPerformance>>;
   lastUpdated: Date;
   source: 'benchmark' | 'empirical' | 'hybrid';
+  /**
+   * Whether the model is multimodal (can accept images as input).
+   * Retrieved from provider metadata / model registry, not inferred.
+   */
+  multimodal?: boolean;
 }
 
 // ─── Cascade Routing ────────────────────────────────────────────────────────

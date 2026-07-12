@@ -46,7 +46,7 @@ describe('ModelProfileRegistry', () => {
       id: 'custom/my-model',
       provider: 'custom',
       name: 'My Custom Model',
-      capabilities: { reasoning: 0.9, coding: 0.9, knowledge: 0.8, instructionFollowing: 0.85, toolUse: 0.8, vision: 0.5, contextUtilization: 0.85 },
+      capabilities: { reasoning: 0.9, coding: 0.9, knowledge: 0.8, instructionFollowing: 0.85, toolUse: 0.8, vision: 0.5, contextUtilization: 0.85, autonomy: 0.85, throughput: 0.8, visualJudgment: 0.6, confidenceSources: {} },
       performance: { contextWindow: 128000, ttft: 50, tokensPerSecond: 200, costPerInputToken: 0.005, costPerOutputToken: 0.015 },
     };
     registry.registerProfile(custom);

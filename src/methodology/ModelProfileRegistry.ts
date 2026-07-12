@@ -35,10 +35,10 @@ const STATIC_PROFILE_ROWS: ProfileRow[] = [
 ];
 
 const TIER_CAPABILITIES: Record<ModelTier, ModelCapabilities> = {
-  S: { reasoning: 0.9, coding: 0.9, knowledge: 0.9, instructionFollowing: 0.9, toolUse: 0.88, vision: 0.85, contextUtilization: 0.9 },
-  A: { reasoning: 0.8, coding: 0.8, knowledge: 0.8, instructionFollowing: 0.8, toolUse: 0.78, vision: 0.75, contextUtilization: 0.8 },
-  B: { reasoning: 0.7, coding: 0.7, knowledge: 0.7, instructionFollowing: 0.7, toolUse: 0.68, vision: 0.65, contextUtilization: 0.7 },
-  C: { reasoning: 0.55, coding: 0.55, knowledge: 0.55, instructionFollowing: 0.55, toolUse: 0.5, vision: 0.5, contextUtilization: 0.55 },
+  S: { reasoning: 0.9, coding: 0.9, knowledge: 0.9, instructionFollowing: 0.9, toolUse: 0.88, vision: 0.85, contextUtilization: 0.9, autonomy: 0.9, throughput: 0.85, visualJudgment: 0.85, confidenceSources: {} },
+  A: { reasoning: 0.8, coding: 0.8, knowledge: 0.8, instructionFollowing: 0.8, toolUse: 0.78, vision: 0.75, contextUtilization: 0.8, autonomy: 0.8, throughput: 0.75, visualJudgment: 0.7, confidenceSources: {} },
+  B: { reasoning: 0.7, coding: 0.7, knowledge: 0.7, instructionFollowing: 0.7, toolUse: 0.68, vision: 0.65, contextUtilization: 0.7, autonomy: 0.6, throughput: 0.7, visualJudgment: 0.55, confidenceSources: {} },
+  C: { reasoning: 0.55, coding: 0.55, knowledge: 0.55, instructionFollowing: 0.55, toolUse: 0.5, vision: 0.5, contextUtilization: 0.55, autonomy: 0.4, throughput: 0.6, visualJudgment: 0.3, confidenceSources: {} },
 };
 
 const TIER_PERFORMANCE: Record<ModelTier, ModelPerformance> = {
