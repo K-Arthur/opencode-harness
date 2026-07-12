@@ -24,28 +24,38 @@ jobs:
       matrix:
         node-version: [20, 22]
     steps:
-      - uses: ./.github/actions/setup
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+          cache: npm
+      - run: npm ci
       - run: npx tsc --noEmit
 
   lint:
     runs-on: ubuntu-latest
     needs: typecheck
     steps:
-      - uses: ./.github/actions/setup
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
       - run: npx eslint src/
 
   build:
     runs-on: ubuntu-latest
     needs: lint
     steps:
-      - uses: ./.github/actions/setup
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - uses: ./.github/actions/build
+          cache: npm
+      - run: npm ci
+      - run: node esbuild.js --production
+      - run: node scripts/check-bundle-size.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: dist
@@ -56,9 +66,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - uses: ./.github/actions/setup
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
       - uses: actions/download-artifact@v4
         with:
           name: dist
@@ -73,9 +86,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - uses: ./.github/actions/setup
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
       - uses: actions/download-artifact@v4
         with:
           name: dist
@@ -86,9 +102,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - uses: ./.github/actions/setup
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
       - uses: actions/download-artifact@v4
         with:
           name: dist
@@ -98,9 +117,12 @@ jobs:
   architecture:
     runs-on: ubuntu-latest
     steps:
-      - uses: ./.github/actions/setup
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
       - run: node scripts/check-architecture.mjs
 
   secrets-scan:
@@ -122,14 +144,14 @@ jobs:
     needs: build
     timeout-minutes: 12
     steps:
-      - uses: ./.github/actions/setup
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
+          cache: npm
       - run: sudo apt-get update && sudo apt-get install -y xvfb libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon-x11-0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2t64
+      - run: npm ci
+      - run: node esbuild.js --production
       - run: xvfb-run --auto-servernum npm run test:integration
 
   webview:
@@ -137,9 +159,12 @@ jobs:
     needs: build
     timeout-minutes: 15
     steps:
-      - uses: ./.github/actions/setup
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
       - uses: actions/download-artifact@v4
         with:
           name: dist
@@ -158,9 +183,12 @@ jobs:
     needs: build
     timeout-minutes: 25
     steps:
-      - uses: ./.github/actions/setup
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
       - uses: actions/download-artifact@v4
         with:
           name: dist
@@ -179,9 +207,12 @@ jobs:
     needs: build
     timeout-minutes: 10
     steps:
-      - uses: ./.github/actions/setup
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
       - uses: actions/download-artifact@v4
         with:
           name: dist

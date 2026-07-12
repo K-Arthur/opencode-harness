@@ -1,9 +1,0 @@
-name: Build extension
-description: esbuild production bundle + bundle size check
-runs:
-  using: composite
-  steps:
-    - run: node esbuild.js --production
-      shell: bash
-    - run: node scripts/check-bundle-size.mjs
-      shell: bash
