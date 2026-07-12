@@ -82,13 +82,23 @@ describe("checkAccessibility", () => {
     assert.equal(violations.length, 0)
   })
 
-  it("warns about low opacity", () => {
+  it("flags low opacity as error (WCAG AA violation)", () => {
     const css = `.faded { opacity: 0.3; }`
     const violations = checkAccessibility(css)
     assert.ok(violations.length >= 1)
     const v0 = violations[0]
     assert.ok(v0)
-    assert.equal(v0.severity, "warning")
+    assert.equal(v0.severity, "error")
+  })
+
+  it("flags low contrast via CONTRAST_PAIRS when hex values are available", () => {
+    const css = `--vscode-editor-foreground: #777777; --vscode-editor-background: #ffffff;
+.editor { color: var(--vscode-editor-foreground); background: var(--vscode-editor-background); }`
+    const violations = checkAccessibility(css)
+    // #777 on #fff is ~4.1:1 — below WCAG AA 4.5:1 for normal text
+    const contrastIssue = violations.find(v => v.property?.includes("contrast"))
+    assert.ok(contrastIssue, "should flag low contrast for Editor text pair")
+    assert.ok(contrastIssue!.actual, "should report actual ratio")
   })
 })
 
@@ -109,6 +119,51 @@ describe("checkLayout", () => {
     const css = `.behind { z-index: -1; }`
     const warnings = checkLayout(css)
     assert.ok(warnings.some(w => w.includes("z-index")))
+  })
+})
+
+describe("non-CSS content filtering", () => {
+  it("returns empty for non-CSS content (JS/TS files)", () => {
+    const diff: CodeDiff = {
+      filesChanged: 1,
+      linesAdded: 10,
+      linesRemoved: 0,
+      linesChanged: 5,
+      newContent: `const x = 1;\nfunction foo() { return x + 1; }\nexport default foo;`,
+      oldContent: "",
+      imports: ["fs"],
+    }
+    const result = runVisualQaGate(diff)
+    assert.equal(result.passed, true)
+    assert.equal(result.tokenViolations.length, 0)
+    assert.equal(result.contrastViolations.length, 0)
+    assert.equal(result.layoutWarnings.length, 0)
+  })
+})
+
+describe("checkDesignTokens extended properties", () => {
+  it("flags raw color in fill property", () => {
+    const css = `.icon { fill: #ff0000; }`
+    const violations = checkDesignTokens(css)
+    assert.ok(violations.length > 0, "should flag fill color literal")
+  })
+
+  it("flags raw color in stroke property", () => {
+    const css = `.line { stroke: #00ff00; }`
+    const violations = checkDesignTokens(css)
+    assert.ok(violations.length > 0, "should flag stroke color literal")
+  })
+
+  it("flags raw color in box-shadow", () => {
+    const css = `.card { box-shadow: 0 2px 4px rgba(0,0,0,0.1); }`
+    const violations = checkDesignTokens(css)
+    assert.ok(violations.length > 0, "should flag box-shadow color literal")
+  })
+
+  it("flags raw color in accent-color", () => {
+    const css = `input { accent-color: #3366cc; }`
+    const violations = checkDesignTokens(css)
+    assert.ok(violations.length > 0, "should flag accent-color literal")
   })
 })
 
@@ -158,7 +213,7 @@ describe("runVisualQaGate", () => {
     assert.ok(result.contrastViolations.length > 0)
   })
 
-  it("warns but does not fail for non-breaking layout issues", () => {
+  it("fails on low-opacity violations (WCAG AA error)", () => {
     const diff: CodeDiff = {
       filesChanged: 1,
       linesAdded: 5,
@@ -169,11 +224,10 @@ describe("runVisualQaGate", () => {
       imports: [],
     }
     const result = runVisualQaGate(diff)
-    // Opacity 0.3 is a warning-level issue (contrast violations are severity 'warning' not 'error')
-    // The gate should still be considered passing since layout warnings don't cause errors
+    // Opacity 0.3 is now severity 'error' — gate must fail
     assert.equal(result.tokenViolations.length, 0)
     assert.ok(result.contrastViolations.length > 0)
-    assert.ok(result.layoutWarnings.length > 0)
+    assert.equal(result.passed, false)
   })
 
   it("handles empty diff gracefully", () => {

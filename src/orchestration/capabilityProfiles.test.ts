@@ -136,9 +136,10 @@ describe("isCapableForRole", () => {
     assert.equal(result.capable, true)
   })
 
-  it("assumes capable for unknown role", () => {
+  it("rejects unknown role with clear reason", () => {
     const result = isCapableForRole(makeCapabilities(), "unknown-role" as string)
-    assert.equal(result.capable, true)
+    assert.equal(result.capable, false)
+    assert.ok(result.reason?.includes("Unknown role"))
   })
 })
 
@@ -167,6 +168,26 @@ describe("canary probe", () => {
       scoringFn: () => { throw new Error("scoring failed") },
     }
     assert.equal(scoreFromCanary("anything", badProbe), 0)
+  })
+})
+
+describe("DEFAULT_CANARY_PROBES", () => {
+  it("includes visualJudgment probe", () => {
+    const { DEFAULT_CANARY_PROBES } = require("./capabilityProfiles")
+    const probes = DEFAULT_CANARY_PROBES as Array<{ id: string; axis: string; scoringFn: (o: string) => number }>
+    const visProbe = probes.find(p => p.axis === "visualJudgment")
+    assert.ok(visProbe, "visual judgment canary probe must exist")
+    assert.ok(visProbe.id.includes("visualJudgment"))
+    assert.ok(visProbe.scoringFn("contrast and WCAG fixed button") > 0)
+  })
+
+  it("scores visual judgment probe correctly for good output", () => {
+    const { DEFAULT_CANARY_PROBES } = require("./capabilityProfiles")
+    const probe = (DEFAULT_CANARY_PROBES as Array<CanaryProbeConfig>).find(p => p.axis === "visualJudgment")!
+    const high = scoreFromCanary("The button has poor contrast (WCAG AA fails). Fixed version uses proper padding and 12px font size.", probe)
+    assert.ok(high >= 0.5, `expected high score for detailed critique, got ${high}`)
+    const low = scoreFromCanary("looks fine", probe)
+    assert.ok(low < 0.3, `expected low score for vague output, got ${low}`)
   })
 })
 

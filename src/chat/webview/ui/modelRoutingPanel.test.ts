@@ -80,7 +80,7 @@ describe("modelRoutingPanel.ts", () => {
     panel.open()
 
     const selects = Array.from(document.querySelectorAll<HTMLSelectElement>(".model-routing-row-select"))
-    assert.equal(selects.length, 4, "one select per orchestration phase")
+    assert.equal(selects.length, 5, "one select per orchestration phase (planning, implementation, review, debugging, visualReview)")
     for (const select of selects) {
       const values = Array.from(select.options).map((o) => o.value)
       assert.deepEqual(values, ["", "anthropic/claude-sonnet-5", "openai/gpt-5"])

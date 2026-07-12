@@ -273,6 +273,41 @@ Find and fix the bug. Then write a test that proves it works. Run the test and r
       return Math.min(1, score)
     },
   },
+  {
+    id: 'canary-visualJudgment-basic',
+    axis: 'visualJudgment',
+    prompt: `You are reviewing a simple button component. It has these CSS properties:
+
+.button {
+  padding: 11px 23px;
+  font-size: 13px;
+  color: #667788;
+  background: #eef0f2;
+  border: 1px solid #ccd;
+  border-radius: 3px;
+}
+
+List every visual/design issue you can find. For each issue:
+1. Name the CSS property
+2. Say what value it should use based on a 4px spacing grid, consistent type scale, and WCAG AA contrast
+3. Say the current value and why it's a problem
+
+Then produce a corrected version.`,
+    expectedBehavior: 'model should identify non-4px-grid padding (11px, 23px), small font-size (13px), low contrast (#667788 on #eef0f2), non-standard radius (3px), and suggest token-based alternatives',
+    scoringFn: (output: string): number => {
+      const lines = output.toLowerCase()
+      let score = 0
+      // Detected non-4px padding (11px not divisible by 4, 23px not divisible by 4)
+      if (lines.includes('11px') || lines.includes('padding') && (lines.includes('not 4') || lines.includes('grid') || lines.includes('12px') || lines.includes('24px') || lines.includes('8px'))) score += 0.25
+      // Detected small font or non-standard size (13px not in typical scale)
+      if (lines.includes('13px') || lines.includes('font-size') && (lines.includes('12') || lines.includes('14') || lines.includes('scale') || lines.includes('small'))) score += 0.25
+      // Detected contrast issue (#667788 on #eef0f2 is ~3.5:1 — below WCAG AA 4.5:1)
+      if (lines.includes('contrast') || lines.includes('wcag') || lines.includes('#667788') || lines.includes('readability')) score += 0.25
+      // Provided a corrected version
+      if ((lines.includes('correct') || lines.includes('fixed') || lines.includes('revised') || lines.includes('improved')) && lines.includes('button')) score += 0.25
+      return Math.min(1, score)
+    },
+  },
 ]
 
 /**
@@ -343,7 +378,7 @@ export function isCapableForRole(
   if (!capabilities) return { capable: true, reason: 'No capability data — assuming capable' }
 
   const thresholds = ROLE_CAPABILITY_THRESHOLDS[role]
-  if (!thresholds) return { capable: true }
+  if (!thresholds) return { capable: false, reason: `Unknown role "${role}" — no capability thresholds defined` }
 
   for (const [cap, threshold] of Object.entries(thresholds)) {
     const value = getNumericCapability(capabilities, cap)
@@ -367,8 +402,9 @@ export function isCapableForRole(
 export function scaffoldingForRole(
   capabilities: ModelCapabilities | undefined,
   role: string,
+  profile?: ModelProfile,
 ): { guidance: AutonomyGuidance; promptPrefix: string } {
-  const guidance = getAutonomyGuidance(capabilities, undefined)
+  const guidance = getAutonomyGuidance(capabilities, profile)
 
   const prefixes: Record<string, string> = {
     planning: `Break this planning task into concrete, verifiable steps. After each step, confirm the result before proceeding.`,

@@ -100,7 +100,11 @@ export function checkDesignTokens(cssContent: string): TokenViolation[] {
 
     // Check for raw color literals outside of tokens.css
     const trimmed = line.trim()
-    if (trimmed.includes('color') || trimmed.includes('background') || trimmed.includes('border-color') || trimmed.includes('outline')) {
+    const COLOR_PROPERTIES = ['color', 'background', 'border-color', 'outline', 'fill', 'stroke',
+      'box-shadow', 'text-shadow', 'caret-color', 'column-rule-color',
+      'outline-color', 'accent-color', 'border-top-color', 'border-right-color',
+      'border-bottom-color', 'border-left-color']
+    if (COLOR_PROPERTIES.some(p => trimmed.includes(p))) {
       for (const pattern of BANNED_COLOR_PATTERNS) {
         const match = trimmed.match(pattern)
         if (match) {
@@ -138,6 +142,49 @@ export function checkDesignTokens(cssContent: string): TokenViolation[] {
 }
 
 /**
+ * Compute a crude relative-luminance-like value from a hex colour for WCAG
+ * heuristics.  Returns a value in 0-1 range (higher = brighter).
+ */
+function hexLuminance(hex: string): number {
+  const clean = hex.replace(/^#/, '')
+  if (clean.length < 6) return 0.5
+  const r = parseInt(clean.slice(0, 2), 16) / 255
+  const g = parseInt(clean.slice(2, 4), 16) / 255
+  const b = parseInt(clean.slice(4, 6), 16) / 255
+  // sRGB → linear approximation
+  const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+}
+
+/**
+ * Compute a simple contrast-ratio-like value from two hex colours.
+ * Uses relative luminance — purely heuristic (no gamma/rounding).
+ * WCAG AA requires ≥ 4.5 for normal text, ≥ 3.0 for large text.
+ */
+function contrastRatio(fgHex: string, bgHex: string): number {
+  const fg = hexLuminance(fgHex)
+  const bg = hexLuminance(bgHex)
+  const lighter = Math.max(fg, bg)
+  const darker = Math.min(fg, bg)
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
+/**
+ * Extract hex colour values from a CSS var() expression or raw hex literal.
+ * Returns the hex value or undefined if not resolvable.
+ */
+function resolveCssColor(cssText: string, hexValues: Map<string, string>): string | undefined {
+  const trimmed = cssText.trim()
+  if (/^#[0-9a-f]{3,8}\b/i.test(trimmed)) return trimmed
+  const varMatch = trimmed.match(/var\((--[\w-]+)\)/)
+  if (varMatch) {
+    const val = hexValues.get(varMatch[1]!)
+    if (val !== undefined) return val
+  }
+  return undefined
+}
+
+/**
  * Check for common a11y/layout issues via CSS heuristic checks.
  * Pure function — no browser needed.
  */
@@ -163,15 +210,49 @@ export function checkAccessibility(cssContent: string): TokenViolation[] {
     }
   }
 
-  // Check for dangerously low contrast patterns
-  if (/\b(opacity|color)\s*:\s*0\.[0-4]\b/i.test(cssContent)) {
+  // Check for dangerously low contrast patterns (opacity-based)
+  if (/\b(opacity)\s*:\s*0\.[0-4]\b/i.test(cssContent)) {
     violations.push({
-      property: 'opacity / color',
-      expected: 'WCAG AA minimum contrast',
-      actual: 'Opacity <= 0.4 may reduce contrast below WCAG AA',
+      property: 'opacity',
+      expected: '≥ 0.5 for WCAG AA minimum contrast',
+      actual: 'Opacity ≤ 0.4 may reduce contrast below WCAG AA',
       selector: '(found in CSS)',
-      severity: 'warning',
+      severity: 'error',
     })
+  }
+
+  // Build a map of known CSS variable → hex values from the CSS content
+  const hexValues = new Map<string, string>()
+  const varDeclares = cssContent.matchAll(/--[\w-]+\s*:\s*(#[0-9a-f]{3,8})\b/gi)
+  for (const m of varDeclares) {
+    hexValues.set(m[0]!.split(':')[0]!.trim(), m[1]!)
+  }
+
+  // Check known VS Code fg/bg pairs against WCAG AA thresholds
+  for (const pair of CONTRAST_PAIRS) {
+    const fgHex = resolveCssColor(`var(${pair.fg})`, hexValues)
+    const bgHex = resolveCssColor(`var(${pair.bg})`, hexValues)
+    if (fgHex && bgHex) {
+      const ratio = contrastRatio(fgHex, bgHex)
+      if (ratio < WCAG_AA_NORMAL_TEXT) {
+        violations.push({
+          property: `${pair.label} contrast`,
+          expected: `≥ ${WCAG_AA_NORMAL_TEXT}:1 for WCAG AA (normal text)`,
+          actual: `${ratio.toFixed(2)}:1`,
+          selector: `${pair.fg} / ${pair.bg}`,
+          severity: ratio < 3 ? 'error' : 'warning',
+        })
+      }
+    } else if (cssContent.includes(pair.fg) && cssContent.includes(pair.bg)) {
+      // Both tokens referenced but hex values not resolvable — warn
+      violations.push({
+        property: `${pair.label} contrast`,
+        expected: 'WCAG AA minimum contrast (4.5:1)',
+        actual: 'Could not resolve — relies on VS Code theme variables',
+        selector: `var(${pair.fg}) / var(${pair.bg})`,
+        severity: 'warning',
+      })
+    }
   }
 
   return violations
@@ -207,10 +288,14 @@ export function checkLayout(cssContent: string): string[] {
 
 /**
  * Parse the diff content — extracts CSS content from a CodeDiff.
- * Looks for .css file changes.
+ * Only analyses content that looks like CSS (contains CSS rules/declarations).
  */
 function extractCssContent(diff: CodeDiff): string {
   const combined = [diff.newContent, diff.oldContent].filter(Boolean).join('\n')
+  if (!combined) return ''
+
+  // Quick heuristic: skip content that has no CSS-like syntax
+  if (!/[{;}]/.test(combined) && !/\.-?[\w-]+\s*\{/.test(combined)) return ''
   return combined
 }
 

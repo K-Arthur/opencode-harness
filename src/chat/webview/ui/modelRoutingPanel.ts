@@ -1,11 +1,12 @@
 import { mountModalFocus, type ModalFocusHandle } from "../focus-trap"
 import type { ModelInfo } from "../types"
 
-const ROLES = [
+export const ROLES = [
   { id: "planning", label: "Planning", description: "Architecture, design, and task breakdown" },
   { id: "implementation", label: "Implementation", description: "Writing code and building features" },
   { id: "review", label: "Review", description: "Code review, quality assessment, and auditing" },
   { id: "debugging", label: "Debugging", description: "Bug investigation, error analysis, and fixes" },
+  { id: "visualReview", label: "Visual Review", description: "UI appearance, design review, and frontend QA" },
 ] as const
 
 export interface ModelRoutingConfig {
