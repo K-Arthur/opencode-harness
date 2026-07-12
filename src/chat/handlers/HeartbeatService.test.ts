@@ -1,7 +1,41 @@
 import { describe, it, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
-import { HeartbeatService } from "./HeartbeatService"
+import Module from "node:module"
+import type { HeartbeatService } from "./HeartbeatService"
 import type { HeartbeatDeps } from "./HeartbeatService"
+
+// HeartbeatService transitively imports `vscode` via `outputChannel`. In a pure
+// node test runner the `vscode` module doesn't exist, so we install a minimal
+// CJS shim into the loader cache before requiring the handler.
+const ModuleAny = Module as unknown as {
+  _resolveFilename: (id: string, parent: NodeModule, ...rest: unknown[]) => string
+  _cache: Record<string, { id: string; exports: unknown; loaded: boolean }>
+}
+const originalResolve = ModuleAny._resolveFilename
+ModuleAny._resolveFilename = function (id: string, parent: NodeModule, ...rest: unknown[]) {
+  if (id === "vscode") return "vscode-stub"
+  return originalResolve.call(this, id, parent, ...rest)
+}
+ModuleAny._cache["vscode-stub"] = {
+  id: "vscode-stub",
+  loaded: true,
+  exports: {
+    window: {
+      createOutputChannel: () => ({
+        appendLine: () => {},
+        append: () => {},
+        show: () => {},
+      }),
+    },
+    OutputChannel: class {},
+    EventEmitter: class { event() { return () => {} } },
+    workspace: { getConfiguration: () => ({ get: () => undefined }) },
+    env: { language: "en" },
+  },
+}
+
+const { HeartbeatService: HeartbeatServiceClass } = require("./HeartbeatService") as typeof import("./HeartbeatService")
+type HeartbeatServiceInstance = InstanceType<typeof HeartbeatServiceClass>
 
 function makeTabManager(isStreaming = true, buffer = "buffered text") {
   return {
@@ -56,7 +90,7 @@ function tick(count = 1) {
 }
 
 describe("HeartbeatService — force_rerender gating", () => {
-  let svc: HeartbeatService
+  let svc: HeartbeatServiceInstance
   let deps: HeartbeatDeps
   let posted: Array<Record<string, unknown>>
   const TAB = "tab-1"
@@ -65,7 +99,7 @@ describe("HeartbeatService — force_rerender gating", () => {
   beforeEach(() => {
     posted = []
     deps = makeDeps()
-    svc = new HeartbeatService(deps)
+    svc = new HeartbeatServiceClass(deps)
     installFakeTimers()
     svc.startHeartbeat(TAB, callbacks())
   })
