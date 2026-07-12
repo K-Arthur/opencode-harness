@@ -33,7 +33,7 @@ async function mountSubagentPanel(page: Page, visible: boolean = true) {
         </button>
       </div>
       <div class="subagent-panel-content" id="subagent-list">
-        <div class="subagent-item">
+        <div class="subagent-item subagent-item--running">
           <div class="subagent-item-header">
             <span class="subagent-item-name">Code Analyzer</span>
             <span class="subagent-item-status subagent-item-status--running">Running</span>
@@ -141,9 +141,8 @@ test.describe('Subagent Activity Panel', () => {
   })
 
   test('running item has accent left border', async ({ page }) => {
-    const runningItem = page.locator('.subagent-item-status--running').first()
-    const item = runningItem.locator('..')
-    const borderLeft = await item.evaluate(el => window.getComputedStyle(el).borderLeftWidth)
+    const runningItem = page.locator('.subagent-item--running').first()
+    const borderLeft = await runningItem.evaluate(el => window.getComputedStyle(el).borderLeftWidth)
     expect(parseFloat(borderLeft)).toBeGreaterThan(0)
   })
 

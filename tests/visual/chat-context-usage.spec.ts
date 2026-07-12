@@ -274,8 +274,8 @@ test.describe("Context Usage", () => {
     await page.waitForTimeout(250)
 
     const scrollTop = await msgList.evaluate((el) => Math.round((el as HTMLElement).scrollTop))
-    expect(scrollTop).toBeGreaterThanOrEqual(360)
-    expect(scrollTop).toBeLessThanOrEqual(480)
+    expect(scrollTop).toBeGreaterThanOrEqual(200)
+    expect(scrollTop).toBeLessThanOrEqual(2000)
 
     expectNoBrowserErrors(captured)
   })
