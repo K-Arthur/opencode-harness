@@ -46,7 +46,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
       - uses: ./.github/actions/build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
@@ -59,7 +59,7 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
@@ -76,7 +76,7 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
@@ -89,7 +89,7 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
@@ -106,7 +106,7 @@ jobs:
   secrets-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: aquasecurity/trivy-action@master
         with:
           scan-type: repo
@@ -125,7 +125,7 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
@@ -140,13 +140,13 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test --project=chromium-webview --retries 2
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-webview-report
@@ -161,13 +161,13 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test --project=chromium --retries 2
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-visual-report
@@ -182,14 +182,14 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
       - run: npx playwright install --with-deps chromium
       - run: npm run screenshots:validate
       - run: npm run screenshots:verify
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: screenshot-diffs
