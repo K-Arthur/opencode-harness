@@ -144,13 +144,23 @@ export class MethodologyOrchestrator {
   }
 
   private mergeTierMaps(): Record<ModelTier, string[]> {
-    const staticMap = this.registry.buildTierMap();
+    // Collect all model IDs from config and registry
     const configMap = this.config.modelTiers;
+    const allConfigIds = [
+      ...(configMap.S ?? []),
+      ...(configMap.A ?? []),
+      ...(configMap.B ?? []),
+      ...(configMap.C ?? []),
+    ];
+    // Use extended map so config models not in the static registry
+    // are inferred on the fly rather than silently dropped
+    const extendedMap = this.registry.buildExtendedTierMap(allConfigIds);
+
     return {
-      S: [...new Set([...(configMap.S ?? []), ...staticMap.S])],
-      A: [...new Set([...(configMap.A ?? []), ...staticMap.A])],
-      B: [...new Set([...(configMap.B ?? []), ...staticMap.B])],
-      C: [...new Set([...(configMap.C ?? []), ...staticMap.C])],
+      S: [...new Set([...(configMap.S ?? []), ...extendedMap.S])],
+      A: [...new Set([...(configMap.A ?? []), ...extendedMap.A])],
+      B: [...new Set([...(configMap.B ?? []), ...extendedMap.B])],
+      C: [...new Set([...(configMap.C ?? []), ...extendedMap.C])],
     };
   }
 }

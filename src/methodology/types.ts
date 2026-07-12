@@ -190,7 +190,7 @@ export interface ModelProfile {
   performance: ModelPerformance;
   taskPerformance: Partial<Record<TaskType, TaskPerformance>>;
   lastUpdated: Date;
-  source: 'benchmark' | 'empirical' | 'hybrid';
+  source: 'benchmark' | 'empirical' | 'hybrid' | 'inferred';
   /**
    * Whether the model is multimodal (can accept images as input).
    * Retrieved from provider metadata / model registry, not inferred.

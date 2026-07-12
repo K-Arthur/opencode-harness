@@ -20,6 +20,7 @@ import {
   ErrorClass,
   MethodologySelection,
 } from './types.js';
+import { ModelProfileRegistry } from './ModelProfileRegistry.js';
 import { QualityEvaluator } from './QualityEvaluator.js';
 
 export { QualityEvaluator } from './QualityEvaluator.js';
@@ -86,6 +87,7 @@ export class CascadeRouter {
   private executor: ModelExecutor | null;
   private evaluator: QualityEvaluator;
   private auditLog: AuditEntry[] = [];
+  private registry: ModelProfileRegistry;
 
   constructor(
     config: Partial<CascadeRouterConfig>,
@@ -94,6 +96,7 @@ export class CascadeRouter {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.executor = executor ?? null;
     this.evaluator = new QualityEvaluator();
+    this.registry = new ModelProfileRegistry();
   }
 
   /**
@@ -128,7 +131,8 @@ export class CascadeRouter {
     if (task.constraints.speedPreferred) {
       let bestSpeed = -1;
       for (const entry of eligibleChain) {
-        const profile = modelProfiles.find(p => p.id === entry.modelId);
+        const profile = modelProfiles.find(p => p.id === entry.modelId)
+          ?? this.registry.resolveOrInfer(entry.modelId);
         if (profile && profile.performance.tokensPerSecond > bestSpeed) {
           bestSpeed = profile.performance.tokensPerSecond;
           chosen = entry;
@@ -136,7 +140,8 @@ export class CascadeRouter {
       }
     }
 
-    const profile = modelProfiles.find(p => p.id === chosen.modelId);
+    const profile = modelProfiles.find(p => p.id === chosen.modelId)
+      ?? this.registry.resolveOrInfer(chosen.modelId);
     const estimatedCostPer1kTokens = profile
       ? (profile.performance.costPerInputToken + profile.performance.costPerOutputToken) * 1000
       : 0;
@@ -182,13 +187,17 @@ export class CascadeRouter {
     for (const tier of tierOrder) {
       const models = modelTiers[tier] || [];
       for (const modelId of models) {
-        const profile = modelProfiles.find(p => p.id === modelId);
+        // Try strict profile match first, then fall back to inferred
+        const profile = modelProfiles.find(p => p.id === modelId)
+          ?? this.registry.resolveOrInfer(modelId);
         if (!profile) continue;
         if (task.modalities.needsVision && profile.capabilities.vision < 0.5) continue;
+        const isInferred = !modelProfiles.some(p => p.id === modelId);
+        const label = isInferred ? ' (inferred)' : '';
         chain.push({
           modelId,
           tier,
-          reason: `Tier ${tier} — ${profile.name} (capability: ${((profile.capabilities.reasoning + profile.capabilities.coding) / 2 * 100).toFixed(1)}%)`,
+          reason: `Tier ${profile.tier}${label} — ${profile.name} (capability: ${((profile.capabilities.reasoning + profile.capabilities.coding) / 2 * 100).toFixed(1)}%)`,
         });
       }
     }
