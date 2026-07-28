@@ -1,7 +1,28 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-07-04
-**Version:** v0.4.56 (unreleased)
+**Last Updated:** 2026-07-27
+**Version:** v0.4.63 (unreleased)
+
+## Highlights (2026-07-27) — Orchestrated pipeline state and attachment classification
+
+- **Attachment summary wired through `send_prompt`**: the webview classifies
+  active file/image attachments into `imageCount`, `documentCount`,
+  `hasUnsupportedImages`, and `estimatedBytes`, and ships an `AttachmentSummary`
+  alongside `send_prompt`. The host validates/normalizes the summary and passes
+  it through the queue into `StreamCoordinator.runOrchestratedPipeline`, where
+  `selectWorkflow()` now makes multimodal decisions from the summary object
+  instead of a simple boolean.
+- **Revisioned pipeline snapshots**: the orchestration state machine increments
+  a monotonic `revision` on every workflow and stage transition. Progress
+  broadcasts now carry `runId` and `revision`; the webview persists the latest
+  `pipeline` state per session and ignores stale messages. On `stream_start` it
+  requests `pipeline_get_state` so the progress UI survives reloads and tab
+  switches.
+- **Production stage dispatcher coverage**: `enhancedStageDispatcher` applies
+  per-stage `model`/`agent` overrides and `AbortSignal` cancellation. New unit
+  tests verify the model/agent forwarding and `pipeline_progress` emission shape.
+- **Handoff validator type safety**: `ValidationResult<T>` is generic; each
+  stage-specific `validateXOutput()` returns the exact handoff type.
 
 ## Highlights (2026-07-04) — Thinking display, compaction, token cap
 

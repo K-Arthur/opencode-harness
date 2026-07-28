@@ -19,6 +19,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Attachment-aware workflow selection**: `AttachmentSummary` is now computed
+  in the webview from active attachments, sent as part of `send_prompt`, and
+  normalized/re-validated by `WebviewEventRouter` before being persisted on
+  queued prompts and forwarded to `StreamCoordinator`. `selectWorkflow()` now
+  consumes the full summary (image/document counts, unsupported-image detection,
+  estimated bytes) instead of a boolean image flag, enabling richer workflow
+  heuristics. (#§send_prompt, #§pipeline)
+
+- **Revisioned pipeline state snapshots**: `WorkflowStateMachine` now maintains a
+  monotonic `revision` counter bumped on every workflow and stage transition. The
+  revision is forwarded through `pipeline_progress` messages and stored in the
+  webview's `SessionState.pipeline`. The webview drops stale progress broadcasts
+  by comparing `(runId, revision)` and requests a fresh `pipeline_get_state` on
+  `stream_start` so the progress UI recovers after reload or tab switch.
+  (#§pipeline, #§webview)
+
 - **Orchestrated session mode pipeline**: Sequential multi-model orchestration
   engine for the Orchestrated mode (`src/orchestration/pipelineCoordinator.ts`).
   PipelineCoordinator dispatches each stage (explore → plan → implement →
@@ -83,6 +99,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   via `resolveCapabilityAwareModel()`. (#§6)
 
 ### Fixed
+
+- **Stage handoff validator typing**: `ValidationResult<T>` is now generic and
+  each `validateXOutput()` function in `src/orchestration/handoffs.ts` returns
+  the exact stage handoff type. This removes unsafe casts and lets consumers
+  access stage-specific fields (e.g. `complexity`, `findings`) directly.
+  (#§orchestration)
 
 - **`HeartbeatService.test.ts` pre-existing failure**: structural test was
   blocked by transitive `vscode` import through `outputChannel.ts`. Applied

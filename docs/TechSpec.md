@@ -87,6 +87,38 @@ SSE events are dispatched to tabs via the `event.sessionID → tab` mapping main
 
 See `docs/adrs/ADR-009-pending-event-buffer.md` for the full motivation and alternatives.
 
+### Attachment Classification
+
+When a `send_prompt` is dispatched, the webview computes an `AttachmentSummary`
+from the active attachment list: `total`, `imageCount`, `documentCount`,
+`hasImages`, `hasDocuments`, `hasUnsupportedImages`, and `estimatedBytes` (base64
+payload character count). The summary is posted to the host alongside the
+attachments array. `WebviewEventRouter.normalizeAttachmentSummary()` validates the
+optional webview hint against the validated payloads, then threads the summary
+through `StreamCoordinator.startPrompt()` and `HostPromptQueue` items. In
+Orchestrated mode, `StreamCoordinator.runOrchestratedPipeline()` passes the
+summary to `selectWorkflow()`, which uses `hasImages` (and, in future
+iterations, the full counts) to choose the Standard, Quick, Debug, Review, or
+Multimodal workflow.
+
+### Orchestrated Mode Pipeline
+
+The Orchestrated mode uses a multi-stage pipeline defined in
+`src/orchestration/pipelineCoordinator.ts` and executed by the
+`OrchestrationCoordinator` (`pipelineCoordinator2.ts`):
+
+- `selectWorkflow()` picks a workflow from the request text and `AttachmentSummary`.
+- `WorkflowStateMachine` (`stateMachine.ts`) tracks workflow/stage states and a
+  monotonic `revision` counter.
+- `createEnhancedStageDispatcher` dispatches each stage with the role-specific
+  model and an `AbortSignal`; results flow back as typed `StageHandoff` objects.
+- `postPipelineProgress` emits `pipeline_progress` messages carrying the current
+  `WorkflowSnapshot` (including `runId` and `revision`) to the webview.
+- The webview persists the latest `pipeline` state on `SessionState` and ignores
+  stale broadcasts by comparing `(runId, revision)`. It requests a fresh
+  `pipeline_get_state` on `stream_start` to recover the UI after reload or tab
+  switch.
+
 ### Backfill Retry Bound
 
 `ChatProvider.backfillRecoveredSessions` uses a 4-step exponential backoff (`BACKFILL_RETRY_DELAYS_MS = [1500, 4000, 8000, 16000]`) when the opencode server returns an empty messages array on `session.messages()`. After the last attempt, `SessionStore.clearNeedsBackfill(sessionId)` is called for any session that is still empty, so subsequent `sessions_recovered` events stop re-trying and stop spamming "Empty response …" log lines. The session is treated as genuinely empty on the server.
@@ -161,6 +193,12 @@ Six root causes behind "completed session shows as running" / "running session s
 - **Elapsed time ticker**: `handleStreamStart` sets `_elapsedStart` on the typing indicator DOM element and starts a 1s `setInterval` that updates a `.typing-elapsed` span (`• 12s`). `showTypingIndicator` appends the elapsed span whenever `_elapsedStart` is set; `hideTypingIndicator` clears the timer.
 - **`notifyTurnOutcome(sessionId, reason)`**: Replaces `notifyTurnComplete`. Fires `showInformationMessage` (success) or `showErrorMessage` (error/timeout) with the session name when the webview is hidden. Also posts a `generation_outcome` webview message for in-webview toasts.
 - **In-webview toast (`showGenerationToast`)**: Green 3-second auto-dismiss on success; red persistent toast with dismiss button on failure. Uses `--z-tooltip` z-index layer and design-system color tokens (`color-mix`). Only shown for the active session.
+
+### Tool Call Spins Forever After Compaction / Reconnect (Fixed, 2026-07-27)
+
+Related to, but distinct from, "Stuck `maybeFinalizeStream` After Grace Timeout" above (that fix keeps the normal grace-timeout path from deadlocking; this one closes a *different* path that could orphan a tool call without ever reaching the grace-timeout machinery at all). Root cause: `StreamCoordinator.reconcileAfterReconnect` — which runs after a webview reload, extension-host restart, or SSE reconnect — has a branch that fires when the server reports the run already finished during the outage. That branch flipped `tab.isStreaming`/`tab.waitingForCompletion` to `false` unconditionally, without first confirming `activeToolCallIds` was empty. Once `waitingForCompletion` is `false`, `maybeFinalizeStream`'s own entry guard (`!tab.waitingForCompletion`) makes the tab permanently unreachable by the normal recovery path — any tool call (or, independently, any subagent tracked in the separate `RunActivityTracker` store) still pending at that instant is orphaned forever: the server is genuinely idle, but nothing will ever post `stream_tool_end`/`stream_tool_unresolved` for it, so the webview spinner never clears. The same gap meant `AutoCompactor` — which only gated compaction on `isStreaming` — could compact a session that had fallen into this state, making it look like "compaction caused it" when compaction was actually just the next thing to run afterward. A second, independent contributor: `sdkMessageConverter`'s historical/backfill conversion rendered a tool part's raw server status (`"pending"`/`"running"`) verbatim with no terminalization pass, so even a clean host-side fix could be undone by the very next full re-render (compaction's own `resume_session`, plus plain backfill/pagination) showing the same stale spinner again.
+
+Fix, in `StreamCoordinator.ts`: `reconcileAfterReconnect`'s completed-run branch now calls `markUnresolvedPendingToolCalls` and `markUnresolvedActiveSubagents` before flipping the flags — bounded (at most one extra reconciliation fetch, no polling) and idempotent (no-op when nothing is pending); the still-active branch now restores `waitingForCompletion` so a later real completion isn't silently dropped by the same guard. New public `StreamCoordinator.hasPendingToolCalls`/`ensureToolStateConverged` give `AutoCompactor` a second gate (alongside `isStreaming`) and an explicit post-compaction convergence checkpoint, wired into both `tryCompactIfNeeded`/`doCompact` and `compactNow`. New `sdkMessageConverter.markStaleToolBlocksUnresolved` terminalizes any non-terminal tool block in a historical snapshot to an honest `"unresolved"` state (new `CanonicalToolState` member); applied at every historical-render call site (`SessionLifecycleService.handleResumeSession`, `BackfillService.hydrate`, `WebviewEventRouter`'s `request_more_messages`/`refresh_session_messages`), each gated on `!tab.isStreaming` so a message genuinely still streaming is never mislabeled. Tests: `StreamCoordinator.test.ts`, `AutoCompactor.test.ts` (source-anchored regression, matching this file's existing convention), `ToolCallTracker.test.ts` (new — real behavioral tests against the reconciliation primitives with fake DI collaborators), `sdkMessageConverter.test.ts`.
 
 ### Sticky-Header Collision In Modals (Fixed, 2026-06-16)
 
