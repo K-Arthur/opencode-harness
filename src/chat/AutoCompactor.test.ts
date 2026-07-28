@@ -284,3 +284,74 @@ void describe("AutoCompactor.ts", () => {
     })
   })
 })
+
+// ---------------------------------------------------------------------------
+// Regression: compaction must not leave stale tool state behind.
+//
+// AutoCompactor's isStreaming gate is the FIRST line of defense against
+// compacting a session with a genuinely in-flight tool call, but it's not
+// the only one that matters — a tab can have isStreaming===false while a
+// tool call is still tracked pending (see the reconcileAfterReconnect
+// regression in StreamCoordinator.test.ts). Compaction needs its own
+// explicit convergence checkpoint so it can never silently succeed while
+// leaving activeToolCallIds — or the separate subagent/activity-timeline
+// store — pointing at a tool call that will spin forever in the UI.
+// ---------------------------------------------------------------------------
+void describe("AutoCompactor.ts — tool-state convergence around compaction (regression)", () => {
+  void it("constructor accepts a StreamCoordinator dependency", () => {
+    assert.ok(
+      source.includes("private readonly streamCoordinator: StreamCoordinator"),
+      "AutoCompactor must depend on StreamCoordinator to gate on / converge tool-call state",
+    )
+  })
+
+  void it("tryCompactIfNeeded refuses to compact while a tool call is still pending", () => {
+    const fnIdx = source.indexOf("tryCompactIfNeeded(")
+    const fnEnd = source.indexOf("handleBannerAction", fnIdx)
+    const block = source.slice(fnIdx, fnEnd)
+    assert.match(
+      block,
+      /this\.streamCoordinator\.hasPendingToolCalls\(activeTab\.id\)/,
+      "tryCompactIfNeeded must also gate on hasPendingToolCalls, not just isStreaming — isStreaming can already be " +
+      "false while a tool call is still tracked pending",
+    )
+  })
+
+  void it("compactNow refuses to compact while a tool call is still pending", () => {
+    const fnIdx = source.indexOf("async compactNow(")
+    const fnEnd = source.indexOf("isCompacting", fnIdx)
+    const block = source.slice(fnIdx, fnEnd)
+    assert.match(
+      block,
+      /this\.streamCoordinator\.hasPendingToolCalls\(sessionId\)/,
+      "compactNow must also gate on hasPendingToolCalls",
+    )
+  })
+
+  void it("doCompact converges tool state before posting session_compacted", () => {
+    const fnIdx = source.indexOf("const doCompact = ()")
+    const fnEnd = source.indexOf("if (autoCompact === \"auto\")", fnIdx)
+    const block = source.slice(fnIdx, fnEnd)
+    const convergeIdx = block.indexOf("this.streamCoordinator.ensureToolStateConverged(")
+    const compactedIdx = block.indexOf("type: \"session_compacted\"")
+    assert.ok(convergeIdx >= 0, "doCompact's success handler must call ensureToolStateConverged")
+    assert.ok(compactedIdx >= 0, "doCompact's success handler must post session_compacted")
+    assert.ok(
+      convergeIdx < compactedIdx,
+      "ensureToolStateConverged must run BEFORE session_compacted is posted — the webview's session_compacted " +
+      "handler triggers a full resume_session re-render, so any stale pending tool call must already be resolved " +
+      "(or explicitly marked unresolved) before that happens",
+    )
+  })
+
+  void it("compactNow converges tool state before posting session_compacted", () => {
+    const fnIdx = source.indexOf("async compactNow(")
+    const fnEnd = source.indexOf("isCompacting", fnIdx)
+    const block = source.slice(fnIdx, fnEnd)
+    const convergeIdx = block.indexOf("this.streamCoordinator.ensureToolStateConverged(")
+    const compactedIdx = block.indexOf("type: \"session_compacted\"")
+    assert.ok(convergeIdx >= 0, "compactNow must call ensureToolStateConverged on success")
+    assert.ok(compactedIdx >= 0, "compactNow must post session_compacted on success")
+    assert.ok(convergeIdx < compactedIdx, "ensureToolStateConverged must run BEFORE session_compacted is posted")
+  })
+})

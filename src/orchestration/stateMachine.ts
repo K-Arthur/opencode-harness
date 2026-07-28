@@ -62,18 +62,18 @@ const STAGE_TRANSITIONS: Record<StageState, StageState[]> = {
   blocked: ["ready", "skipped", "cancelled"],
   ready: ["starting", "skipped", "cancelled"],
   starting: ["running", "failed", "cancelled"],
-  running: ["streaming", "waiting_for_tool", "waiting_for_approval", "failed", "cancelled", "interrupted"],
+  running: ["streaming", "waiting_for_tool", "waiting_for_approval", "succeeded", "failed", "cancelled", "interrupted"],
   streaming: ["waiting_for_tool", "waiting_for_approval", "retrying", "succeeded", "failed", "cancelled", "interrupted"],
-  waiting_for_tool: ["streaming", "failed", "cancelled", "interrupted"],
-  waiting_for_approval: ["running", "retrying", "paused", "succeeded", "failed", "cancelled"],
-  retrying: ["starting", "running", "failed", "cancelled"],
-  paused: ["ready", "starting", "cancelled"],
+  waiting_for_tool: ["streaming", "succeeded", "failed", "cancelled", "interrupted"],
+  waiting_for_approval: ["running", "succeeded", "retrying", "paused", "failed", "cancelled"],
+  retrying: ["starting", "running", "failed", "cancelled", "succeeded"],
+  paused: ["ready", "starting", "cancelled", "running"],
   succeeded: [],
-  failed: [],
+  failed: ["retrying", "skipped"],
   cancelled: [],
   skipped: [],
   interrupted: ["pending", "ready", "retrying", "succeeded", "failed", "cancelled"],
-  unresolved: ["pending", "retrying", "skipped", "cancelled"],
+  unresolved: ["pending", "retrying", "skipped", "cancelled", "failed"],
 };
 
 // ─── Workflow Transition Logic ─────────────────────────────────────────────
@@ -124,13 +124,13 @@ export type StateErrorCategory = "transient" | "terminal" | "stale" | "unknown";
 
 export function classifyStateError(error: string): StateErrorCategory {
   const lower = error.toLowerCase();
-  if (lower.includes("timeout") || lower.includes("rate limit") || lower.includes("429") || lower.includes("503") || lower.includes("network") || lower.includes("econnrefused") || lower.includes("econnreset")) {
+  if (lower.includes("timeout") || lower.includes("timed out") || lower.includes("rate limit") || lower.includes("429") || lower.includes("503") || lower.includes("network") || lower.includes("econnrefused") || lower.includes("econnreset")) {
     return "transient";
   }
-  if (lower.includes("auth") || lower.includes("quota") || lower.includes("forbidden") || lower.includes("not found") || lower.includes("invalid") || lower.includes("context overflow") || lower.includes("content filter")) {
+  if (lower.includes("auth") || lower.includes("quota") || lower.includes("forbidden") || lower.includes("invalid") || lower.includes("context overflow") || lower.includes("content filter")) {
     return "terminal";
   }
-  if (lower.includes("stale") || lower.includes("obsolete") || lower.includes("expired") || lower.includes("not found in transcript")) {
+  if (lower.includes("stale") || lower.includes("obsolete") || lower.includes("expired") || lower.includes("not found in transcript") || lower.includes("not found")) {
     return "stale";
   }
   return "unknown";

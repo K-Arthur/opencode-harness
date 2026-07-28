@@ -21,8 +21,9 @@ import {
   partsToBlocks,
   sdkMessageToChatMessage,
   sdkMessagesToChatMessages,
+  markStaleToolBlocksUnresolved,
 } from "./sdkMessageConverter"
-import type { Block } from "../types"
+import type { Block, ChatMessage } from "../types"
 
 // ---------------------------------------------------------------------------
 // Test fixtures — minimal valid SDK Part objects per types.gen.d.ts (1.15.3)
@@ -469,5 +470,88 @@ describe("sdkMessageConverter — partsToBlocks (Layer 1)", () => {
     assert.equal(out.length, 2)
     assert.equal(out[0]!.type, "text")
     assert.equal(out[1]!.type, "reasoning")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// markStaleToolBlocksUnresolved — historical/backfill terminalization.
+//
+// Regression coverage for: compaction's resume_session_data (and plain
+// backfill/pagination) rendering a tool block straight from whatever raw
+// status the server transcript happens to still show. A genuinely orphaned
+// tool call — the completion event lost to a dead SSE connection, a reconnect
+// race, or a compaction boundary — has no live stream left that will ever
+// move it past "pending"/"running", so a snapshot read must show it as
+// honestly unresolved rather than replaying the stale in-progress status
+// forever.
+// ---------------------------------------------------------------------------
+
+describe("sdkMessageConverter — markStaleToolBlocksUnresolved", () => {
+  function messageWith(...parts: Part[]): ChatMessage {
+    const msg = sdkMessageToChatMessage(assistantMessage(), parts)
+    assert.ok(msg, "fixture message must convert to a non-null ChatMessage")
+    return msg!
+  }
+
+  it("leaves a completed tool block untouched", () => {
+    const before = messageWith(toolPartCompleted("output text"))
+    const [after] = markStaleToolBlocksUnresolved([before])
+    assert.deepEqual(after, before)
+  })
+
+  it("leaves an error tool block untouched", () => {
+    const before = messageWith(toolPartError("boom"))
+    const [after] = markStaleToolBlocksUnresolved([before])
+    assert.deepEqual(after, before)
+  })
+
+  it("converts a pending tool block to unresolved with an honest message", () => {
+    const [after] = markStaleToolBlocksUnresolved([messageWith(toolPartPending())])
+    const block = f(after!.blocks[0]!)
+    assert.equal(block.state, "unresolved")
+    assert.equal(block.error, "Tool did not emit a completion event before the server became idle.")
+  })
+
+  it("converts a running tool block to unresolved with an honest message", () => {
+    const [after] = markStaleToolBlocksUnresolved([messageWith(toolPartRunning())])
+    const block = f(after!.blocks[0]!)
+    assert.equal(block.state, "unresolved")
+    assert.equal(block.error, "Tool did not emit a completion event before the server became idle.")
+  })
+
+  it("leaves non-tool blocks (e.g. text) completely untouched", () => {
+    const before = messageWith(textPart({ text: "hello" }))
+    const [after] = markStaleToolBlocksUnresolved([before])
+    assert.deepEqual(after, before)
+  })
+
+  it("does not mutate the input message or block objects", () => {
+    const before = messageWith(toolPartPending())
+    const beforeSnapshot = JSON.parse(JSON.stringify(before))
+    markStaleToolBlocksUnresolved([before])
+    assert.deepEqual(before, beforeSnapshot, "input must not be mutated")
+  })
+
+  it("only converts the non-terminal blocks within a message with multiple tool calls", () => {
+    const runningPart: Part = {
+      ...toolPartRunning(),
+      id: "p-running",
+      callID: "call-running",
+    } as Part
+    const completedPart: Part = {
+      ...toolPartCompleted("done"),
+      id: "p-completed",
+      callID: "call-completed",
+    } as Part
+    const [after] = markStaleToolBlocksUnresolved([messageWith(runningPart, completedPart)])
+    const [runningBlock, completedBlock] = after!.blocks.map(f)
+    assert.equal(runningBlock!.state, "unresolved")
+    assert.equal(completedBlock!.state, "completed")
+  })
+
+  it("is a no-op across a whole message list when every tool call is already terminal", () => {
+    const messages = [messageWith(toolPartCompleted()), messageWith(toolPartError("e"))]
+    const out = markStaleToolBlocksUnresolved(messages)
+    assert.deepEqual(out, messages)
   })
 })
