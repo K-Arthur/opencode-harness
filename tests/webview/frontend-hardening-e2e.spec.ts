@@ -69,29 +69,25 @@ test.describe("Frontend Hardening E2E", () => {
     })
 
     const strip = page.locator("#changed-files-strip")
-    // While A is active, strip shows A's count and first chip only
-    await expect(strip).toContainText("1 file changed")
+    // While A is active, strip shows A's file only
     await expect(strip).toContainText("from-A.ts")
-    await expect(strip).not.toContainText("from-B")
+    await expect(strip).not.toContainText("from-B-1.ts")
+    await expect(strip).not.toContainText("from-B-2.ts")
 
-    // Switch to session B via a user tab click. (Host-driven
-    // active_session_changed is deliberately ignored while the user views a
-    // valid tab — no-focus-stealing policy, sessionFocus.ts.)
-    await page.locator('.tab-btn[data-tab-id="sess-B"]').click()
+    // Switch to session B
+    await dispatchHostMessage(page, { type: "active_session_changed", sessionId: "sess-B" })
     await page.waitForTimeout(200)
 
-    // Now strip shows B's count and first chip; A's must not bleed in
-    await expect(strip).toContainText("2 files changed")
+    // Now strip shows B's files; A's must not bleed in
     await expect(strip).toContainText("from-B-1.ts")
-    await expect(strip).toContainText("+1 more")
-    await expect(strip).not.toContainText("from-A")
+    await expect(strip).toContainText("from-B-2.ts")
+    await expect(strip).not.toContainText("from-A.ts")
 
     // Switch back to A — A's file must still be there, B's gone
-    await page.locator('.tab-btn[data-tab-id="sess-A"]').click()
+    await dispatchHostMessage(page, { type: "active_session_changed", sessionId: "sess-A" })
     await page.waitForTimeout(200)
-    await expect(strip).toContainText("1 file changed")
     await expect(strip).toContainText("from-A.ts")
-    await expect(strip).not.toContainText("from-B")
+    await expect(strip).not.toContainText("from-B-1.ts")
 
     expectNoBrowserErrors(captured)
   })
@@ -132,9 +128,9 @@ test.describe("Frontend Hardening E2E", () => {
   })
 
   // ───────────────────────────────────────────────────────────────────
-  // Change A: inline edit banners are suppressed; changed-files strip is canonical
+  // Change A: compact banner
   // ───────────────────────────────────────────────────────────────────
-  test("Edited N files task banner does not render inline; strip is canonical", async ({ page }) => {
+  test("Edited N files banner renders as a single compact row", async ({ page }) => {
     const captured = captureErrors(page)
     await page.goto("/")
 
@@ -166,29 +162,54 @@ test.describe("Frontend Hardening E2E", () => {
     })
     await page.waitForTimeout(300)
 
-    // Inline edit banners are suppressed; the canonical surface is the
-    // changed-files strip, which receives the same files via changed_files_update.
-    await expect(page.locator(".task-banner--compact")).toHaveCount(0)
+    const banner = page.locator(".task-banner--compact").first()
+    await expect(banner).toBeVisible()
+    // The compact variant must NOT use the legacy multi-row card styling
+    // (no big icon, no max-height scroll area).
+    await expect(banner.locator(".task-banner-files")).toHaveCount(0)
+    // The +N more pill must appear since 13 files > FILE_CHIP_VISIBLE (4)
+    await expect(banner.locator(".cf-strip-overflow")).toHaveText(/\+\d+ more/)
+  })
 
-    // Simulate the host sending the canonical changed_files_update.
+  test("clicking the compact banner expands the chip list", async ({ page }) => {
+    await page.goto("/")
     await dispatchHostMessage(page, {
-      type: "changed_files_update",
-      sessionId: "sess-A",
-      files: [
-        { path: "a.ts", added: 1, removed: 0 },
-        { path: "b.ts", added: 1, removed: 0 },
-        { path: "c.ts", added: 1, removed: 0 },
-        { path: "d.ts", added: 1, removed: 0 },
-        { path: "e.ts", added: 1, removed: 0 },
+      type: "init_state",
+      sessions: [
+        {
+          id: "sess-A",
+          name: "A",
+          model: "anthropic/claude-3-5-sonnet-20241022",
+          messages: [
+            {
+              role: "system",
+              id: "msg-banner-2",
+              blocks: [{
+                type: "task_banner",
+                status: "success",
+                text: "Edited 13 files: a.ts, b.ts, c.ts, d.ts, e.ts, f.ts, g.ts, h.ts, i.ts, j.ts, k.ts, l.ts, m.ts",
+              }],
+              timestamp: Date.now(),
+              sessionId: "sess-A",
+            },
+          ],
+          tokenUsage: { prompt: 0, completion: 0, total: 0 },
+        },
       ],
+      activeSessionId: "sess-A",
+      globalModel: "anthropic/claude-3-5-sonnet-20241022",
     })
+    await page.waitForTimeout(300)
 
-    const strip = page.locator("#changed-files-strip")
-    await expect(strip).toContainText("5 files changed")
-    await expect(strip).toContainText("a.ts")
-    await expect(strip).toContainText("+4 more")
-
-    expectNoBrowserErrors(captured)
+    const banner = page.locator(".task-banner--compact").first()
+    await expect(banner).not.toHaveClass(/task-banner--expanded/)
+    // Click the chevron, not a file chip — clicking on a chip would route to
+    // open_file instead of toggling expansion (intentional separation).
+    await banner.locator(".task-banner-chevron").click()
+    await expect(banner).toHaveClass(/task-banner--expanded/)
+    // After expansion all 13 chips are present, no overflow pill
+    await expect(banner.locator(".cf-strip-chip")).toHaveCount(13)
+    await expect(banner.locator(".cf-strip-overflow")).toHaveCount(0)
   })
 
   // ───────────────────────────────────────────────────────────────────
@@ -233,24 +254,23 @@ test.describe("Frontend Hardening E2E", () => {
     const block = page.locator(".question-block").first()
     await expect(block).toBeVisible()
     await expect(block).toContainText("Which database driver?")
-    // init_state does not repopulate unanswered questions in the bar (they are
-    // ephemeral and received during streaming), so the transcript renders the
-    // inline fallback controls.
-    await expect(block.locator(".question-block-question-item")).toHaveCount(3)
+    await expect(block.locator(".question-option")).toHaveCount(3)
     await expect(block.locator(".question-freetext")).toBeVisible()
 
     // Click "MySQL"
-    await block.locator(".question-block-question-item").filter({ hasText: "MySQL" }).click()
-    await block.locator(".question-submit").click()
+    await block.locator(".question-option").filter({ hasText: "MySQL" }).click()
 
     // Verify the postMessage was sent
     const sent = await postedMessages(page)
     const answer = sent.find((m) => m.type === "question_answer")
     expect(answer).toBeTruthy()
-    expect(answer!.value).toBe("Which database driver?: MySQL")
+    expect(answer!.value).toBe("MySQL")
     expect(answer!.source).toBe("option")
     expect(answer!.sessionId).toBe("sess-A")
     expect(answer!.toolCallId).toBe("tool-q-1")
+
+    // Block goes into answered state and disables further input
+    await expect(block).toHaveClass(/question-block--answered/)
 
     expectNoBrowserErrors(captured)
   })
@@ -289,11 +309,9 @@ test.describe("Frontend Hardening E2E", () => {
     })
     await page.waitForTimeout(300)
 
-    const block = page.locator(".question-block").first()
-    await expect(block).toContainText("What's the deployment target?")
-    const ta = block.locator(".question-freetext").first()
+    const ta = page.locator(".question-freetext").first()
     await ta.fill("Vercel + Neon Postgres")
-    await block.locator(".question-submit").click()
+    await page.locator(".question-submit").first().click()
 
     const sent = await postedMessages(page)
     const answer = sent.find((m) => m.type === "question_answer")

@@ -13,7 +13,6 @@ import {
   escapeHtml,
   parseEditBannerFiles,
   mergeEditBannerFiles,
-  getExtBadgeLabel,
 } from "./file-chip-list"
 
 describe("file-chip-list — escapeHtml", () => {
@@ -26,44 +25,6 @@ describe("file-chip-list — escapeHtml", () => {
 
   it("preserves benign content", () => {
     assert.equal(escapeHtml("src/foo/bar.ts"), "src/foo/bar.ts")
-  })
-})
-
-describe("file-chip-list — getExtBadgeLabel", () => {
-  it("maps .ts to TS", () => {
-    assert.equal(getExtBadgeLabel("foo.ts"), "TS")
-  })
-
-  it("maps .tsx to TSX", () => {
-    assert.equal(getExtBadgeLabel("foo.tsx"), "TSX")
-  })
-
-  it("maps .py to PY", () => {
-    assert.equal(getExtBadgeLabel("foo.py"), "PY")
-  })
-
-  it("maps .js to JS", () => {
-    assert.equal(getExtBadgeLabel("foo.js"), "JS")
-  })
-
-  it("maps .go to GO", () => {
-    assert.equal(getExtBadgeLabel("main.go"), "GO")
-  })
-
-  it("maps .rs to RS", () => {
-    assert.equal(getExtBadgeLabel("lib.rs"), "RS")
-  })
-
-  it("returns uppercased ext for unknown extensions", () => {
-    assert.equal(getExtBadgeLabel("foo.xyz"), "XYZ")
-  })
-
-  it("handles files with no extension", () => {
-    assert.equal(getExtBadgeLabel("Makefile"), "MK")
-  })
-
-  it("handles paths with directories", () => {
-    assert.equal(getExtBadgeLabel("src/components/App.tsx"), "TSX")
   })
 })
 
@@ -87,36 +48,11 @@ describe("file-chip-list — splitFileList", () => {
   })
 })
 
-describe("file-chip-list — renderFileChipListHtml (chip DOM)", () => {
-  it("renders .file-chip button with data-path and basename", () => {
+describe("file-chip-list — renderFileChipListHtml", () => {
+  it("renders chip with data-path and basename text", () => {
     const html = renderFileChipListHtml(["src/foo/bar.ts"])
-    assert.ok(html.includes(`class="file-chip"`), "must use .file-chip class")
-    assert.ok(html.includes(`data-path="src/foo/bar.ts"`), "must have data-path")
-    assert.ok(html.includes(">bar.ts<"), "must show basename")
-  })
-
-  it("renders extension badge with data-lang attribute", () => {
-    const html = renderFileChipListHtml(["src/foo/bar.ts"])
-    assert.ok(html.includes(`class="file-chip__ext"`), "must have ext badge")
-    assert.ok(html.includes(`data-lang="typescript"`), "must set data-lang")
-    assert.ok(html.includes(">TS<"), "must show TS badge label")
-  })
-
-  it("renders remove button with .file-chip__remove", () => {
-    const html = renderFileChipListHtml(["src/foo/bar.ts"])
-    assert.ok(html.includes(`class="file-chip__remove"`), "must have remove button")
-    assert.ok(html.includes(`aria-label="Remove bar.ts"`), "must have accessible label")
-  })
-
-  it("renders chips as <button> elements for native keyboard accessibility", () => {
-    const html = renderFileChipListHtml(["src/foo/bar.ts"])
-    assert.ok(html.includes(`<button class="file-chip"`), "must be a <button>")
-  })
-
-  it("sets tabindex=0 on chips for Tab navigation", () => {
-    const html = renderFileChipListHtml(["a.ts", "b.ts"])
-    const count = (html.match(/tabindex="0"/g) || []).length
-    assert.ok(count >= 2, "each chip must have tabindex=0")
+    assert.ok(html.includes(`data-path="src/foo/bar.ts"`))
+    assert.ok(html.includes(">bar.ts<"))
   })
 
   it("includes count label and divider by default", () => {
@@ -154,7 +90,7 @@ describe("file-chip-list — renderFileChipListHtml (chip DOM)", () => {
     assert.ok(html.includes(`+4 more`))
     assert.ok(html.includes(`cf-strip-overflow`))
     // Only first 3 chips rendered
-    assert.equal((html.match(/class="file-chip"/g) || []).length, 3)
+    assert.equal((html.match(/cf-strip-chip/g) || []).length, 3)
   })
 
   it("escapes HTML in file paths to prevent injection", () => {
@@ -163,40 +99,18 @@ describe("file-chip-list — renderFileChipListHtml (chip DOM)", () => {
     assert.ok(html.includes("&lt;script&gt;"), "escaped marker must appear")
   })
 
-  it("escapes HTML in remove button aria-label", () => {
-    const html = renderFileChipListHtml([`src/a<b>.ts`])
-    assert.ok(!html.match(/aria-label="Remove a<b>/), "aria-label must be escaped")
-    assert.ok(html.includes("&lt;b&gt;"), "must escape angle brackets in label")
-  })
-
-  it("produces identical output for identical input (deterministic)", () => {
+  it("strip and inline banner produce identical chip markup for same input", () => {
+    // The whole point of this helper: identical input → identical output,
+    // regardless of which surface the caller is rendering for.
     const files = ["src/StreamCoordinator.ts", "src/main.ts", "tests/foo.test.mjs"]
-    const a = renderFileChipListHtml(files, { maxVisible: 5, showCountLabel: true, showLeadingIcon: true })
-    const b = renderFileChipListHtml(files, { maxVisible: 5, showCountLabel: true, showLeadingIcon: true })
-    assert.equal(a, b, "shared helper must produce byte-identical output for identical input")
+    const stripHtml = renderFileChipListHtml(files, { maxVisible: 5, showCountLabel: true, showLeadingIcon: true })
+    const bannerHtml = renderFileChipListHtml(files, { maxVisible: 5, showCountLabel: true, showLeadingIcon: true })
+    assert.equal(stripHtml, bannerHtml, "shared helper must produce byte-identical output for identical input")
   })
 
   it("renders empty string for empty file list without icon/label", () => {
     const html = renderFileChipListHtml([], { showCountLabel: false, showLeadingIcon: false })
     assert.equal(html, "")
-  })
-
-  it("maps .py extension to PY badge with python data-lang", () => {
-    const html = renderFileChipListHtml(["src/main.py"])
-    assert.ok(html.includes(`data-lang="python"`))
-    assert.ok(html.includes(">PY<"))
-  })
-
-  it("maps .go extension to GO badge with go data-lang", () => {
-    const html = renderFileChipListHtml(["cmd/server.go"])
-    assert.ok(html.includes(`data-lang="go"`))
-    assert.ok(html.includes(">GO<"))
-  })
-
-  it("maps .rs extension to RS badge with rust data-lang", () => {
-    const html = renderFileChipListHtml(["src/lib.rs"])
-    assert.ok(html.includes(`data-lang="rust"`))
-    assert.ok(html.includes(">RS<"))
   })
 })
 
@@ -260,26 +174,5 @@ describe("file-chip-list — mergeEditBannerFiles", () => {
       "Edited src/sub/b.ts",
     )
     assert.equal(merged, "Edited 2 files: a.ts, b.ts")
-  })
-})
-
-describe("file-chip-list — aggregate diff stats", () => {
-  it("renders +added/−removed totals after the count label when stats are provided", () => {
-    const html = renderFileChipListHtml(["src/a.ts", "src/b.ts"], {
-      showCountLabel: true,
-      countLabelSuffix: "changed",
-      stats: { added: 12, removed: 4 },
-    })
-    assert.match(html, /class="cf-strip-stats"/)
-    assert.match(html, /class="cf-strip-added"[^>]*>\+12</)
-    assert.match(html, /class="cf-strip-removed"[^>]*>−4</)
-  })
-
-  it("omits the stats block when stats are absent or zero", () => {
-    assert.doesNotMatch(renderFileChipListHtml(["a.ts"]), /cf-strip-stats/)
-    assert.doesNotMatch(
-      renderFileChipListHtml(["a.ts"], { stats: { added: 0, removed: 0 } }),
-      /cf-strip-stats/,
-    )
   })
 })

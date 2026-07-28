@@ -68,18 +68,16 @@ describe("streaming text-tool interleave", () => {
     assert.ok(diffFinalizeCall > handleDiffIdx, "handleDiff must call finalizeCurrentTextBlock")
   })
 
-  it("handleStreamToken routes live updates through RenderQueue", () => {
-    const tokenIdx = handlersSource.indexOf("export function handleStreamToken(")
-    assert.ok(tokenIdx > 0)
+  it("handleStreamToken doUpdate uses insertStreamingTextAfterLastBlock for recovery", () => {
+    const doUpdateIdx = handlersSource.indexOf("const doUpdate = () => {")
+    assert.ok(doUpdateIdx > 0)
 
-    const queueCreateIdx = handlersSource.indexOf("createLiveRenderQueue(state, els, messages, id, callbacks)", tokenIdx)
-    const enqueueIdx = handlersSource.indexOf("state.renderQueue.enqueue(chunk)", tokenIdx)
-    assert.ok(queueCreateIdx > tokenIdx, "handleStreamToken must create a live render queue when missing")
-    assert.ok(enqueueIdx > queueCreateIdx, "handleStreamToken must enqueue chunks through RenderQueue")
+    const insertInDoUpdate = handlersSource.indexOf("insertStreamingTextAfterLastBlock(bubble, state, messages)", doUpdateIdx)
+    assert.ok(insertInDoUpdate > doUpdateIdx, "doUpdate must use insertStreamingTextAfterLastBlock")
   })
 
-  it("live render queue callback uses insertStreamingTextAfterLastBlock", () => {
-    const renderQueueIdx = handlersSource.indexOf("function createLiveRenderQueue(")
+  it("renderQueue callback in handleStreamStart uses insertStreamingTextAfterLastBlock", () => {
+    const renderQueueIdx = handlersSource.indexOf("state.renderQueue = new RenderQueue(")
     assert.ok(renderQueueIdx > 0)
 
     const insertInQueue = handlersSource.indexOf("insertStreamingTextAfterLastBlock(bubble, state, messages)", renderQueueIdx)
@@ -94,27 +92,19 @@ describe("streaming text-tool interleave", () => {
     )
   })
 
-  it("finalize demotes an empty block (no render, no lingering cursor) instead of leaving it streaming", () => {
-    // Short-circuits without rendering markdown / writing block text when there
-    // is no accumulated content...
+  it("finalize skips when no buffer content", () => {
     assert.ok(
-      handlersSource.includes("if (!state.currentBlockBuffer.trim() || !displayText.trim()) {"),
-      "finalize must short-circuit when no content accumulated"
-    )
-    // ...but it must demote the empty streaming element so its blinking caret
-    // does not survive the end of the turn.
-    assert.ok(
-      handlersSource.includes("demoteStreamingText(state.currentBlockEl)"),
-      "an empty block must be demoted (cursor removed), not left as live streaming-text"
+      handlersSource.includes("if (!state.currentBlockEl || !state.currentBlockBuffer.trim()) return"),
+      "finalize must bail early when no content accumulated"
     )
   })
 })
 
 describe("streaming text rendering during active stream", () => {
-  it("uses LiveTextRenderer during live updates", () => {
+  it("uses renderMarkdown with streaming=true during live updates", () => {
     assert.ok(
-      handlersSource.includes("liveRenderer.renderInto(textEl, displayText)"),
-      "live streaming must use LiveTextRenderer via RenderQueue"
+      handlersSource.includes("renderMarkdown(displayText, true)"),
+      "live streaming must use renderMarkdown with isStreaming=true"
     )
   })
 

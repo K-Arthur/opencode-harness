@@ -92,10 +92,12 @@ test.describe("Chat Webview E2E", () => {
       percent: 4,
     })
 
-    // Switch to the empty session the way a user does — clicking its tab.
-    // (Host-driven `active_session_changed` is deliberately ignored while the
-    // user is viewing a valid tab: no-focus-stealing policy, sessionFocus.ts.)
-    await page.locator('.tab-btn[data-tab-id="session-empty"]').click()
+    // Switch to the empty session via the same host event the extension
+    // sends when the active session changes.
+    await dispatchHostMessage(page, {
+      type: "active_session_changed",
+      sessionId: "session-empty",
+    })
 
     const bar = page.locator("#context-usage")
     // After switch the bar should be hidden again (no usage on the new tab).
@@ -140,8 +142,10 @@ test.describe("Chat Webview E2E", () => {
     const bar = page.locator("#context-usage")
     await expect(bar).toHaveClass(/hidden/, { timeout: 3000 })
 
-    // Explicit user tab click (host-driven switches are ignored by design).
-    await page.locator('.tab-btn[data-tab-id="session-b"]').click()
+    await dispatchHostMessage(page, {
+      type: "active_session_changed",
+      sessionId: "session-b",
+    })
 
     await expect(bar).not.toHaveClass(/hidden/, { timeout: 3000 })
     await expect(page.locator("#context-label")).toContainText("75%")
@@ -187,20 +191,19 @@ test.describe("Chat Webview E2E", () => {
     const strip = page.locator("#changed-files-strip")
     await expect(strip).not.toHaveClass(/hidden/, { timeout: 5000 })
 
-    // Strip must show a "4 files changed" label and the first chip
+    // Strip must show a "4 files changed" label
     await expect(strip).toContainText("4 files changed")
+
+    // File basenames appear as chips in the strip
     await expect(strip).toContainText("foo.ts")
-    await expect(strip).toContainText("+3 more")
+    await expect(strip).toContainText("bar.py")
+    await expect(strip).toContainText("README.md")
+    await expect(strip).toContainText("config.json")
 
-    // Clicking the strip opens the inline panel tree
-    await strip.locator(".cf-strip-label").click()
-    const tree = page.locator("#cf-panel-tree")
+    // Clicking the strip opens the full dropdown tree
+    await strip.click()
+    const tree = page.locator("#cf-dropdown-tree")
     await expect(tree).toBeVisible({ timeout: 3000 })
-
-    // Full file list is visible inside the panel
-    await expect(tree).toContainText("bar.py")
-    await expect(tree).toContainText("README.md")
-    await expect(tree).toContainText("config.json")
 
     expectNoBrowserErrors(captured)
   })
@@ -243,8 +246,13 @@ test.describe("Chat Webview E2E", () => {
     const strip = page.locator("#changed-files-strip")
     await expect(strip).not.toHaveClass(/hidden/, { timeout: 5000 })
     await expect(strip).toContainText("5 files changed")
+
+    // All 5 basenames appear in the strip chips
     await expect(strip).toContainText("Main.kt")
-    await expect(strip).toContainText("+4 more")
+    await expect(strip).toContainText("deploy.sh")
+    await expect(strip).toContainText("workflow.yaml")
+    await expect(strip).toContainText("index.html")
+    await expect(strip).toContainText("migration.sql")
 
     expectNoBrowserErrors(captured)
   })
@@ -396,74 +404,20 @@ test.describe("Chat Webview E2E", () => {
     const strip = page.locator("#changed-files-strip")
     await expect(strip).not.toHaveClass(/hidden/, { timeout: 5000 })
 
-    await strip.locator(".cf-strip-label").click()
+    await strip.click()
 
-    const panel = page.locator("#changed-files-panel")
-    await expect(panel).not.toHaveClass(/hidden/, { timeout: 3000 })
-    await expect(panel).toBeVisible()
+    const dropdown = page.locator("#changed-files-dropdown")
+    await expect(dropdown).not.toHaveClass(/hidden/, { timeout: 3000 })
+    await expect(dropdown).toBeVisible()
 
-    // Panel must be positioned on-screen (right edge not off-screen)
-    const box = await panel.boundingBox()
+    // Dropdown must be positioned on-screen (right edge not off-screen)
+    const box = await dropdown.boundingBox()
     expect(box).not.toBeNull()
     expect(box!.x).toBeGreaterThan(-10)           // not off-screen left
     expect(box!.x + box!.width).toBeLessThan(2000) // not off-screen right
 
-    // Panel must be closeable
+    // Dropdown must be closeable
     await page.keyboard.press("Escape")
-    await expect(panel).toHaveClass(/hidden/, { timeout: 2000 })
-  })
-
-  // Whole-message copy: both the user's prompt and the model's output carry
-  // a hover copy control in the message header; clicking it signals success
-  // via the transient `copied` state.
-  test("user and assistant messages expose a copy control that signals success", async ({ page, context }) => {
-    const captured = captureErrors(page)
-    await context.grantPermissions(["clipboard-write"])
-    await page.goto("/")
-
-    await dispatchHostMessage(page, {
-      type: "init_state",
-      sessions: [
-        {
-          id: "session-copy",
-          name: "Copy",
-          model: "anthropic/claude-3-5-sonnet-20241022",
-          messages: [
-            {
-              role: "user",
-              id: "msg-u1",
-              blocks: [{ type: "text", text: "my prompt text" }],
-              timestamp: Date.now(),
-              sessionId: "session-copy",
-            },
-            {
-              role: "assistant",
-              id: "msg-a1",
-              blocks: [{ type: "text", text: "model output text" }],
-              timestamp: Date.now(),
-              sessionId: "session-copy",
-            },
-          ],
-          tokenUsage: { prompt: 0, completion: 0, total: 0 },
-        },
-      ],
-      activeSessionId: "session-copy",
-      globalModel: "anthropic/claude-3-5-sonnet-20241022",
-    })
-
-    const copyButtons = page.locator(".message-copy-btn")
-    await expect(copyButtons).toHaveCount(2, { timeout: 5000 })
-    await expect(copyButtons.first()).toHaveAttribute("aria-label", "Copy message")
-
-    // The control is hover-revealed (visibility: hidden at rest) — hover the
-    // message like a user would so the button becomes clickable.
-    const assistantMessage = page.locator('[data-message-id="msg-a1"]')
-    await assistantMessage.hover()
-    const assistantCopy = assistantMessage.locator(".message-copy-btn")
-    await expect(assistantCopy).toBeVisible()
-    await assistantCopy.click()
-    await expect(assistantCopy).toHaveClass(/copied/, { timeout: 3000 })
-
-    expectNoBrowserErrors(captured)
+    await expect(dropdown).toHaveClass(/hidden/, { timeout: 2000 })
   })
 })

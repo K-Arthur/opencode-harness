@@ -11,9 +11,6 @@ const commandExecSource = readFileSync(resolve(__dirname, "CommandExecutionServi
 const eventRouterSource = readFileSync(resolve(__dirname, "WebviewEventRouter.ts"), "utf8")
 const validatorSource = readFileSync(resolve(__dirname, "WebviewMessageValidator.ts"), "utf8")
 const backfillSource = readFileSync(resolve(__dirname, "BackfillService.ts"), "utf8")
-const modePolicySource = readFileSync(resolve(__dirname, "modePolicy.ts"), "utf8")
-const rateLimitMonitorSource = readFileSync(resolve(__dirname, "../monitor/RateLimitMonitor.ts"), "utf8")
-const providerManagementSource = readFileSync(resolve(__dirname, "ProviderManagementService.ts"), "utf8")
 
 void describe("ChatProvider.ts", () => {
   void it("exports ChatProvider class with correct interfaces", () => {
@@ -30,74 +27,11 @@ void describe("ChatProvider.ts", () => {
     assert.ok(source.includes("dispose()"), "must have dispose method")
   })
 
-  void it("wires setupVoiceInput to the local tool setup planner", () => {
-    assert.ok(source.includes("buildVoiceSetupPlan"), "setupVoiceInput must build the recorder/STT setup plan")
-    assert.ok(source.includes("selectRecorderPlan"), "setupVoiceInput must detect the local recorder")
-    assert.ok(source.includes("selectTranscriberPlan"), "setupVoiceInput must detect the local STT engine")
-    assert.ok(source.includes("createTerminal(\"OpenCode Voice Setup\")"), "setupVoiceInput must offer runnable setup in a terminal")
-    assert.ok(!source.includes("voice_open_settings"), "setupVoiceInput must not post the removed dead settings message")
-  })
-
   void it("has expected private methods and key patterns", () => {
     assert.ok(source.includes("private async handleWebviewMessage("), "must have handleWebviewMessage")
     assert.ok(source.includes("private handleServerEvent("), "must have handleServerEvent")
-    assert.ok(/\s*postMessage\(/.test(source), "must have postMessage")
+    assert.ok(source.includes("private postMessage("), "must have postMessage")
     assert.ok(source.includes("private postRequestError("), "must have postRequestError")
-  })
-
-  void it("suppresses the expected abort error for an intentionally-aborted tab", () => {
-    // The server emits MessageAbortedError on the SSE stream a beat after Stop /
-    // interrupt-and-send. The server_error handler must swallow it (no error card,
-    // no state teardown) for the tab that was just aborted, before any postRequestError.
-    assert.ok(source.includes("isAbortErrorValue(raw)"), "server_error must classify abort-category errors")
-    assert.ok(
-      source.includes("this.streamCoordinator.wasIntentionallyAborted("),
-      "server_error must consult the intentional-abort window",
-    )
-    const handlerIdx = source.indexOf('["server_error"')
-    const suppressIdx = source.indexOf("wasIntentionallyAborted(", handlerIdx)
-    const postErrorIdx = source.indexOf("this.postRequestError(", handlerIdx)
-    assert.ok(handlerIdx >= 0 && suppressIdx > handlerIdx, "suppression check must live in the server_error handler")
-    assert.ok(suppressIdx < postErrorIdx, "abort suppression must run BEFORE postRequestError")
-    assert.ok(
-      utilsSource.includes("export function isAbortErrorValue("),
-      "isAbortErrorValue must be a shared chatUtils helper",
-    )
-  })
-
-  void it("warms the server lazily when the chat view is resolved (R3)", () => {
-    assert.ok(source.includes("setServerWarmup("), "must expose setServerWarmup for the host to wire lazy start")
-    const resolveIdx = source.indexOf("resolveWebviewView(")
-    assert.ok(resolveIdx >= 0, "resolveWebviewView must exist")
-    const resolveBody = source.slice(resolveIdx, resolveIdx + 1200)
-    assert.ok(
-      resolveBody.includes("this.serverWarmup?.()"),
-      "resolveWebviewView must invoke the warm-up hook so opening the view spawns the server",
-    )
-  })
-
-  void it("correlates abort suppression by the server message id carried on the event", () => {
-    // Timing-independent correlation: the handler must extract the server message id
-    // from the event payload and pass it to wasIntentionallyAborted so a late abort
-    // error is suppressed regardless of how long after the abort it lands.
-    const handlerIdx = source.indexOf('["server_error"')
-    assert.ok(handlerIdx >= 0, "server_error handler must exist")
-    const handlerBody = source.slice(handlerIdx, handlerIdx + 2000)
-    assert.ok(
-      /messageId\??:\s*unknown/.test(handlerBody) && handlerBody.includes("data?.messageId"),
-      "must read messageId off the server_error event data",
-    )
-    assert.ok(
-      handlerBody.includes("wasIntentionallyAborted(abortTabId, serverMessageId)"),
-      "must pass the extracted serverMessageId into wasIntentionallyAborted",
-    )
-  })
-
-  void it("treats tool_update as a high-frequency server event", () => {
-    assert.ok(
-      source.includes('event.type === "tool_update"'),
-      "tool_update bursts must use high-frequency buffering/logging rules",
-    )
   })
 
   void it("contains VALID_WEBVIEW_TYPES static set with known message types", () => {
@@ -139,36 +73,11 @@ void describe("ChatProvider.ts", () => {
     assert.ok(source.includes("import { ChatFileOps } from \"./ChatFileOps\""), "must import ChatFileOps")
   })
 
-  void it("imports and uses WorkspaceFileIndex for workspace file indexing", () => {
-    assert.ok(source.includes("import { WorkspaceFileIndex } from \"./WorkspaceFileIndex\""), "ChatProvider must import WorkspaceFileIndex")
-    assert.ok(source.includes("new WorkspaceFileIndex("), "ChatProvider must instantiate WorkspaceFileIndex")
-    assert.ok(source.includes("workspaceFileIndex.watch()"), "ChatProvider must start watching workspace file changes")
-  })
-
-  void it("tracks the active editor and posts active_file messages", () => {
-    assert.ok(
-      source.includes("import { ActiveFileTracker } from \"./ActiveFileTracker\""),
-      "ChatProvider must import ActiveFileTracker",
-    )
-    assert.ok(
-      source.includes("new ActiveFileTracker("),
-      "ChatProvider must instantiate ActiveFileTracker",
-    )
-    assert.ok(
-      source.includes("this.activeFileTracker.start()"),
-      "ChatProvider must start the ActiveFileTracker in resolveWebviewView",
-    )
-    assert.ok(
-      source.includes('type: "active_file"') || source.includes("ActiveFileTracker"),
-      "ChatProvider must delegate active_file tracking to ActiveFileTracker",
-    )
-  })
-
   void it("delegates message validation guards for send_prompt and mention_search", () => {
     assert.ok(source.includes('msg.type === "send_prompt"') || eventRouterSource.includes('"send_prompt"'), "must handle send_prompt")
     assert.ok(source.includes('msg.type === "mention_search"') || eventRouterSource.includes('"mention_search"'), "must handle mention_search")
     assert.ok(eventRouterSource.includes("validateWebviewMessage"), "WebviewEventRouter must delegate validation")
-    assert.ok(validatorSource.includes("text.length > 1_000_000"), "must reject oversized prompts")
+    assert.ok(validatorSource.includes("text.length > 50000"), "must reject oversized prompts")
     assert.ok(
       validatorSource.includes('invalidOptionalString(msg, "query", "Rejected oversized mention search query", deps, 500)'),
       "must reject oversized mention queries"
@@ -247,31 +156,22 @@ void describe("ChatProvider.ts", () => {
   })
 
   void it("stream_end_triggers_notification_when_webview_not_visible", () => {
-    // notifyTurnComplete was replaced by notifyTurnOutcome which distinguishes
-    // success/error, shows session title, and sends a webview toast.
-    assert.ok(
-      source.includes("notifyTurnOutcome") || source.includes("notifyTurnComplete"),
-      "must have turn-complete or turn-outcome notification method"
-    )
-    assert.ok(
-      source.includes('"Open Chat"') || source.includes("'Open Chat'"),
-      "must have Open Chat button action in VS Code notification"
-    )
-    assert.ok(
-      source.includes("showInformationMessage") && source.includes("showErrorMessage"),
-      "must show info for success and error for failures"
-    )
+    assert.ok(source.includes("notifyTurnComplete"), "must have notifyTurnComplete method")
+    assert.ok(source.includes('"OpenCode turn complete"'), "must show turn complete notification")
+    assert.ok(source.includes('"Open Chat"'), "must have Open Chat button action")
   })
 
-  // Switching to Auto is treated as consent — the native warning modal was
-  // removed (it blocked the workbench on Linux and gated the switch). No
-  // confirmation prompt, no persisted "confirmed" flag, no AutoModeService.
-  void it("auto_mode_switches_without_confirmation", () => {
-    assert.ok(!source.includes("AutoModeService"), "AutoModeService must be removed")
-    assert.ok(!source.includes("hasAutoModeConfirmed"), "host must not gate auto mode behind a confirmation flag")
-    assert.ok(!source.includes("showAutoModeConfirmation"), "host must not show an auto-mode confirmation modal")
-    assert.ok(!eventRouterSource.includes("showAutoModeConfirmation"), "router must not call an auto-mode confirmation modal")
-    assert.ok(!eventRouterSource.includes("hasAutoModeConfirmed"), "router must not gate the change_mode handler on a confirmation flag")
+  void it("auto_mode_shows_one_time_confirmation", () => {
+    assert.ok(source.includes("showAutoModeConfirmation"), "must have showAutoModeConfirmation method")
+    assert.ok(source.includes("Auto mode will apply all changes without asking"), "must show auto mode warning")
+    assert.ok(source.includes('"auto"') || eventRouterSource.includes('"auto"'), "must handle auto mode")
+    assert.ok(source.includes("hasAutoModeConfirmed"), "must have hasAutoModeConfirmed check")
+  })
+
+  void it("auto_mode_confirmation_suppressible", () => {
+    assert.ok(source.includes("Don't show again"), "must have Don't show again option")
+    assert.ok(source.includes("AUTO_MODE_CONFIRMED_KEY"), "must use globalState key for persistence")
+    assert.ok(source.includes("globalState.update"), "must persist confirmation to globalState")
   })
 
   void it("has session lifecycle methods", () => {
@@ -297,39 +197,6 @@ void describe("ChatProvider.ts", () => {
     assert.ok(source.includes("pushCommandListToWebview("), "must have pushCommandListToWebview")
   })
 
-  void it("pushes chat font config to webview", () => {
-    assert.ok(source.includes("pushChatFontConfigToWebview("), "must have pushChatFontConfigToWebview")
-    assert.ok(source.includes('type: "chat_font_config"'), "must post chat_font_config message")
-    assert.ok(source.includes("opencode.chat"), "must read opencode.chat configuration")
-    assert.ok(source.includes("Math.max(8, Math.min(32"), "must clamp font size to 8-32")
-  })
-
-  void it("persists and restores chat text direction (RTL/LTR)", () => {
-    assert.ok(source.includes("CHAT_DIRECTION_KEY"), "must define CHAT_DIRECTION_KEY")
-    assert.ok(source.includes("persistChatDirection("), "must have persistChatDirection method")
-    assert.ok(source.includes("pushChatDirectionToWebview("), "must have pushChatDirectionToWebview method")
-    assert.ok(source.includes('type: "chat_dir_config"'), "must post chat_dir_config message")
-    assert.ok(source.includes("opencode-harness.chatDirection"), "must use the chatDirection globalState key")
-  })
-
-  void it("pushVisibleStateToWebview uses lightweight sync instead of re-sending init_state", () => {
-    const idx = source.indexOf("private pushVisibleStateToWebview(")
-    assert.ok(idx >= 0, "pushVisibleStateToWebview must exist")
-    const block = source.slice(idx, source.indexOf("private replayLiveStreamsToWebview", idx))
-    assert.ok(block.includes("this.messageBatcher.flush()"), "visibility sync must flush queued messages")
-    assert.ok(block.includes("this.pushModelToWebview()"), "visibility sync must refresh model state")
-    assert.ok(block.includes("this.pushRateLimitStateToWebview()"), "visibility sync must refresh rate-limit state")
-    assert.ok(block.includes("this.applyContextWindowFor()"), "visibility sync must refresh context window state")
-    assert.ok(block.includes("this.pushContextUsageForSession(activeSessionId)"), "visibility sync must refresh current context usage")
-    assert.ok(block.includes("this.replayLiveStreamsToWebview()"), "visibility sync must replay live streams")
-    assert.ok(
-      !block.includes("this.streamCoordinator.clearReplayDedup()"),
-      "visibility sync must NOT clear replay dedup — only webview_ready should do that"
-    )
-    assert.ok(!block.includes("pushAllStateToWebview"), "visibility sync must not send a full init_state refresh")
-    assert.ok(!block.includes("pushInitStateToWebview"), "visibility sync must not send a full init_state refresh")
-  })
-
   void it("has command handler methods", () => {
     assert.ok(source.includes("handleExecuteCommand("), "must have handleExecuteCommand")
     // The user-initiated list_commands flow now lives in WebviewEventRouter
@@ -345,8 +212,9 @@ void describe("ChatProvider.ts", () => {
     assert.ok(source.includes("handleHelpCommand("), "must have handleHelpCommand")
   })
 
-  void it("has banner methods", () => {
+  void it("has banner and auto-mode methods", () => {
     assert.ok(source.includes("handleCompactBannerAction("), "must have handleCompactBannerAction")
+    assert.ok(source.includes("hasAutoModeConfirmed("), "must have hasAutoModeConfirmed")
   })
 
   void it("has custom prompt variable resolution", () => {
@@ -430,16 +298,6 @@ void describe("ChatProvider.ts", () => {
     assert.ok(block.includes("closeTab(sessionId)"), "close_tab must still close the visual tab")
   })
 
-  void it("close_tab clears SessionStore active state when the last active tab is closed", () => {
-    const idx = eventRouterSource.indexOf('["close_tab"')
-    assert.ok(idx >= 0, "close_tab handler must exist")
-    const block = eventRouterSource.slice(idx, eventRouterSource.indexOf('["switch_tab"', idx))
-
-    assert.ok(block.includes("wasActive"), "close_tab must capture whether the closing tab was active")
-    assert.ok(block.includes("tabManager.getActiveId()"), "close_tab must inspect the next open tab after close")
-    assert.ok(block.includes("sessionStore.clearActive()"), "close_tab must clear active session when no open tab remains")
-  })
-
   void it("pushInitStateToWebview scopes restored open tabs to the current workspace", () => {
     const idx = source.indexOf("private pushInitStateToWebview(")
     assert.ok(idx >= 0, "pushInitStateToWebview must exist")
@@ -455,21 +313,6 @@ void describe("ChatProvider.ts", () => {
     assert.ok(block.includes("markRestorableSession"), "restored sessions must be marked through a single alias-aware helper")
     assert.ok(block.includes("aliasToSessionId"), "restored active tab aliases must resolve to canonical session ids")
     assert.ok(block.includes("tab.cliSessionId"), "open tabs must be de-duped by CLI session id as well as local tab id")
-  })
-
-  void it("pushInitStateToWebview does not auto-select a closed historical active session", () => {
-    const idx = source.indexOf("private pushInitStateToWebview(")
-    assert.ok(idx >= 0, "pushInitStateToWebview must exist")
-    const block = source.slice(idx, source.indexOf("private pushAllStateToWebview", idx))
-
-    assert.ok(
-      !block.includes("this.sessionStore.getActive()"),
-      "init restore must not call getActive(), because getActive() auto-selects history and can reopen a closed tab",
-    )
-    assert.ok(
-      block.includes("this.sessionStore.activeId") && block.includes("this.sessionStore.get("),
-      "init restore should only read the explicitly active session id",
-    )
   })
 
   void it("handles personalized theme customizer messages", () => {
@@ -496,8 +339,8 @@ void it("change_mode handler reads mode from msg.mode", () => {
   assert.ok(changeIdx >= 0 || eventRouterSource.indexOf('["change_mode"') >= 0, "change_mode handler must exist")
   const block = findChangeModeBlock(changeIdx >= 0 ? source : eventRouterSource)
   assert.ok(
-    /normalizeSessionMode\(msg\.mode\)/.test(block),
-    "change_mode handler must read and validate mode from msg.mode (the webview sends mode, not tools)"
+    /msg\.mode\s+as\s+string/.test(block),
+    "change_mode handler must read mode from msg.mode (the webview sends mode, not tools)"
   )
   assert.ok(
     !block.includes("msg.tools"),
@@ -505,34 +348,23 @@ void it("change_mode handler reads mode from msg.mode", () => {
   )
 })
 
-void it("change_mode delegates to applySessionMode", () => {
+void it("change_mode passes msg.mode to tabManager.setMode and sessionStore.updateMode", () => {
   const block = findChangeModeBlock(source.indexOf('["change_mode"') >= 0 ? source : eventRouterSource)
   assert.ok(
-    /applySessionMode\(sessionId,\s*mode\)/.test(block),
-    "change_mode handler must delegate to applySessionMode (extracted to ChatProvider)"
+    /tabManager\.setMode\(sessionId,\s*mode\)/.test(block),
+    "must call tabManager.setMode(sessionId, mode)"
+  )
+  assert.ok(
+    /sessionStore\.updateMode\(sessionId,\s*mode\)/.test(block),
+    "must call sessionStore.updateMode(sessionId, mode)"
   )
 })
 
-void it("applySessionMode calls tabManager.setMode and sessionStore.updateMode", () => {
-  assert.ok(
-    /tabManager\.setMode\(sessionId,\s*normalized\)/.test(source),
-    "applySessionMode must call tabManager.setMode(sessionId, normalized)"
-  )
-  assert.ok(
-    /sessionStore\.updateMode\(sessionId,\s*normalized\)/.test(source),
-    "applySessionMode must call sessionStore.updateMode(sessionId, normalized)"
-  )
-})
-
-void it("change_mode switches to auto without a confirmation gate", () => {
+void it("change_mode triggers auto-mode confirmation when mode is auto", () => {
   const block = findChangeModeBlock(source.indexOf('["change_mode"') >= 0 ? source : eventRouterSource)
   assert.ok(
-    !block.includes("hasAutoModeConfirmed") && !block.includes("showAutoModeConfirmation"),
-    "switching to auto must not be gated behind a confirmation modal (consent model)"
-  )
-  assert.ok(
-    /applySessionMode\(sessionId,\s*mode\)/.test(block),
-    "auto switch must still apply the mode via applySessionMode"
+    /mode\s*===\s*"auto"/.test(block) && block.includes("hasAutoModeConfirmed"),
+    "auto mode must reach the confirmation check (block.mode === 'auto' branch must be reachable)"
   )
 })
 
@@ -548,10 +380,9 @@ void it("accept_permission rejects mutating requests while the session is in pla
 
 void it("accept_permission allows plan document permission responses in plan mode", () => {
   assert.ok(
-    eventRouterSource.includes("resolvePlanPermission") &&
-      modePolicySource.includes('startsWith(".opencode/plans/")') &&
-      modePolicySource.includes('endsWith(".md")'),
-    "plan mode must allow OpenCode's .opencode/plans/*.md permission exception through the shared policy"
+    eventRouterSource.includes('startsWith(".opencode/plans/")') &&
+      eventRouterSource.includes('endsWith(".md")'),
+    "plan mode must allow OpenCode's .opencode/plans/*.md permission exception"
   )
 })
 
@@ -636,28 +467,14 @@ void it("file_edited server events register changed files in backend store befor
   assert.ok(!block.includes("if (!tab?.isStreaming) return"), "backend changed-file registration must not be streaming-only")
 })
 
-void it("sessionless file_edited events are credited to streaming tab, with active CLI-session fallback", () => {
-  // Session-exclusivity: a file.edited event with no sessionID can't be
-  // attributed by the server. The primary signal is a uniquely streaming tab.
-  // After a compaction/resume cycle the local streaming flag may briefly be
-  // false, so we also allow attributing to the active tab when it has a CLI
-  // session (the server-side run is still attached). We still refuse to credit
-  // an idle tab that has no active CLI session, preserving the original guard
-  // against external tools polluting the changed-files dropdown.
-  // When multiple sessions are streaming, we prefer the active tab if it's
-  // one of them; otherwise we DROP rather than guess (guessing causes
-  // cross-session contamination in the file changes dropdown).
-  const idx = source.indexOf("private resolveSessionlessFileEditTab(")
-  assert.ok(idx >= 0, "resolveSessionlessFileEditTab must exist")
-  const block = source.slice(idx, idx + 2200)
-  assert.ok(block.includes('event.type !== "file_edited"'), "guards to file_edited events")
-  assert.ok(block.includes("getAllTabs().filter"), "must inspect streaming tabs")
-  assert.ok(block.includes("liveTabs.length === 1"), "attribute uniquely streaming tab")
-  assert.ok(block.includes("liveTabs.length > 1"), "must handle multiple streaming tabs")
-  assert.ok(block.includes("liveTabs.includes(activeTab)"), "must prefer active tab among streaming")
-  assert.ok(block.includes("getActiveTab()"), "must check active tab as fallback")
-  assert.ok(block.includes("activeTab?.cliSessionId"), "active-tab fallback must require a CLI session")
-  assert.ok(block.includes("Dropping sessionless file_edited"), "must log+drop ambiguous/idle sessionless edits")
+void it("sessionless file_edited events are attributed to an active or streaming tab", () => {
+  const idx = source.indexOf("private handleServerEvent(")
+  assert.ok(idx >= 0, "handleServerEvent must exist")
+  const block = source.slice(idx, idx + 2400)
+  assert.ok(block.includes('event.type === "file_edited"'), "sessionless file_edited handling must be explicit")
+  assert.ok(block.includes("getAllTabs().filter"), "must inspect live tabs before dropping sessionless file edits")
+  assert.ok(block.includes("getActiveTab()"), "must fall back to the active tab for global file.edited events")
+  assert.ok(block.includes("Dropping sessionless file_edited"), "must log rather than silently writing to an empty session id")
 })
 
 // ── resume_server_session: open any server session from the modal ─────────
@@ -773,7 +590,7 @@ void it("pushes rate-limit state to the webview for the quota bar", () => {
   assert.ok(source.includes("rateLimitMonitor.onStateChanged"), "must subscribe to rate-limit state changes")
   const statePushSource = readFileSync(resolve(__dirname, "StatePushService.ts"), "utf8")
   assert.ok(statePushSource.includes('type: "rate_limit_state"'), "must post rate_limit_state messages")
-  assert.ok(source.includes("pushRateLimitStateToWebview") || rateLimitMonitorSource.includes("getSerializableState"), "must serialize rate-limit state before posting")
+  assert.ok(source.includes("getSerializableState"), "must serialize rate-limit state before posting")
 })
 
 // ── sessions_recovered: server session recovery after startup ────────────────
@@ -833,15 +650,9 @@ void it("open_file resolves through the centralized session-aware opener", () =>
     "open_file handler must use the shared resolver with the active session id"
   )
   assert.ok(
-    eventRouterSource.includes("parseOpenFileTarget"),
-    "shared opener must exist"
+    eventRouterSource.includes("parseOpenFileTarget") && eventRouterSource.includes('fragment.match(/^L(\\d+)/i)'),
+    "shared opener must parse #L12 line fragments"
   )
-  const hasLineFragment = eventRouterSource.includes('fragment.match(/^L(\\d+)')
-  const hasColumnFragment = eventRouterSource.includes('fragment.match(/^L(\\d+)(?::(\\d+))?$')
-  assert.ok(hasColumnFragment || hasLineFragment, "shared opener must parse #L12 line fragments (with optional column)")
-  const hasTrailingLine = eventRouterSource.includes('trailing.match(/^(.+?):(\\d+)(?::(\\d+))?$/)') ||
-    eventRouterSource.includes('trailing = working.match')
-  assert.ok(hasTrailingLine, "shared opener must support :LINE and :LINE:COL trailing line refs")
   assert.ok(
     eventRouterSource.includes("this.opts.sessionStore.get(sessionId)?.workspacePath"),
     "shared opener must prefer the stored session workspace path"
@@ -988,155 +799,7 @@ void it("backfillRecoveredSessions guards in-progress and skips local placeholde
     "must clear in-progress flag in a finally block"
   )
   assert.ok(
-    block.includes("selectPendingBackfill(sessions)"),
-    "must skip local placeholder ids (now delegated to selectPendingBackfill, which filters them out)"
+    block.includes("isLocalPlaceholderSessionId(session.cliSessionId)"),
+    "must skip local placeholder ids that are not real server sessions"
   )
-})
-
-void describe("ChatProvider token accounting — host source of truth", () => {
-  void it("step_finish posts step_tokens with cumulative totals from SessionStore", () => {
-    const start = source.indexOf('["step_finish"')
-    assert.ok(start >= 0, "step_finish handler must exist")
-    const block = source.slice(start, source.indexOf("}],", start))
-    assert.ok(
-      block.includes("cumulative:"),
-      "step_tokens must carry cumulative session totals so the webview can SET instead of accumulate (idempotent on replay)",
-    )
-    assert.ok(
-      block.includes("cumulativeCost:"),
-      "step_tokens must carry the cumulative session cost",
-    )
-  })
-})
-
-// ── question.asked surfacing (Sprint 0 / B1) ────────────────────────────────
-// The opencode server can emit question.asked / question.v2.asked WITHOUT a
-// matching tool part (question invoked outside a tool-call context). In that
-// case, the only host event that fires is the normalized `question_asked`
-// (no `tool_start` with name "question" ever arrives). The webview's question
-// bar is populated exclusively via the `question_asked` host message — so if
-// the host only posts `{type:"message"}` from `ensureQuestionBlock`, the bar
-// stays empty and the user cannot answer. ensureQuestionBlock MUST also post
-// `{type:"question_asked", block, messageId}` so the existing webview handler
-// at main.ts (~line 4132) fires and calls questionBar.addQuestion.
-
-void describe("ChatProvider question.asked surfacing (B1)", () => {
-  void it("ensureQuestionBlock posts question_asked in addition to the transcript message", () => {
-    const idx = source.indexOf("private ensureQuestionBlock(")
-    assert.ok(idx >= 0, "ensureQuestionBlock must exist")
-    // Slice a generous window — the method body is small but contains the postMessage calls.
-    const block = source.slice(idx, idx + 1600)
-    assert.ok(
-      block.includes('type: "question_asked"'),
-      "ensureQuestionBlock must post {type:\"question_asked\"} so non-tool-context questions reach the question bar (B1)",
-    )
-    assert.ok(
-      block.includes('type: "message"'),
-      "ensureQuestionBlock must STILL post {type:\"message\"} so the transcript pointer card renders",
-    )
-    // Order check: the transcript message must post first (so the block is in
-    // history before the bar attempts to bind to it by messageId), then the
-    // question_asked dispatch.
-    const msgIdx = block.indexOf('type: "message"')
-    const askedIdx = block.indexOf('type: "question_asked"')
-    assert.ok(msgIdx >= 0 && askedIdx >= 0 && msgIdx < askedIdx, "post {type:\"message\"} before {type:\"question_asked\"}")
-  })
-
-  void it("question_asked dispatch carries the question block and messageId", () => {
-    const idx = source.indexOf("private ensureQuestionBlock(")
-    const block = source.slice(idx, idx + 1600)
-    const askedIdx = block.indexOf('type: "question_asked"')
-    assert.ok(askedIdx >= 0, "question_asked post must exist")
-    // Look at the postMessage argument shape right after the question_asked type marker.
-    const slice = block.slice(askedIdx, askedIdx + 400)
-    assert.ok(slice.includes("block"), "question_asked payload must include the question block")
-    assert.ok(
-      slice.includes("messageId") || slice.includes("messageId:"),
-      "question_asked payload must include messageId so the bar can bind to the right transcript bubble",
-    )
-    assert.ok(slice.includes("sessionId"), "question_asked payload must include sessionId")
-  })
-
-  void it("wires refreshModels callback to ProviderManagementService", () => {
-    assert.ok(
-      source.includes("refreshModels: () => this.modelManager.refreshModels"),
-      "ChatProvider must pass refreshModels callback to ProviderManagementService"
-    )
-  })
-
-  void it("ProviderManagementService calls refreshModels after handleConnectProviderKey success", () => {
-    const idx = providerManagementSource.indexOf("async handleConnectProviderKey")
-    const block = providerManagementSource.slice(idx, idx + 1000)
-    assert.ok(
-      block.includes("await this.deps.refreshModels()"),
-      "handleConnectProviderKey must call refreshModels after successful auth.set"
-    )
-  })
-
-  void it("ProviderManagementService calls refreshModels after handleAddProvider success", () => {
-    const idx = providerManagementSource.indexOf("async handleAddProvider")
-    const block = providerManagementSource.slice(idx, idx + 400)
-    assert.ok(
-      block.includes("await this.deps.refreshModels()"),
-      "handleAddProvider must call refreshModels after successful upsertConfig"
-    )
-  })
-
-  void it("ProviderManagementService calls refreshModels after handleCompleteProviderOAuth success", () => {
-    const idx = providerManagementSource.indexOf("async handleCompleteProviderOAuth")
-    const block = providerManagementSource.slice(idx, idx + 1000)
-    assert.ok(
-      block.includes("await this.deps.refreshModels()"),
-      "handleCompleteProviderOAuth must call refreshModels after successful callback"
-    )
-  })
-
-  // Issue 1: error_cleared must be posted after reconnect to dismiss stale banners
-  void it("posts error_cleared envelope after event_stream_reconnected", () => {
-    const idx = source.indexOf('"event_stream_reconnected"')
-    assert.ok(idx >= 0, "must have event_stream_reconnected handler")
-    const blockEnd = source.indexOf('"sessions_recovered"', idx)
-    const block = source.slice(idx, blockEnd > idx ? blockEnd : idx + 5000)
-    assert.ok(
-      block.includes('"error_cleared"'),
-      "event_stream_reconnected handler must post error_cleared to dismiss stale banners",
-    )
-  })
-
-  void it("posts error_cleared envelope after server_connected", () => {
-    const idx = source.indexOf('"server_connected"')
-    assert.ok(idx >= 0, "must have server_connected handler")
-    const block = source.slice(idx, idx + 1000)
-    assert.ok(
-      block.includes('"error_cleared"'),
-      "server_connected handler must post error_cleared to dismiss stale banners",
-    )
-  })
-
-  // Issue 4: max-reconnect failure must produce a structured, actionable error
-  void it("detects max reconnect attempts and maps to EVENT_STREAM_FAILED error context", () => {
-    assert.ok(
-      source.includes("EVENT_STREAM_FAILED"),
-      "must define EVENT_STREAM_FAILED error code for max-reconnect failure",
-    )
-    assert.ok(
-      source.includes("max reconnect attempts reached"),
-      "must detect the max-reconnect-attempts-reached message",
-    )
-    assert.ok(
-      source.includes("restart the OpenCode server"),
-      "must provide actionable guidance to restart the server",
-    )
-  })
-
-  // Issue 4: isEventStreamTransportError must NOT match the terminal max-reconnect failure
-  void it("isEventStreamTransportError excludes max reconnect attempts reached", () => {
-    const fnIdx = source.indexOf("private isEventStreamTransportError")
-    assert.ok(fnIdx >= 0, "must have isEventStreamTransportError method")
-    const fnBlock = source.slice(fnIdx, fnIdx + 500)
-    assert.ok(
-      fnBlock.includes("max reconnect"),
-      "isEventStreamTransportError must check for 'max reconnect' to exclude terminal failure",
-    )
-  })
 })

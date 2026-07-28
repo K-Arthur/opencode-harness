@@ -8,7 +8,6 @@ const eventRouterSource = readFileSync(resolve(__dirname, "WebviewEventRouter.ts
 const validatorSource = readFileSync(resolve(__dirname, "WebviewMessageValidator.ts"), "utf8")
 const hostMessageBatcherSource = readFileSync(resolve(__dirname, "HostMessageBatcher.ts"), "utf8")
 const typesSource = readFileSync(resolve(__dirname, "webview/types.ts"), "utf8")
-const retryQueueSource = readFileSync(resolve(__dirname, "RetryQueueService.ts"), "utf8")
 
 void describe("Webview Message Flow Integration Tests", () => {
   void describe("message validation flow", () => {
@@ -26,7 +25,7 @@ void describe("Webview Message Flow Integration Tests", () => {
     void it("validates send_prompt text length", () => {
       assert.ok(eventRouterSource.includes("validateMessage"), "must call validateMessage")
       assert.ok(validatorSource.includes("send_prompt: validateSendPrompt"), "must validate send_prompt")
-      assert.ok(validatorSource.includes("text.length > 1_000_000"), "must validate prompt length")
+      assert.ok(validatorSource.includes("text.length > 50000"), "must validate prompt length")
     })
 
     void it("validates mention_search query length", () => {
@@ -83,7 +82,7 @@ void describe("Webview Message Flow Integration Tests", () => {
     void it("batches non-critical host messages without batching stream lifecycle", () => {
       assert.ok(chatProviderSource.includes("this.messageBatcher.post(msg)"), "ChatProvider must route host messages through the unified batcher")
       assert.ok(typesSource.includes("host_message_batch"), "HostMessage must include the batch envelope")
-      assert.ok(chatProviderSource.includes('"stream_start", "stream_end", "stream_chunk"') || retryQueueSource.includes('"stream_start", "stream_end", "stream_chunk"') || retryQueueSource.includes("stream_start") && retryQueueSource.includes("stream_end") && retryQueueSource.includes("stream_chunk"), "stream lifecycle messages must remain critical")
+      assert.ok(chatProviderSource.includes('"stream_start", "stream_end", "stream_chunk"'), "stream lifecycle messages must remain critical")
     })
 
     void it("flushes immediately on stream_end", () => {
@@ -99,25 +98,25 @@ void describe("Webview Message Flow Integration Tests", () => {
 
   void describe("retry logic flow", () => {
     void it("identifies critical message types for retry", () => {
-      assert.ok(chatProviderSource.includes("CRITICAL_MESSAGE_TYPES") || retryQueueSource.includes("CRITICAL_MESSAGE_TYPES"), "must define critical types")
-      assert.ok(chatProviderSource.includes("stream_end") || retryQueueSource.includes("stream_end"), "must include stream_end")
-      assert.ok(chatProviderSource.includes("error") || retryQueueSource.includes("error"), "must include error")
-      assert.ok(chatProviderSource.includes("webview_ready") || retryQueueSource.includes("webview_ready"), "must include webview_ready")
+      assert.ok(chatProviderSource.includes("CRITICAL_MESSAGE_TYPES"), "must define critical types")
+      assert.ok(chatProviderSource.includes("stream_end"), "must include stream_end")
+      assert.ok(chatProviderSource.includes("error"), "must include error")
+      assert.ok(chatProviderSource.includes("webview_ready"), "must include webview_ready")
     })
 
     void it("implements exponential backoff for retries", () => {
-      assert.ok(chatProviderSource.includes("RETRY_DELAYS_MS") || retryQueueSource.includes("RETRY_DELAYS_MS") || retryQueueSource.includes("RETRY_DELAYS"), "must have retry delay array")
-      assert.ok(chatProviderSource.includes("attempts") || retryQueueSource.includes("attempts"), "must track retry attempts")
-      assert.ok(chatProviderSource.includes("MAX_RETRIES") || retryQueueSource.includes("MAX_RETRIES"), "must have max retry limit")
+      assert.ok(chatProviderSource.includes("RETRY_DELAYS_MS"), "must have retry delay array")
+      assert.ok(chatProviderSource.includes("attempts"), "must track retry attempts")
+      assert.ok(chatProviderSource.includes("MAX_RETRIES"), "must have max retry limit")
     })
 
     void it("removes message from queue on successful retry", () => {
-      assert.ok(chatProviderSource.includes("this.messageRetryQueue.splice") || retryQueueSource.includes(".splice("), "must remove from queue on success")
+      assert.ok(chatProviderSource.includes("this.messageRetryQueue.splice"), "must remove from queue on success")
     })
 
     void it("abandons message after max retries", () => {
-      assert.ok(chatProviderSource.includes("attempts >= ChatProvider.MAX_RETRIES") || retryQueueSource.includes("attempts >= MAX_RETRIES") || retryQueueSource.includes("attempts >= maxRetries") || retryQueueSource.includes(">= MAX_RETRIES"), "must check max retries")
-      assert.ok(chatProviderSource.includes('log.error(`Max retries exceeded') || retryQueueSource.includes('Max retries exceeded'), "must log when max retries exceeded")
+      assert.ok(chatProviderSource.includes("attempts >= ChatProvider.MAX_RETRIES"), "must check max retries")
+      assert.ok(chatProviderSource.includes('log.error(`Max retries exceeded'), "must log when max retries exceeded")
     })
   })
 

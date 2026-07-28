@@ -1,153 +1,7 @@
 # Status.md
 
-## Last Updated: 2026-06-28
-## Project State: v0.4.23 (unreleased fix pending) — provider refresh fix
-
-### Unreleased fix (2026-06-28): Provider add not refreshing models
-- **Added providers not showing until extension restart** — when a user connected a provider via "Add Key" (`connect_provider_key`), the provider's models didn't appear in the model picker until the extension was restarted. Root cause: `MessageRouter.getModelList` only read from the cached model list and only triggered `refreshModels()` if the cache was empty. Fix: added `refreshModels` callback to `ProviderManagementServiceDeps`, called after `handleConnectProviderKey`, `handleAddProvider`, and `handleCompleteProviderOAuth` success. The existing `onModelsRefreshed` listener in `ChatProvider` pushes the fresh model list to the webview. Also added missing `get_models` post to `provider_oauth_completed` webview handler.
-- **Files changed:** `src/chat/ProviderManagementService.ts`, `src/chat/ChatProvider.ts`, `src/chat/webview/main.ts`, `src/chat/ChatProvider.test.ts`
-- **Verification:** build green; 92/92 tests pass.
-
-### v0.4.23 (2026-06-27): Regression fixes + v2 SDK audit
-- **SVG icons rendered as literal text** — `textContent` on SVG strings showed raw markup. Switched to `innerHTML` in `liveCommandCard.ts` (render + update) and `tasks-panel.ts`.
-- **Auto-tab-switch on background resumes** — background sessions with pending questions/permissions no longer steal focus. Pulsing `data-needs-attention` indicator marks tabs needing input. Streaming tabs anchor to bottom on switch (prevents scroll jump).
-- **CSS preset design tokens** — context-chip, context-chip-toggle, live-command-card styles now use `--oc-*` semantic variables instead of raw `--vscode-*`.
-- **Diff display compact mode** — `buildDiffPreview` now counts added/removed lines toward `MAX_PREVIEW_LINES` (5). `MAX_DIFF_LINES` reduced 40→15.
-- **v2 SDK error messages** — `throwOnV2Error` produced `Command failed: {}` on empty error objects. New `v2ErrorDetail` helper extracts message → field JSON → HTTP status. Applied to `SessionClient` + `PtyService`.
-- **`file.read` shape mismatch** — removed dead `messageID` parameter not accepted by v2 SDK `file.read` signature.
-- **AGENTS.md** — added Focused-Change Discipline and Tab Attention Indicator sections.
-- **Bundle limit** — webview 794KB→796KB (measures 794.5KB).
-
-### v0.4.21 (2026-06-27): Rebuild + reinstall
-- **Rebuilt and reinstalled** — version bumped to 0.4.21, extension packaged and installed. Bundle sizes: extension.js 743.8KB (limit 748KB), main.js 793.3KB (limit 794KB). All within limits.
-
-### v0.4.20 (2026-06-27): Emoji→SVG icons + active file toggle + file mention + file edit cards
-- **Emoji → SVG icon replacement** — all emoji/Unicode symbols in webview UI, HTML, CSS, extension host files, and dead code replaced with SVG icons from `icons.ts`. CSS pseudo-elements use CSS-drawn shapes. VS Code status bar items use codicon syntax.
-- **Active file context toggle** — moved `#context-bar` inside `#input-area` in `index.html`. Propagated `reason` field for suppressed files. Removed dead `toggle_active_file` postMessage. Re-posted active file on tab switch.
-- **File edit cards stuck as running** — added branch in `handleToolEnd` to resolve file edit cards from "running" to completed/error/stale state.
-- **Changed files dropdown** — updated dropdown immediately on `file_edited` message. Added changed files toolbar button back to HTML with SVG icon.
-- **File mention search** — `MessageRouter` now uses `WorkspaceFileIndex` as primary source with `vscode.workspace.findFiles` fallback, deduplicating results. `WorkspaceFileIndex` refreshed on `webview_ready`. Webview proactively requests files on `@` mention trigger.
-- **ActiveFileTracker crash fix** — `bestEditor()` safely handles undefined `visibleTextEditors` array.
-- **Subagent panel CSS restored** — state-specific classes and detail-view badge colors restored after ephemeral-tree wipe.
-- **CSS coverage structural test** — `src/chat/webview/css/cssCoverage.test.ts` asserts every renderer class has a matching CSS rule.
-- **Ephemeral-tree hardening** — `detect-wiped-work.mjs`, `check-workspace-state.mjs`, pre-commit CSS coverage hook.
-- **Verification:** typecheck clean; unit 1970 pass / 0 fail; production build green. Playwright webview tests require browser install (`npx playwright install chromium`).
-
-### v0.4.13 (2026-06-25): Inline diffs + compaction ordering + SDK v1.17.11 + theme engine overhaul
-- **Inline diff in file-edit cards** — the "Show diff" button on file-edit cards now renders a unified diff inline from the tool arguments (`oldString`/`newString` or `content`) instead of relying on a host round-trip that only updated the changed-files dropdown.
-- **Events displayed out of order after session compaction** — the webview now resets the per-session stream state on `session_compacted` before resuming, so server chunks that arrive before the resumed session is ready render in the correct post-compaction bubble.
-- **Sessionless file_edited attribution after compaction** — `file.edited` events with no session ID now fall back to the active tab when it has an active CLI session, covering the transient non-streaming gap after compaction while still guarding against idle-tab attribution for external tools.
-- **SDK v1.17.11 alignment** — "Max" thinking variant, MCP server cwd/timeout/OAuth config, provider custom headers.
-- **Diff review / accept / reject** — changed-file rows carry accept (✓) and reject (✕) buttons with session-aware baseline and undoable checkpoints.
-- **Theme engine overhaul** — modular `ThemeAnalyzer` / `ThemeStateMutator` / `ThemeWebviewBridge` subagents; `ThemeManager` exposes `activateTheme()`, `applyOverrides()`, `resetToDefault()`; live CSS variable sync to the webview; namespace-isolated merges under `workbench.colorCustomizations.opencodeHarness`; integration tests for merge preservation, fallback, and workspace isolation. Webview customizer refreshed with Common section, Cancel/Apply/Restore defaults actions, and current-theme color picker previews.
-- **Verification:** typecheck clean; unit 1966 pass / 0 fail; message-contract 23/23; production build green; `.vsix` packaged at `opencode-harness-0.4.13.vsix` (2.1 MB).
-
-### Migration progress (2026-06-15): v1→v2 SDK strangler — Phases 1 + 2 (partial)
-- **Phase 1 (done, `816a874`):** v2 client first-class; question reply/reject on v2 (bug fixed).
-- **Phase 2 partial (done, `27cf50d`):** safe void/ack session calls on v2 — `deleteSession`/`abortSession`/`revertMessage` (v2 flat `{ sessionID }` replaces v1 nested `{ path: { id } }`).
-- **Blocker found for the rest of Phase 2:** v2 domain types differ from v1 (`Session` adds slug/workspaceID/path; `summary.diffs` is `SnapshotFileDiff`), so calls returning `Session`/`Message`/`Part` (create/get/list/messages/prompt/command/children) need a v2→domain mapping layer (Phase 2b) — not a clean swap. The streaming prompt path is intentionally untouched; the SSE event pipeline migrates LAST (Phase 4, with R1).
-- **Handoff:** full self-contained continuation prompt at `docs/implementation/2026-06-15-v2-migration-handoff-prompt.md`; plan at `docs/adrs/2026-06-15-v1-to-v2-sdk-migration.md`.
-
-### Recent Fix (2026-06-15): Question reply/reject "API is unavailable" + panel stuck — v2 SDK client beachhead
-- **Symptom:** answering OR skipping a model clarification question showed a red "Stream error — OpenCode question reply/reject API is unavailable" card, and the QUESTION FROM MODEL panel persisted even after answering.
-- **Root cause:** the question reply/reject API exists **only on the @opencode-ai/sdk v2 client**; the extension's `SessionClient` uses the **v1** client, which has no `question` namespace. The code cast the v1 client and probed `client.question.reply`/`reject` → always `undefined` → always threw "API is unavailable". The webview's optimistic-answer flow then hit its B9 rollback (`question_unacknowledged`), re-showing the bar — hence the "panel persists" symptom. **One root cause, both symptoms.**
-- **Fix (v2 strangler beachhead):** stood up the **v2 SDK client as a first-class citizen** — `opencodeClientFactory.createV2Client`, `AuthProvider.makeV2Client`/`makeRemoteV2Client` (built from the **same** baseUrl + auth as v1 via shared `localClientConfig`/`remoteClientConfig` helpers so they can't drift), `SessionManager.v2Client` created/cleared alongside `client`, passed to `SessionClient` as `getV2Client`. `replyToQuestion`/`rejectQuestion` now call the real v2 `question.reply({ requestID, answers })` / `question.reject({ requestID })`. On success the host posts `question_acknowledged` → webview `questionBar.removeQuestion` dismisses the panel.
-- **Decision (user):** full v1→v2 migration is the destination; this is the agreed **Phase 1 beachhead** (phased strangler plan to follow). Event pipeline (SseSubscriber) migrates last under its own phase.
-- **Bundle:** hey-api's class-based v2 SDK is not tree-shakeable per-method, so importing it pulls the whole generated client (~44KB). Host bundle 561.6KB → 618.1KB; re-baselined the host limit 562KB → **624KB** (~1% headroom) with a documented rationale in `scripts/check-bundle-size.mjs`. (v1 SDK ~30KB becomes removable once the migration completes.)
-- **Tests:** behavioral `tests/unit/session-client-question-v2.test.mjs` (×5, vscode-stub esbuild bundle): reply→v2 `question.reply`, reject→v2 `question.reject`, null v2 → "Server not running" (not "API unavailable"), error surfacing. `AuthProvider.test.ts` updated to the new shape incl. the v2-shares-v1-auth guarantee.
-- **Verification:** typecheck clean; unit **3627 + 768 mjs pass / 0 fail**; message-contract 17/17; roundtrip 7/7; prod build + bundle gate green (ext 618.1/624KB, webview 734.5/736KB).
-
-### Recent Change (2026-06-15): Lazy opencode server spawn on first engagement (audit R3)
-- **Before:** the opencode server process was spawned in **every** window on activation (fire-and-forget `ensureOpencodeAndStart`), even if the user never opened the OpenCode view — N idle server processes + SSE subscriptions + `recoverSessions()` across multi-window setups.
-- **Decision (user):** keep `onStartupFinished` activation (status bar, CLI auto-install prompt, diagnostics, command registration all stay) but defer the **server spawn** until first engagement. Trade-off accepted: a brief "connecting" state on first chat-view open in exchange for zero idle cost in windows that never use OpenCode.
-- **Fix:** new pure `createLazyStarter` (`src/utils/lazyStarter.ts`) memoizes success, de-dupes concurrent callers to a single in-flight start, and re-arms on failure (so a transient CLI-not-installed failure can retry). `extension.ts` builds `ensureServerReady = createLazyStarter(() => ensureOpencodeAndStart(...))`, removes the eager top-level call, and wires it to `ChatProvider.setServerWarmup()`, which `resolveWebviewView` invokes when the view is shown. Command flows that need chat already reveal the view (`chat.focus`/`openChat`) → transitive warm-up; non-view paths already degrade gracefully (`!isRunning` guards, constitution rule #6).
-- **Tests:** RED→GREEN `lazyStarter.test.ts` (×4: single-in-flight, memoize-success, re-arm-on-failure, resolved-after-success); regression assertions in `extension.test.ts` (lazy wiring present, eager start absent) and `ChatProvider.test.ts` (resolveWebviewView fires the warm-up hook).
-- **Verification:** typecheck clean; unit **3624 pass / 0 fail** (+6); message-contract 17/17; roundtrip 7/7; production build + bundle gate green (ext **561.6/562.0KB — 0.4KB headroom, re-baseline likely needed next host change**; main 734.5/736KB).
-
-### Recent Fix (2026-06-15): Timing-independent abort suppression via server-message-id correlation (audit R2)
-- **Symptom:** a spurious "The request was cancelled." error card could still appear after Stop / interrupt-and-send when the server's late `MessageAbortedError` (SSE) landed after the fixed 8s suppression window expired (queued/slow sessions).
-- **Root cause:** abort suppression relied **solely** on a per-tab time window (`intentionalAbortUntil`, 8s). The only message id tracked per run was the synthetic `resp-…` UI bubble id (anchored deliberately, see `appendChunk`), never the server `msg_…` id the abort error actually carries — so no precise, timing-independent correlation existed.
-- **Fix:** new pure, clock-injected `IntentionalAbortRegistry` (`src/chat/handlers/intentionalAbortRegistry.ts`) suppresses an abort-category error by correlating the **server message id** (consumed on match, independent of elapsed time), keeping the self-expiring per-tab window only as a fallback for late errors with no correlatable id. Zero behavioral regression; strictly more robust.
-  - `ActiveStreamRun` gains `serverMessageId`, recorded in `appendChunk`; `abort()` registers it; `StreamCoordinator.wasIntentionallyAborted(tabId, serverMessageId?)` delegates to the registry; dispose clears it.
-  - `MessageUpdateHandler` now carries `messageId: msg.id` on the abort `server_error` event; `ChatProvider.server_error` extracts it and passes it through.
-- **Test quality (audit R5, in microcosm):** replaced the 4 brittle source-string assertions that pinned the removed private `intentionalAbortUntil` field with real **behavioral** tests — `intentionalAbortRegistry.test.ts` (×10, fake clock) and `MessageUpdateHandler.test.ts` (×4) — plus delegation-seam checks in `StreamCoordinator.test.ts`/`ChatProvider.test.ts`.
-- **Verification:** typecheck clean; unit **3618 pass / 0 fail** (+13); message-contract 17/17; roundtrip 7/7; production build + bundle gate green (ext 561.4/562KB, main 734.5/736KB).
-- **Context:** first implementation item from the 2026-06-15 productivity/reliability audit (P0). De-risks the larger R1 (unify the dual host/webview stream state machine) by introducing the pure, tested run-identity seam it will build on.
-
-### Recent Work (2026-06-13): Steering / queueing redesign + keyboard de-conflict + SDK bump
-- **Symptom:** sending a message mid-stream showed a red "Stream error — The request was cancelled. Aborted"; the three steer modes (Interrupt/Append/Queue) were inconsistent (Append gave no feedback); steer `Ctrl+1/2/3` clashed with the plan/build/auto shortcuts, which never fired from the composer anyway.
-- **Root causes:** (1) "interrupt" was the default and did `abort()` → the server's late `MessageAbortedError` (SSE) was mapped to an error card by `ChatProvider`'s `server_error` handler; the `abortedTabs` flag cleared after one tick, too soon to suppress it. (2) steer digits in `inputHandlers` swallowed `Ctrl+Alt+digit`; mode shortcuts in `modeDropdown` bailed on `isTextEntryTarget`.
-- **Fix — behavior:** collapse to **Queue (default)** + **Interrupt (explicit)**; remove "Append" (folded into Queue) and its `appendCallbacks`/`append_cancelled` plumbing + the dead `add_to_queue` handler. Add a self-expiring intentional-abort window (`StreamCoordinator.wasIntentionallyAborted`) consulted by `server_error` (via new pure `isAbortErrorValue` in `chatUtils`) so intentional aborts never show an error or kill the replacement run.
-- **Fix — keyboard:** composer **Enter** = send(idle)/queue(streaming), **⌘/Ctrl+Enter** = send(idle)/interrupt-and-send(streaming, one-shot), **Shift+Enter** = newline; session modes **Alt+1/2/3** now work in the composer (match `e.code`); steer `Ctrl+1/2/3` removed. Help modal updated.
-- **Fix — frontend:** streaming-only **Queue | Interrupt** segmented toggle (re-shows on tab switch via `syncSteerAffordance`); CSS + a11y (`aria-keyshortcuts` Alt+1/2/3) updated.
-- **SDK:** bumped `@opencode-ai/sdk` → **1.17.6** (latest; v1 prompt path unchanged); classified 3 new v2 events in the coverage contract. v2 `delivery:"steer"|"queue"` noted as a future enhancement.
-- **Tests:** RED→GREEN across `chatUtils` (isAbortErrorValue), `ChatProvider`/`StreamCoordinator` (abort suppression, append removal), `SteerPromptHandler` (queue default + legacy coercion), `modeDropdown` (Alt+1/2/3 incl. in text input), `steerMode`, `input-handlers-behavioral` (Enter/Cmd+Enter), regression-smoke. Full unit + message-contract + roundtrip green; typecheck clean.
-
-### Recent Fix (2026-06-13): Fuzzy command + skill search — custom commands no longer "missing"
-- **Symptom:** custom commands (e.g. `.opencode/commands/code-review.md`) and MCP/skill commands appeared to be missing from the slash UI; you also couldn't search by characters that don't begin the command name.
-- **Root cause:** the inline `/` dropdown filtered with `startsWith` and the commands palette + skills search with `includes`. A command whose *name* didn't begin with the typed characters never showed — so `/review` never surfaced `/code-review`, and `/cr` found nothing. Custom commands *do* flow through the server's `command.list()` (opencode reads `.opencode/commands/*.md`), but the prefix filter hid them.
-- **Fix:** new pure, DOM-free `fuzzyMatch.ts` (`fuzzyScore` / `scoreCommandMatch` / `rankByFuzzy`). Names match by subsequence, descriptions by substring; results rank best-first (exact › contiguous prefix › word-boundary › scattered; a name match always tiers above a description-only match). Wired into all three surfaces so they can't drift: inline `/` dropdown (`mentions.ts`), commands palette incl. stash search (`commands-modal.ts`), and host-side skill search (`WebviewEventRouter.search_skills`). (`src/chat/webview/fuzzyMatch.ts`, `mentions.ts`, `commands-modal.ts`, `src/chat/WebviewEventRouter.ts`)
-- **Not a bug (verified):** `.opencode/prompts/*.md` (client-side variable-templating prompts, `PromptManager` → "Custom" badge) and `.opencode/commands/*.md` (server-executed, "Server"/"MCP"/"Skill" badge) are deliberately separate features with different execution paths (`resolveCustomPromptVariables` vs `sendCommand`). No directory change made.
-- **Follow-up polish:** the inline `/` dropdown now shows a per-command origin badge (`Built-in`/`Server`/`MCP`/`Skill`/`Custom`, with a per-source icon + accent, matching the palette) and caps at 50 fuzzy-ranked rows with a non-interactive "+N more" hint so a short query against a large MCP/skill set can't run away. `MentionItem` gained an optional `badge`. (`mentions.ts`, `types.ts`, `css/components.css`)
-- **Tests:** +34 RED-first (`fuzzyMatch.test.ts` ×23 incl. hand-rolled property checks; commands-modal fuzzy behaviour ×5; mentions badge/cap behaviour ×6) plus updated `mentions.test.ts` assertions. Full unit suite (3413 tests) + message-contract + roundtrip green; typecheck clean; design-token discipline green (badge uses `--text-2xs`, no raw px).
-
-### Recent Fix (2026-06-13): Streaming remnant, switch-marker UX, and modal focus a11y
-- **Streaming never recognised as complete (empty bubble + stuck "live" dot).** A stream restart for a new message id (agent/model switch mid-turn) finalized the prior bubble's tool calls but never removed the orphaned empty assistant placeholder — leaving an empty bubble whose pulsing `.message.assistant.streaming` dot never cleared. `handleStreamStart` now removes an empty prior placeholder (array + DOM), or re-renders a non-empty prior as finalized so the dot stops. New exported `isEmptyStreamingMessage()`. (`src/chat/webview/streamHandlers.ts`)
-- **Agent/Model "switched" cards were verbose and mis-placed.** (1) The normalizer stores the FULL event type (`session.next.agent.switched`) but renderers compared the bare form, so the heavy activity-card path ran instead of the compact pill — fixed with a shared `isSwitchEventType()`. (2) `session.next.*` switches arrive at turn-end and were appended at the transcript bottom; new `switchInsertIndex()`/`decideSwitchPlacement()` place them before the trailing assistant generation (×N coalescing preserved) on both host and webview. (`src/session/activityCoalesce.ts`, `SessionStore.ts`, `src/chat/webview/switchEvent.ts`, `renderer.ts`, `messageRenderer.ts`, `main.ts`)
-- **Modal focus management (WCAG 2.4.3 / 2.1.2).** New `mountModalFocus()` (capture invoker → focus in → trap Tab → restore on release) wired into Model Manager (was leaking Tab behind the dialog, no restore) and Tool Permissions (never moved focus into the dialog). (`src/chat/webview/focus-trap.ts`, `model-manager.ts`, `permissionConfig.ts`)
-- **Icon collision + welcome a11y.** Input-bar "Edit tab instructions" no longer shares the header "More options" cog (distinct notes icon); the welcome "Shortcuts" button is no longer a focusable control inside an `aria-hidden` container (WCAG 4.1.2). (`src/chat/webview/index.html`)
-- **ARIA role corrections.** `#context-usage` (no `aria-valuenow`, focusable, opens a dropdown) changed `role="progressbar"` → `role="button"`; `#mode-dropdown` wrapper dropped its mismatched `role="radiogroup"` (it wraps a listbox combobox, not radios). Verified non-issues: the two conversation-timeline toggles stay `aria-pressed`-synced (deliberate quick-access), and the input bottom bar already `flex-wrap`s so it never clips on narrow sidebars. (`src/chat/webview/index.html`)
-- **Layout/grouping pass.** The "More options" menu is grouped into labelled Panels/View/Configure sections (`role="group"` + `aria-label`); the welcome view now leads with the New/Continue CTA and moves the history search box down beside the recent-sessions list it filters. Keyboard traversal and all id-based wiring preserved; +1 grouped-nav test. (`src/chat/webview/index.html`, `css/layout.css`, `settings-menu.behavior.test.ts`)
-- **Welcome model chip keyboard access.** `#welcome-model-ctx` (click-only `<span>` that opens the model manager) is now a keyboard-operable `role="button"` (Enter/Space). Audited all focusable custom widgets — the rest were already operable. (`index.html`, `ui/welcomeView.ts`)
-- **Note (reverted):** an attempt to hide the welcome search box for "new" users was reverted — the Playwright welcome spec correctly enforces that search stays visible because it queries server-side history, not the webview's local session list. Kept as a guard against re-introducing the bug.
-- **Visual tests:** no spec uses `toHaveScreenshot` (the `*-snapshots/*.png` are orphaned from an older revision), so no snapshot re-baseline is needed. The functional Playwright welcome spec passes by inspection; it can't be executed in this environment (Playwright's `chrome-headless-shell` browser isn't installed — `npx playwright install chromium-headless-shell` to run locally).
-- **Tests:** +25 (each fix RED-first where applicable): focus-trap `mountModalFocus` ×9, restart remnant ×3, `isSwitchEventType` ×4, `switchInsertIndex`/`decideSwitchPlacement` ×9. Full unit suite + message-contract + roundtrip green; typecheck clean.
-
-### Recent Fix (2026-06-11): Two-session lag — persistence amplification + virtual-list lifecycle (5 root causes, TDD)
-- **Symptom:** UI lag with only two open sessions; slow session switching. The streaming/render pipeline (2026-06-02 audit) was healthy — the cost was in persistence and the virtual-list lifecycle. Full record: `docs/performance-audit.md` §"2026-06-11".
-- **RC1 — webview `setState` full-state churn:** every debounced save handed the entire state (all sessions × all messages, ~2.9 MB at 2×500 msgs) to `vscode.setState` (serialize + IPC), fired by scroll saves, stream block boundaries, token updates. Now persists a bounded snapshot (last 50 msgs/session, deep-trim to 10 over the 2 MB budget); `doPrune`/`schedulePrune` full-state stringify machinery deleted. Payload 2.9 MB → 289 KB. (`src/chat/webview/state.ts`)
-- **RC2 — virtual list:** placeholders were never observed → scroll-back restore was dead code (pruned history = permanent empty boxes), masked by resume's dispose→`restoreAll()`→recreate cycle which synchronously re-rendered every detached message at switch time. Placeholders now observed (restore works), `dispose({restoreDom:false})` on close/delete/rebuild, resume reuses the existing list when the DOM wasn't rebuilt. (`src/chat/webview/virtualList.ts`, `main.ts`)
-- **RC3 — open-tab clicks triggered full server refetch:** recent-list/history-modal clicks always posted `resume_session` (host re-fetches the ENTIRE transcript, rewrites the store, re-pushes 50 messages). New `openSession` router: open tabs switch locally; closed sessions resume; post-compaction keeps the true refetch. (`src/chat/webview/main.ts`)
-- **RC4 — host `SessionStore.flush()` serialized the whole store** (~28 MB at 10×1000 msgs → ~170 ms per 500 ms-debounced flush + state-DB write). Now routes through pure `buildPersistedSessions(sessions, 200)`: 200 msgs/session persisted, in-memory unbounded, server remains source of truth (resume/backfill re-fetch). 170 ms → 16 ms, 28 MB → 5.6 MB. (`src/session/SessionStore.ts`, `sessionUtils.ts`)
-- **RC5 — `TimestampUpdater` memory leak:** element-keyed Map never pruned; tick() now drops `isConnected === false` entries. (`src/chat/webview/timestampUpdater.ts`)
-- **Also:** init_state/resume virtual lists read messages through `stateManager` (canonical in-place array) instead of capturing hydration payload arrays (stale-closure hazard exposed by working scroll-back restore).
-- **Language review verdict:** no Rust/WASM/native justified — bottlenecks were redundant serialization and wasted DOM renders, removed in TypeScript.
-- **Tests:** +21 new (each fix landed RED first): 7 state snapshot, 4 virtualList restore/dispose, 4 openSession routing, 4 buildPersistedSessions, 2 timestamp pruning. Full suite 0 fail; typecheck clean; production bundle gate green (ext 544.0/545 KB, main 699.6/700 KB).
-- **Caveat:** no live-host profiling available in the work environment; serialize/payload wins measured via reproducible node benchmarks of the real code paths. Manual two-session checklist to be run post-reinstall.
-
-### Recent Feature (2026-05-31): Automatic opencode CLI install on activation
-- **The required opencode CLI is now installed for the user.** VS Code has no install-time hook, so detect-and-install runs on activation. Default is **prompt-once** (Install / Manual Instructions / Not Now); declines are remembered in `globalState` to avoid nagging. macOS/Linux use the official installer (downloaded, validated, run as `bash <file>` with `shell:false` — no `curl | bash`; installs to `~/.opencode/bin`); Windows uses `npm i -g opencode-ai` (or manual). New `opencode.autoInstall` setting (`prompt`|`auto`|`off`) and `OpenCode: Install CLI` command. (`src/install/installPlan.ts`, `src/install/OpencodeInstaller.ts`, `src/extension.ts`, `src/commands/misc.ts`, `package.json`)
-- **Binary detection probes known install dirs.** `ServerLifecycle.findOpencodeBinary()` now falls back from PATH to `~/.opencode/bin/opencode` etc., fixing "installed but not detected" for GUI-launched editors. (`src/session/ServerLifecycle.ts`)
-- **ADR:** `docs/adrs/2026-05-31-cli-auto-install.md`. **Tests:** typecheck clean, build clean; new behavioral tests (`installPlan`), string-assertion tests (`OpencodeInstaller`), ServerLifecycle fallback + config-schema assertions — full suite passing, 0 failures.
-
-### Recent Fix (2026-05-31): Model variant selector — variant now actually sent with prompts, persisted locally, restored on tab switch
-- **Variant was silently dropped from `send_prompt`.** `sendLogic.ts` built the prompt message without reading the session's variant — no variant was ever sent to the server. Now reads `session.variant` (fallback `globalVariant`) and includes it in the payload. (`src/chat/webview/sendLogic.ts`)
-- **Selection not persisted locally.** `onSelect` in `main.ts` posted to host but didn't call `setSessionVariant`/`setGlobalVariant`, creating a stale-race window. Now updates local state synchronously before posting. (`src/chat/webview/main.ts`)
-- **Tab switch left selector stale.** `switchTab()` now restores the variant from the active session (fallback global → "Default"). (`src/chat/webview/main.ts`)
-- **New sessions didn't inherit global variant.** `createSession()` now spreads `state.globalVariant` into new sessions, matching the `globalModel` pattern. (`src/chat/webview/state.ts`)
-- **Tests:** typecheck clean, build clean, 16/16 structural state tests pass, 41/41 regression smoke tests pass.
-
-### Recent Fix (2026-05-31): Error message fidelity — structured errors preserved end-to-end
-- **`mapOpencodeError` read the wrong field locations.** The @opencode-ai/sdk error union nests its payload under `.data` (`ApiError = { name, data: { statusCode, isRetryable } }`), but the mapper read top-level `err.statusCode`/`err.providerID`. Result: a real `429` mapped to `NETWORK_UNREACHABLE` ("Can't reach the server") and auth errors lost the provider name. Mapper now normalizes both nested and flat shapes; `technicalDetails` is populated from `responseBody`/message for progressive disclosure. (`src/chat/webview/opencodeErrorMapper.ts`)
-- **The rich mapper was dead in the live path.** Host flattened SDK errors to a bare string in `errorValueToMessage` before posting, so `mapOpencodeError` was never reached and the webview re-classified by regex. Host now maps genuine SDK errors (`looksLikeSdkError` guard) and carries the full `ErrorContext` over the wire via `request_error.errorContext`; connection strings / command failures keep the friendly string path. (`ChatProvider` server_error handler, `MessagePostService`, `chatUtils.looksLikeSdkError`)
-- **Webview stopped discarding structured context.** `handleStreamError`/`handleRequestError` now prefer a carried `ErrorContext` over re-classifying; `handleServerStatus` threads the host-mapped context (category/severity/actions/URL) through instead of collapsing to `userMessage`. (`streamHandlers.ts`, `stream.ts`, `streamOrchestrator.ts`, `main.ts`)
-- **Error-display action buttons are functional.** Replaced the per-button `console.log` with an injected dispatcher: URL-bearing actions → `open_url`, retry/regenerate/wait → `retry_stream`, switch_model → model picker, edit → `connect_provider`. (`errorComponents.ts` `setErrorActionHandler`, wired in `main.ts`)
-- **Collapsed the duplicate `sessionStatusMapper`.** Deleted the dead webview copy (only its own test consumed it); the live host copy is the single source and now also sets `technicalDetails`. Test moved beside it. (`src/session/eventHandlers/sessionStatusMapper.ts` + test)
-- **Wire-contract + type drift fixed.** `request_error` type now declares `message` (was a mismatched `error`); `MessageInfoLike.error` typed as the SDK union (was `string`).
-- **Tests:** +18 mapper/guard/status assertions (RED→GREEN); updated 2 brittle structural assertions for the new signatures.
-- **Verification:** `npm run typecheck` clean; `test:unit` 447 + 2426 pass / 0 fail; `test:message-contract` 9/9; `test:roundtrip` 7/7; `npm run build` clean.
-
-### Recent Feature (2026-05-30): ADR-010 Complete — Horizontal Scaling, Crash Resilience, Configurable Streams
-- **Crash resilience (Phase 1.5):** Tabs survive CLI crashes. On `server_disconnected`, streaming tab state is captured as `TabRestorationState` and persisted to `globalState`. On reconnect, interrupted tabs receive `stream_interrupted` messages with "Resume Stream" / "Dismiss" buttons. `resume_stream` clears restoration state and re-sends the last prompt via `retryFromHere`.
-- **Multi-process infrastructure (Phase 2):** `LocalSessionProcessManager` wraps N `ServerLifecycle` instances with crash detection. `SessionManagerRegistry` provides tab→process routing. `PortPool` allocates ports atomically (no TOCTOU race). Default model is shared-process (all tabs → 1 server) to avoid SQLite contention.
-- **Configurable stream cap:** `opencode.sessions.maxConcurrentStreams` setting (default 5, range 1-10). `TabManager` reads the setting; webview receives value via `init_state` and updates at runtime via `setMaxConcurrentStreams()`.
-- **Process strategy:** `opencode.sessions.processStrategy` setting (`"shared"` default, `"per-tab"` option). Shared mode uses one server for all tabs. Per-tab mode gives each tab its own process with isolated `OPENCODE_DATA_DIR`.
-- **SessionManagerRegistry wired:** `extension.ts` creates registry, passes to `ChatProvider`. `StreamCoordinator.startPrompt` resolves per-tab SessionManager via registry.
-- **Research findings:** SDK is fully stateless (safe for N instances). `opencode serve` supports multiple ports. SQLite is shared (`~/.local/share/opencode/opencode.db`, WAL mode) — multiple writers cause `SQLITE_BUSY`. Extension handles 5+ concurrent streams efficiently (per-session chunk batching, O(1) event routing).
-- **Files added:** `LocalSessionProcessManager.ts`, `SessionManagerRegistry.ts`, `portPool.ts`
-- **Files modified:** `SessionProcessManager.ts`, `TabManager.ts`, `ChatProvider.ts`, `WebviewEventRouter.ts`, `StreamCoordinatorTypes.ts`, `sessionTypes.ts`, `main.ts`, `sendLogic.ts`, `types.ts`, `messages.css`, `package.json`, `extension.ts`
-- **Tests:** 445/445 unit tests pass, 2403/2403 structural tests pass.
-- **Verification:** `npm run typecheck` clean, `npm run build` clean, `npm run test:unit` 445/445 pass.
+## Last Updated: 2026-05-29
+## Project State: Context/token usage accounting fix applied and verified
 
 ### Recent Fix (2026-05-29): Session-scoped context usage + cumulative token accounting
 - **Backend token totals no longer reset after multi-turn sessions** — final SDK assistant
@@ -189,8 +43,8 @@
 | Check | Status |
 |-------|--------|
 | Typecheck (`tsc --noEmit`) | ✅ Zero errors |
-| Build (`node esbuild.js`) | ✅ Extension 796KB, Webview 1.1MB |
-| Unit tests | ✅ 447 pass, 0 fail |
+| Build (`node esbuild.js`) | ✅ Extension 454KB, Webview 668KB, CSS 99KB |
+| Unit tests | ✅ 306 pass, 1 known pre-existing (DeltaHandler messageId format) |
 | Integration tests | ✅ Extension Dev Host |
 | CI | ✅ 3 jobs (typecheck+unit, integration, visual) |
 | VSIX package | ✅ packaging |
@@ -219,9 +73,6 @@
 | Scroll markers + jump-to-bottom | ✅ | P09 — content-visibility, rAF batching, scroll markers |
 | Hardening sweep | ✅ | P10 — CSP, a11y aria-labels, packaging, regression tests |
 | Regression suite | ✅ | P11 — 14 suites covering all 22 user flows |
-| Crash resilience | ✅ | ADR-010 Phase 1.5 — TabRestorationState, auto-resume, stream_interrupted |
-| Multi-process infrastructure | ✅ | ADR-010 Phase 2 — LocalSessionProcessManager, SessionManagerRegistry, PortPool |
-| Configurable stream cap | ✅ | opencode.sessions.maxConcurrentStreams (default 5, was hardcoded 3) |
 
 ## Regression Coverage
 | # | Flow | Test Suite | Status |

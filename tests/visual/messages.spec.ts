@@ -89,7 +89,7 @@ test.describe('Chat Messages', () => {
     await expect(markdownContent.locator('em')).toHaveText('italic')
   })
 
-  test('assistant tool calls render as individual tool-call details via init_state', async ({ page }) => {
+  test('assistant tool calls collapse into one grouped expandable row', async ({ page }) => {
     await dispatchHostMessage(page, {
       type: 'init_state',
       sessions: [{
@@ -114,10 +114,10 @@ test.describe('Chat Messages', () => {
       activeSessionId: 's',
     })
 
-    const toolCalls = page.locator('.message.assistant details.tool-call')
-    await expect(toolCalls).toHaveCount(2)
-    await expect(toolCalls.nth(0)).toContainText('rg')
-    await expect(toolCalls.nth(1)).toContainText('sed')
+    const grouped = page.locator('.message.assistant details.tool-group')
+    await expect(grouped).toHaveCount(1)
+    await expect(page.locator('.message.assistant details.tool-group > summary').first()).toContainText('2 calls')
+    await expect(page.locator('.message.assistant .message-bubble > details.tool-call:not(.tool-group)')).toHaveCount(0)
   })
 
   test('should have proper message spacing and layout', async ({ page }) => {
@@ -190,7 +190,7 @@ test.describe('Chat Messages', () => {
       // Verify no horizontal scroll
       const scrollWidth = await page.evaluate(() => document.body.scrollWidth)
       const clientWidth = await page.evaluate(() => document.body.clientWidth)
-      expect(scrollWidth - clientWidth).toBeLessThanOrEqual(15)
+      expect(scrollWidth - clientWidth).toBeLessThanOrEqual(0)
     })
 
     test('should display correctly at medium width (400px)', async ({ page }) => {
@@ -265,9 +265,9 @@ test.describe('Chat Messages', () => {
       
       for (const width of widths) {
         await page.setViewportSize({ width, height: 600 })
-      const scrollWidth = await page.evaluate(() => document.body.scrollWidth)
-      const clientWidth = await page.evaluate(() => document.body.clientWidth)
-      expect(scrollWidth - clientWidth).toBeLessThanOrEqual(15)
+        const scrollWidth = await page.evaluate(() => document.body.scrollWidth)
+        const clientWidth = await page.evaluate(() => document.body.clientWidth)
+        expect(scrollWidth - clientWidth).toBeLessThanOrEqual(0)
       }
     })
 
@@ -481,7 +481,7 @@ test.describe('Chat Messages', () => {
                 <span class="tool-icon">R</span>
                 <span class="tool-name">read</span>
                 <span class="tool-arg" style="cursor: pointer;">src/main.ts</span>
-                <span class="tool-status tool-status--result"><span class="tool-status-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" stroke="none" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg></span><span class="tool-status-label">Done</span></span>
+                <span class="tool-status tool-status--result">✓ Done</span>
               </summary>
             </details>
           </div>
@@ -543,30 +543,6 @@ test.describe('Chat Messages', () => {
 
       const messages = await postedMessages(page)
       const openFileMsg = messages.find(m => m.type === 'open_file' && m.path === 'src/chat/webview/renderer.ts')
-      expect(openFileMsg).toBeDefined()
-    })
-
-    test('should trigger open_file when clicking a markdown file-link anchor', async ({ page }) => {
-      await page.evaluate(() => {
-        const msgList = document.querySelector('.message-list')
-        if (!msgList) return
-
-        const assistantMsg = document.createElement('div')
-        assistantMsg.className = 'message assistant'
-        assistantMsg.innerHTML = `
-          <div class="message-bubble markdown-content">
-            <p>Check <a class="file-link" data-file-path="src/main.ts:42" href="#" tabindex="0" role="button">src/main.ts</a> for details.</p>
-          </div>
-        `
-        msgList.appendChild(assistantMsg)
-      })
-
-      const link = page.locator('.file-link').first()
-      await expect(link).toBeVisible()
-      await link.click()
-
-      const messages = await postedMessages(page)
-      const openFileMsg = messages.find(m => m.type === 'open_file' && m.path === 'src/main.ts:42')
       expect(openFileMsg).toBeDefined()
     })
   })

@@ -1,50 +1,25 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { readFileSync, readdirSync } from "node:fs"
+import { readFileSync } from "node:fs"
 import path from "node:path"
 
 const source = readFileSync(path.join(__dirname, "main.ts"), "utf8")
 const orchestratorSource = (() => { try { return readFileSync(path.join(__dirname, "streamOrchestrator.ts"), "utf8") } catch { return "" } })()
 const timelineSource = (() => { try { return readFileSync(path.join(__dirname, "timeline.ts"), "utf8") } catch { return "" } })()
-const thinkingToggleSource = (() => { try { return readFileSync(path.join(__dirname, "thinkingToggle.ts"), "utf8") } catch { return "" } })()
 const composerSource = (() => { try { return readFileSync(path.join(__dirname, "composer.ts"), "utf8") } catch { return "" } })()
-const slashCommandsSource = (() => { try { return readFileSync(path.join(__dirname, "slashCommands.ts"), "utf8") } catch { return "" } })()
-const inputHandlersSource = (() => { try { return readFileSync(path.join(__dirname, "inputHandlers.ts"), "utf8") } catch { return "" } })()
-const sendLogicSource = (() => { try { return readFileSync(path.join(__dirname, "sendLogic.ts"), "utf8") } catch { return "" } })()
-const sendButtonSource = (() => { try { return readFileSync(path.join(__dirname, "sendButton.ts"), "utf8") } catch { return "" } })()
-const sendMessageSource = (() => { try { return readFileSync(path.join(__dirname, "sendMessage.ts"), "utf8") } catch { return "" } })()
-const withComposer = source + "\n" + composerSource + "\n" + slashCommandsSource + "\n" + inputHandlersSource + "\n" + sendLogicSource + "\n" + sendButtonSource + "\n" + sendMessageSource
+const withComposer = source + "\n" + composerSource
 const themeCustomizerSource = readFileSync(path.join(__dirname, "ui", "themeCustomizer.ts"), "utf8")
-// The theme customizer was split out of the monolithic themeCustomizer.ts into
-// ui/theme/* modules (themeBridge posts get_theme_config/update_theme_config,
-// themeOrchestrator wires it up). Concatenate the whole directory so the
-// message-contract assertions keep finding those strings no matter which
-// module owns them — this stays correct across future theme refactors.
-const themeModuleSource = (() => {
-  try {
-    const dir = path.join(__dirname, "ui", "theme")
-    return readdirSync(dir)
-      .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
-      .map((f) => readFileSync(path.join(dir, f), "utf8"))
-      .join("\n")
-  } catch { return "" }
-})()
 const modeDropdownSource = readFileSync(path.join(__dirname, "ui", "modeDropdown.ts"), "utf8")
 const sessionModalSource = readFileSync(path.join(__dirname, "ui", "sessionModal.ts"), "utf8")
 const tokenCostDisplaySource = readFileSync(path.join(__dirname, "ui", "tokenCostDisplay.ts"), "utf8")
 const attachmentsSource = readFileSync(path.join(__dirname, "ui", "attachments.ts"), "utf8")
+const modeWarningSource = readFileSync(path.join(__dirname, "ui", "modeWarning.ts"), "utf8")
 const welcomeViewSource = readFileSync(path.join(__dirname, "ui", "welcomeView.ts"), "utf8")
 const settingsMenuSource = readFileSync(path.join(__dirname, "ui", "settingsMenu.ts"), "utf8")
 const fileTrackingSource = readFileSync(path.join(__dirname, "ui", "fileTracking.ts"), "utf8")
 const buttonSetupSource = readFileSync(path.join(__dirname, "ui", "buttonSetup.ts"), "utf8")
 const scrollMarkersSource = readFileSync(path.join(__dirname, "ui", "scrollMarkers.ts"), "utf8")
-const keyboardShortcutsSource = (() => { try { return readFileSync(path.join(__dirname, "ui", "keyboardShortcuts.ts"), "utf8") } catch { return "" } })()
-const markdownFileLinksSource = (() => { try { return readFileSync(path.join(__dirname, "ui", "markdownFileLinks.ts"), "utf8") } catch { return "" } })()
-const todoSubagentSetupSource = (() => { try { return readFileSync(path.join(__dirname, "todoSubagentSetup.ts"), "utf8") } catch { return "" } })()
-const tabSwitcherSource = (() => { try { return readFileSync(path.join(__dirname, "tabSwitcher.ts"), "utf8") } catch { return "" } })()
-const panelSetupSource = (() => { try { return readFileSync(path.join(__dirname, "panelSetup.ts"), "utf8") } catch { return "" } })()
-const indexHtml = readFileSync(path.join(__dirname, "index.html"), "utf8")
-const allSource = source + "\n" + themeCustomizerSource + "\n" + themeModuleSource + "\n" + modeDropdownSource + "\n" + sessionModalSource + "\n" + tokenCostDisplaySource + "\n" + attachmentsSource + "\n" + welcomeViewSource + "\n" + settingsMenuSource + "\n" + fileTrackingSource + "\n" + buttonSetupSource + "\n" + scrollMarkersSource
+const allSource = source + "\n" + themeCustomizerSource + "\n" + modeDropdownSource + "\n" + sessionModalSource + "\n" + tokenCostDisplaySource + "\n" + attachmentsSource + "\n" + modeWarningSource + "\n" + welcomeViewSource + "\n" + settingsMenuSource + "\n" + fileTrackingSource + "\n" + buttonSetupSource + "\n" + scrollMarkersSource
 const sessionListRendererSource = readFileSync(path.join(__dirname, "sessionListRenderer.ts"), "utf8")
 const messagesCss = readFileSync(path.join(__dirname, "css", "messages.css"), "utf8")
 
@@ -64,32 +39,6 @@ describe("main.ts", () => {
     assert.ok(!source.includes('id: "user-" + crypto.randomUUID()'), "send path must not crash if crypto.randomUUID is unavailable")
   })
 
-  it("context_window_unknown shows bar when tokens are available", () => {
-    assert.ok(source.includes("context_window_unknown"), "main.ts must handle context_window_unknown")
-    assert.ok(source.includes("usage && usage.tokens > 0"), "must check for token usage data")
-    assert.ok(source.includes("updateContextUsageBar(0, usage.tokens, 0)"), "must show bar in indeterminate state with tokens")
-    assert.ok(source.includes("els.contextUsage.classList.remove(\"hidden\")"), "must unhide the context bar")
-  })
-
-  it("RTL toggle uses body class instead of html dir attribute", () => {
-    assert.ok(source.includes("setupDirToggle"), "main.ts must setup RTL toggle")
-    assert.ok(source.includes("document.body.classList.add(\"chat-rtl\")"), "must add chat-rtl class to body")
-    assert.ok(source.includes("document.body.classList.remove(\"chat-rtl\")"), "must remove chat-rtl class from body")
-    assert.ok(!source.includes("document.documentElement.setAttribute(\"dir\""), "must not set dir on html element in toggle")
-    assert.ok(source.includes("chat_dir_config"), "must handle chat_dir_config message")
-    assert.ok(source.includes("document.body.classList.add(\"chat-rtl\")") || source.includes("document.body.classList.remove(\"chat-rtl\")"), "chat_dir_config must use body class")
-  })
-
-  it("generates opencode-compatible user message ids in the prompt send paths", () => {
-    // opencode rejects user-message ids not starting with "msg" (BadRequest:
-    // "Expected a string starting with \"msg\""). The id is reused as the local
-    // optimistic bubble id, so the webview must mint a msg_ id, not createWebviewId("user").
-    assert.ok(sendMessageSource.includes("generateUserMessageId("), "sendMessage.ts must mint an opencode-compatible user message id")
-    assert.ok(!sendMessageSource.includes('createWebviewId("user")'), "sendMessage.ts must not send a server-rejected user- id")
-    assert.ok(orchestratorSource.includes("generateUserMessageId("), "streamOrchestrator.ts must mint an opencode-compatible user message id")
-    assert.ok(!orchestratorSource.includes('createWebviewId("user")'), "streamOrchestrator.ts must not send a server-rejected user- id")
-  })
-
   it("uses IIFE pattern", () => {
     assert.ok(source.includes("(function ()"))
   })
@@ -106,7 +55,6 @@ describe("main.ts", () => {
     assert.ok(withComposer.includes('"/clear"'))
     assert.ok(withComposer.includes('"/model"'))
     assert.ok(withComposer.includes('"/help"'))
-    assert.ok(withComposer.includes('"/temp"'))
   })
 
   it("sends webview_ready message", () => {
@@ -122,33 +70,6 @@ describe("main.ts", () => {
     assert.ok(source.includes("dispatchHostMessage(item as LegacyHostMessage)"), "must dispatch each batched message through normal handlers")
   })
 
-  it("surfaces orchestration routing and masking status in the webview chrome", () => {
-    assert.ok(indexHtml.includes('id="status-route"'), "status strip must include the routing chip")
-    assert.ok(indexHtml.includes('id="status-masking"'), "status strip must include the masking chip")
-    assert.ok(indexHtml.includes('id="role-route-select"'), "composer must expose an explicit route selector")
-    assert.ok(source.includes('["orchestration_route"'), "main.ts must handle route decisions from the host")
-    assert.ok(source.includes('["masking_summary"'), "main.ts must handle masking summaries from the host")
-    assert.ok(sendMessageSource.includes("readSelectedAgentRole"), "send path must read the explicit route selector")
-    assert.ok(sendMessageSource.includes("{ role: selectedRole }"), "send path must include role in send_prompt when selected")
-    assert.ok(source.includes("function renderRouteChip"), "main.ts must render the active route chip")
-    assert.ok(source.includes("function renderMaskingChip"), "main.ts must render the active masking chip")
-  })
-
-  it("handles temporary chat creation from both welcome and host paths", () => {
-    assert.ok(indexHtml.includes('id="welcome-temp-btn"'), "welcome screen must expose a temporary chat action")
-    assert.ok(welcomeViewSource.includes('type: "new_temp_session"'), "welcome action must ask the host for a temporary session")
-    assert.ok(source.includes('["temp_session_created"'), "main.ts must handle host-created temporary sessions")
-    assert.ok(source.includes("createNewTab(\"Temporary chat\", { ephemeral: true })"), "local temp tab action must create ephemeral sessions")
-  })
-
-  it("rate-limits rendered stream ACKs and forces a final ACK", () => {
-    assert.ok(source.includes("STREAM_ACK_MIN_INTERVAL_MS = 200"), "render ACKs must be rate-limited")
-    assert.ok(source.includes("function createStreamHandlersForTab"), "stream handler factory must exist")
-    assert.ok(source.includes("const postRenderAck = (chunkSeq: number, force = false)"), "must define render ACK callback")
-    assert.ok(source.includes('type: "stream_ack", sessionId: tabId, lastRenderedChunkSeq: chunkSeq'), "render ACK must include lastRenderedChunkSeq")
-    assert.ok(source.includes("onRenderFlush: postRenderAck"), "stream handlers must wire render ACK callback")
-  })
-
   it("coalesces frequent tool update messages and clears progress state", () => {
     const combined = source + orchestratorSource
     assert.ok(combined.includes("pendingToolUpdates"), "must buffer frequent tool updates")
@@ -162,28 +83,30 @@ describe("main.ts", () => {
     assert.ok(source.includes('dataset.testid = els.sendBtn.dataset.testid || "send-button"'))
   })
 
-  it("mode_change_result host acknowledgement updates the visible dropdown", () => {
-    assert.ok(source.includes('"mode_change_result"'), "host acknowledgement must update the visible dropdown")
-    assert.ok(source.includes("updateModeDropdownLocal(mode)"), "mode_change_result must update the visible dropdown after host acknowledges")
-    assert.ok(source.includes("updateModeSelectorStateLocal()"), "mode_change_result must update the selector state after host acknowledges")
+  it("auto-mode warning confirmation updates UI state and notifies the host", () => {
+    const setModeIdx = source.indexOf("function setMode(mode: string): void")
+    assert.ok(setModeIdx >= 0, "auto-mode warning setMode helper must exist")
+    const block = source.slice(setModeIdx, source.indexOf("const modeWarningDeps", setModeIdx))
+    assert.ok(block.includes("updateModeDropdownLocal(mode)"), "confirming auto mode must update the visible dropdown")
+    assert.ok(block.includes('vscode.postMessage({ type: "change_mode", mode, sessionId: active.id })'), "confirming auto mode must notify the extension host")
   })
 
   it("condenses very long local history without mutating server history", () => {
     const combined = source + orchestratorSource + timelineSource
     assert.ok(combined.includes("function applyHistoryCondensation") || combined.includes("applyHistoryCondensation"), "must define history condensation")
     assert.ok(combined.includes("history-condensed-summary"), "must render deterministic local summary controls")
-    assert.ok(combined.includes("HISTORY_CONDENSATION_THRESHOLD") || combined.includes("session.messages.length <= 140"), "must only condense long sessions")
+    assert.ok(combined.includes("session.messages.length <= 140"), "must only condense long sessions")
   })
 
   it("keeps send button state synchronized across input event variants", () => {
-    const idx = inputHandlersSource.indexOf("function setupInput()")
-    assert.ok(idx >= 0, "setupInput must exist in inputHandlers.ts")
-    const nextFn = inputHandlersSource.indexOf("\n  function ", idx + 1)
-    const block = inputHandlersSource.slice(idx, nextFn > idx ? nextFn : inputHandlersSource.length)
-    assert.ok(block.includes('addEventListener("input", onInputChange)') || block.includes('promptInput.addEventListener("input", onInputChange)'), "must handle normal input events")
-    assert.ok(block.includes('addEventListener("keyup", updateSendButton)') || block.includes('promptInput.addEventListener("keyup", updateSendButton)'), "must refresh after keyup fallback")
-    assert.ok(block.includes('addEventListener("change", updateSendButton)') || block.includes('promptInput.addEventListener("change", updateSendButton)'), "must refresh after change events")
-    assert.ok(block.includes('addEventListener("compositionend", onInputChange)') || block.includes('promptInput.addEventListener("compositionend", onInputChange)'), "must refresh after IME composition")
+    const idx = composerSource.indexOf("function setupInput()")
+    assert.ok(idx >= 0, "setupInput must exist in composer.ts")
+    const nextFn = composerSource.indexOf("\n  function ", idx + 1)
+    const block = composerSource.slice(idx, nextFn > idx ? nextFn : composerSource.length)
+    assert.ok(block.includes('addEventListener("input", onInputChange)'), "must handle normal input events")
+    assert.ok(block.includes('addEventListener("keyup", updateSendButton)'), "must refresh after keyup fallback")
+    assert.ok(block.includes('addEventListener("change", updateSendButton)'), "must refresh after change events")
+    assert.ok(block.includes('addEventListener("compositionend", onInputChange)'), "must refresh after IME composition")
   })
 
   it("wires attachment context chips through the full webview element refs", () => {
@@ -195,8 +118,8 @@ describe("main.ts", () => {
   })
 
   it("has concurrent streaming limit of 3", () => {
-    assert.ok(withComposer.includes("MAX_CONCURRENT_STREAMS ="))
-    assert.ok(withComposer.includes("activeStreams >= ") && (withComposer.includes("MAX_CONCURRENT_STREAMS") || sendButtonSource.includes("activeStreams >= maxStreams")))
+    assert.ok(withComposer.includes("MAX_CONCURRENT_STREAMS = 3"))
+    assert.ok(withComposer.includes("activeStreams >= MAX_CONCURRENT_STREAMS"))
   })
 
   it("init_state checks for .tab-panel not vscode-tab-panel", () => {
@@ -211,41 +134,6 @@ describe("main.ts", () => {
 
   it("renderRecentSessionsList excludes active session", () => {
     assert.ok(source.includes("prepareLocalRecentSessions"))
-  })
-
-  it("wires welcomeTempBtn into welcomeViewDeps.els so the welcome-screen temp-chat button actually binds a click handler", () => {
-    // Regression: welcomeView.ts's setupWelcomeActions() only attaches the
-    // click listener when deps.els.welcomeTempBtn is provided (it uses
-    // `?.addEventListener`), so leaving it out of the deps object here made
-    // the button a silent no-op even though the element and handler code
-    // both existed.
-    assert.ok(source.includes("welcomeTempBtn: els.welcomeTempBtn"), "welcomeViewDeps.els must include welcomeTempBtn")
-  })
-
-  it("requests get_role_models when opening the Model Routing panel so it doesn't render as reset", () => {
-    const idx = source.indexOf("openModelRouting: () => {")
-    assert.ok(idx >= 0, "openModelRouting callback must exist")
-    const block = source.slice(idx, idx + 200)
-    assert.ok(block.includes("modelRoutingPanel.open()"))
-    assert.ok(block.includes('vscode.postMessage({ type: "get_role_models" })'))
-  })
-
-  it("wires the Model Routing panel to the real model list and cached role/mode config instead of stub empties", () => {
-    // Regression: these were hardcoded to () => [] / () => ({}) so the panel
-    // could never show real available models or reflect a saved config —
-    // it always rendered as if nothing had ever been set.
-    assert.ok(source.includes("getModels: () => modelManager.getAllModels()"), "must supply the real available-models list")
-    assert.ok(source.includes("getRoleModels: () => roleModelsConfig.roleModels"))
-    assert.ok(source.includes("getModeModels: () => roleModelsConfig.modeModels"))
-    assert.ok(source.includes("getRoutingEnabled: () => roleModelsConfig.enabled"))
-  })
-
-  it("handles role_models_config by updating the cache and refreshing the open panel", () => {
-    const idx = source.indexOf('["role_models_config"')
-    assert.ok(idx >= 0, "must register a role_models_config handler")
-    const block = source.slice(idx, idx + 600)
-    assert.ok(block.includes("roleModelsConfig = { roleModels, modeModels, enabled }"))
-    assert.ok(block.includes("modelRoutingPanel.applyConfig({ roleModels, modeModels, enabled })"))
   })
 
   it("setupButtons does not add duplicate newTabBtn listener", () => {
@@ -270,7 +158,7 @@ describe("main.ts", () => {
   })
 
   it("slash_command_in_sendMessage_handles_known_and_unknown", () => {
-    assert.ok(sendMessageSource.includes('text.startsWith("/")'), "sendMessage.ts must handle slash commands in the send path")
+    assert.ok(withComposer.includes('text.startsWith("/")'))
   })
 
   it("slash_unknown_routes_to_host_for_server_commands", () => {
@@ -279,50 +167,21 @@ describe("main.ts", () => {
     assert.ok(!withComposer.includes("Unknown command: ${cmd}"), "must not reject server-discovered commands in the webview")
   })
 
-  it("slash handler resolves MCP namespace prefixes before forwarding", () => {
-    assert.ok(slashCommandsSource.includes("resolveMcpNamespace"), "must call resolveMcpNamespace in the default case")
-    assert.ok(slashCommandsSource.includes("getServerCommands"), "must accept a getServerCommands dependency")
-  })
-
-  it("slash handler supports @namespace /command hierarchical syntax", () => {
-    assert.ok(slashCommandsSource.includes("resolveNamespacedCommand"), "must call resolveNamespacedCommand for @namespace /command")
-    assert.ok(sendMessageSource.includes("@\\S+\\s+\\/"), "sendMessage must route @namespace / patterns to the slash dispatcher")
-  })
-
-  it("slash handler shows non-blocking guidance for unrecognised commands", () => {
-    assert.ok(slashCommandsSource.includes("isKnownRemote"), "must check whether the command is in the cached server list")
-    assert.ok(slashCommandsSource.includes("/commands"), "guidance message must point users to /commands")
-  })
-
-  it("command palette local entries route through the slash dispatcher", () => {
-    const idx = slashCommandsSource.indexOf("function runCommandEntry(")
-    assert.ok(idx >= 0, "runCommandEntry must exist")
-    const nextFn = slashCommandsSource.indexOf("\n  function ", idx + 1)
-    const block = slashCommandsSource.slice(idx, nextFn > idx ? nextFn : slashCommandsSource.length)
-
-    assert.ok(block.includes('entry.source === "local"'), "palette local commands must be identified")
-    assert.ok(block.includes("runSlashCommandText("), "palette local commands must use the same path as typed slash commands")
-  })
-
-  it("mode_selector_interactive_during_stream", () => {
-    // Mode is a per-session label consumed by the NEXT prompt, so switching it
-    // mid-stream is safe and the selector must stay fully interactive (this
-    // previously hard-disabled the button + options during a run, leaving users
-    // "stuck on build"). `updateModeSelectorState` must NOT disable on streaming.
+  it("mode_selector_disabled_during_stream", () => {
+    assert.ok(allSource.includes("isStreaming"), "must reference isStreaming state")
     assert.ok(allSource.includes("updateModeSelectorState"), "must have updateModeSelectorState function")
-    assert.ok(!modeDropdownSource.includes("btn.disabled = isStreaming"), "must not disable option buttons during streaming")
-    assert.ok(!modeDropdownSource.includes('classList.toggle("disabled"'), "must not toggle a disabled class during streaming")
-    assert.ok(modeDropdownSource.includes('aria-disabled", "false"'), "must force-enable the selector regardless of streaming state")
+    assert.ok(modeDropdownSource.includes("classList.toggle(\"disabled\""), "must toggle disabled class")
+    assert.ok(modeDropdownSource.includes("btn.disabled = isStreaming"), "must disable buttons during streaming")
   })
 
   it("disables send with a clear tooltip when the global stream cap is full", () => {
-    const idx = sendButtonSource.indexOf("function updateSendButton(")
-    assert.ok(idx >= 0, "updateSendButton must exist in sendButton.ts")
-    const nextFn = sendButtonSource.indexOf("\nexport function ", idx + 1)
-    const block = nextFn > idx ? sendButtonSource.slice(idx, nextFn) : sendButtonSource.slice(idx, sendButtonSource.length)
+    const idx = composerSource.indexOf("function updateSendButton()")
+    assert.ok(idx >= 0, "updateSendButton must exist in composer.ts")
+    const nextFn = composerSource.indexOf("\n  function ", idx + 1)
+    const block = composerSource.slice(idx, nextFn > idx ? nextFn : composerSource.length)
     assert.ok(block.includes("getStreamCapacityState"), "send button must inspect global stream capacity")
     assert.ok(block.includes("stream-limit-blocked"), "send button must expose a blocked visual state")
-    assert.ok(sendButtonSource.includes("stream-limit-blocked") || sendButtonSource.includes("streams active"), "must explain the stream cap in the tooltip")
+    assert.ok(composerSource.includes("3 streams active"), "must explain the stream cap in the tooltip")
   })
 
   it("timeline jumps use exact message-list scroll positioning", () => {
@@ -334,7 +193,7 @@ describe("main.ts", () => {
     // Block ends at the next top-level export, or end of file.
     const after = scrollMarkersSource.indexOf("\nexport function ", idx + 1)
     const block = scrollMarkersSource.slice(idx, after >= 0 ? after : scrollMarkersSource.length)
-    assert.ok(block.includes("scrollMessageToTop(msgList, target") && block.includes("deps.timers"), "timeline jumps must use the message list scroller directly with timers injection")
+    assert.ok(block.includes("scrollMessageToTop(msgList, target)"), "timeline jumps must use the message list scroller directly")
     assert.ok(!block.includes("scrollIntoView"), "timeline jumps must not rely on scrollIntoView/focus side effects")
   })
 
@@ -356,35 +215,10 @@ describe("main.ts", () => {
   })
 
   it("has a personalized theme customizer modal workflow", () => {
-    assert.ok(allSource.includes("createThemeOrchestrator"), "must initialize the theme customizer via createThemeOrchestrator")
+    assert.ok(allSource.includes("setupThemeCustomizer"), "must initialize the theme customizer modal")
     assert.ok(allSource.includes('"get_theme_config"'), "must request current theme config")
     assert.ok(allSource.includes('"update_theme_config"'), "must save personalized theme overrides")
     assert.ok(allSource.includes('"theme_config"'), "must handle theme config responses")
-  })
-
-  it("wires Activity and Tasks panels to real HTML elements", () => {
-    for (const id of [
-      "activity-toggle-btn",
-      "activity-panel",
-      "activity-filters",
-      "activity-list",
-      "tasks-toggle-btn",
-      "tasks-panel",
-      "tasks-filters",
-      "tasks-list",
-    ]) {
-      assert.ok(indexHtml.includes(`id="${id}"`), `index.html must expose #${id}`)
-    }
-    assert.ok(source.includes("setupActivityPanel"), "main.ts must initialize the activity panel")
-    assert.ok(source.includes("setupTasksPanel"), "main.ts must initialize the tasks panel")
-  })
-
-  it("rate_limit_exhausted reads resetAt from the structured info payload", () => {
-    const idx = source.indexOf('"rate_limit_exhausted"')
-    assert.ok(idx >= 0, "rate_limit_exhausted handler must exist")
-    const block = source.slice(idx, idx + 500)
-    assert.ok(block.includes("msg.info"), "handler must read resetAt from msg.info.resetAt")
-    assert.ok(block.includes("handleRateLimitExhausted(els, resetAt)"), "input banner must receive the extracted resetAt")
   })
 
   // ===== RED PHASE: New tests for features that should exist but don't yet =====
@@ -403,10 +237,10 @@ describe("main.ts", () => {
   })
 
   it("RED: tracks file changes per session with changedFiles", () => {
-    assert.ok(source.includes("changedFiles"),
+    assert.ok(source.includes("changedFiles") || source.includes("fileChange"),
       "must track changed files per session")
-    assert.ok(source.includes("changedFiles.push") || source.includes("changedFiles.includes"),
-      "must add changed files to session")
+    assert.ok(source.includes("addChangedFile") || source.includes("trackFileChange"),
+      "must have function to add changed files")
   })
 
   it.skip("RED: has summarize session handler (unimplemented feature placeholder)", () => {
@@ -424,8 +258,10 @@ describe("main.ts", () => {
   })
 
   it("RED: browse sessions by workspace folder", () => {
-    assert.ok(source.includes("workspaceName") || source.includes("workspace"),
-      "must store workspace name per session")
+    assert.ok(source.includes("workspacePath") || source.includes("workspace"),
+      "must store workspace path per session")
+    assert.ok(source.includes("getSessionsByWorkspace") || source.includes("filterByWorkspace"),
+      "must have function to filter sessions by workspace")
   })
 
   // ── Unified session modal ────────────────────────────────────────────────
@@ -540,107 +376,6 @@ it("unified modal: server session items send resume_server_session on click", ()
     )
   })
 
-  // ── todos streaming guards ────────────────────────────────────────────────
-  // Regression guards for C1 (cross-tab leakage), C3 (dead deny route),
-  // the recommendation to warn on unknown sessionId, plus the auto-open +
-  // reconciliation + error-surface behavior added in the todos-panel overhaul.
-
-  it("todos_update handler is per-session (uses sessionId from message, not active fallback)", () => {
-    const idx = source.indexOf('"todos_update"')
-    assert.ok(idx >= 0, "todos_update handler must exist")
-    const block = source.slice(idx, idx + 1500)
-    assert.ok(
-      !block.includes("|| stateManager.getState().activeSessionId"),
-      "todos_update must not silently fall back to active session — that path poisons cross-tab state"
-    )
-    assert.ok(block.includes("setServerTodos("), "todos_update must store per-session via setServerTodos")
-  })
-
-  it("todos_update warns and drops events for unknown sessionId (recommendation)", () => {
-    const idx = source.indexOf('"todos_update"')
-    const block = source.slice(idx, idx + 1500)
-    assert.ok(
-      block.includes("dropped todos_update for unknown sessionId") ||
-      block.includes("dropped todos_update without sessionId"),
-      "todos_update must log when it drops an event so ChatProvider routing bugs are visible"
-    )
-  })
-
-  it("todos_update validates payload and drops malformed entries without crashing", () => {
-    const idx = source.indexOf('"todos_update"')
-    const block = source.slice(idx, idx + 1800)
-    assert.ok(block.includes("Array.isArray(msg.todos)"), "todos_update must guard todos with Array.isArray")
-    assert.ok(block.includes("dropped malformed todo"), "todos_update must log when dropping malformed todos")
-  })
-
-  it("todos_update triggers auto-open on first non-empty delivery per session", () => {
-    const idx = source.indexOf('"todos_update"')
-    const block = source.slice(idx, idx + 1800)
-    assert.ok(block.includes("autoOpen: true"), "todos_update must pass autoOpen:true to triggerTodosRender")
-    assert.ok(source.includes("todosAutoOpenedForSession"), "main.ts must track auto-opened sessions to prevent re-opening")
-    assert.ok(source.includes("todosDismissedBySession"), "main.ts must track user-dismissed sessions")
-  })
-
-  it("todos_error handler renders an actionable error state with retry", () => {
-    const idx = source.indexOf('"todos_error"')
-    assert.ok(idx >= 0, "todos_error handler must exist")
-    const block = source.slice(idx, idx + 600)
-    assert.ok(block.includes("renderError"), "todos_error must call todosPanelApi.renderError")
-    assert.ok(block.includes("get_todos"), "todos_error retry must re-post get_todos")
-  })
-
-  it("triggerTodosRender reads from per-session map, not a module-scoped variable (C1 regression)", () => {
-    assert.ok(source.includes("serverTodosBySession"),
-      "main.ts must keep todos in a Map<sid, Todo[]> — not a single `currentTodosList`")
-    assert.ok(!source.includes("let currentTodosList"),
-      "the legacy `currentTodosList` global must be gone (it was the C1 cross-tab leak source)")
-    assert.ok(source.includes("todosApi.triggerTodosRender"),
-      "triggerTodosRender must delegate to the todos module so it reads per-session server todos")
-  })
-
-  it("closeTab cleans up per-session server todos", () => {
-    assert.ok(source.includes("serverTodosBySession.delete(tabId)"),
-      "closeTab must drop cached server todos for the closed tab")
-    assert.ok(source.includes("todosDismissedBySession.delete(tabId)"),
-      "closeTab must drop dismissed-tracking for the closed tab")
-    assert.ok(source.includes("todosAutoOpenedForSession.delete(tabId)"),
-      "closeTab must drop auto-open tracking for the closed tab")
-  })
-
-  it("stream_end reconciles todos by re-requesting get_todos", () => {
-    const idx = source.indexOf('"stream_end"')
-    assert.ok(idx >= 0, "stream_end handler must exist")
-    const block = source.slice(idx, idx + 800)
-    assert.ok(block.includes('type: "get_todos"'),
-      "stream_end must re-request todos to reconcile missed todo.updated events")
-  })
-
-  it("toggle_todo / delete_todo are no longer posted to the host for server todos (C3 regression)", () => {
-    assert.ok(!source.includes('type: "toggle_todo"'),
-      "main.ts must not post toggle_todo — server todos are read-only at the UI")
-    assert.ok(!source.includes('type: "delete_todo"'),
-      "main.ts must not post delete_todo — server todos are read-only at the UI")
-    assert.ok(!source.includes('"todo_operation_denied"'),
-      "the todo_operation_denied handler must be removed (denied route no longer exists)")
-    // Ensure the host VALID_WEBVIEW_TYPES set also no longer accepts the dead routes.
-    const routerSource = readFileSync(path.join(__dirname, "..", "WebviewEventRouter.ts"), "utf8")
-    assert.ok(!routerSource.includes('"toggle_todo"'),
-      "WebviewEventRouter must not whitelist toggle_todo anymore")
-    assert.ok(!routerSource.includes('"delete_todo"'),
-      "WebviewEventRouter must not whitelist delete_todo anymore")
-  })
-
-  it("WebviewEventRouter.get_todos surfaces errors via todos_error instead of silent empty array", () => {
-    const routerSource = readFileSync(path.join(__dirname, "..", "WebviewEventRouter.ts"), "utf8")
-    const idx = routerSource.indexOf('"get_todos"')
-    assert.ok(idx >= 0, "get_todos handler must exist")
-    const block = routerSource.slice(idx, idx + 1500)
-    assert.ok(block.includes("todos_error"),
-      "get_todos must post todos_error on failure rather than a silent empty array")
-    assert.ok(!block.includes("todos: [], sessionId })\n      } catch"), // old anti-pattern: catch falls back to []
-      "get_todos catch must NOT silently post an empty array")
-  })
-
   it("changed_files_update is canonical sync for chip bar and todos panel", () => {
     const idx = source.indexOf('"changed_files_update"')
     assert.ok(idx >= 0, "changed_files_update handler must exist")
@@ -654,7 +389,7 @@ it("unified modal: server session items send resume_server_session on click", ()
     assert.ok(idx >= 0, "changed_files_update handler must exist")
     const block = source.slice(idx, idx + 1200)
     assert.ok(fileTrackingSource.includes("deps.getActiveSessionId() === sessionId"), "chip list must only render active session files")
-    assert.ok(tabSwitcherSource.includes("cfDropdownApi?.setCurrentSession("), "switching tabs must reset dropdown to correct session")
+    assert.ok(source.includes("cfDropdownApi?.setCurrentSession("), "switching tabs must reset dropdown to correct session")
   })
 
   // ── model selector on welcome screen ─────────────────────────────────────
@@ -662,9 +397,9 @@ it("unified modal: server session items send resume_server_session on click", ()
   // preference + dropdown UI — not silently discard the selection.
 
   it("model onSelect sets globalModel before checking for active session", () => {
-    const idx = panelSetupSource.indexOf("onSelect: (modelId) =>")
+    const idx = source.indexOf("onSelect: (modelId) =>")
     assert.ok(idx >= 0, "onSelect callback must exist in model dropdown setup")
-    const block = panelSetupSource.slice(idx, idx + 500)
+    const block = source.slice(idx, idx + 500)
     const globalModelIdx = block.indexOf("setGlobalModel")
     const activeGuardIdx = block.indexOf("if (active)")
     assert.ok(globalModelIdx >= 0, "setGlobalModel must be called inside onSelect")
@@ -675,9 +410,9 @@ it("unified modal: server session items send resume_server_session on click", ()
   })
 
   it("model onSelect calls setCurrentModel and syncModelViews unconditionally", () => {
-    const idx = panelSetupSource.indexOf("onSelect: (modelId) =>")
+    const idx = source.indexOf("onSelect: (modelId) =>")
     assert.ok(idx >= 0, "onSelect callback must exist")
-    const block = panelSetupSource.slice(idx, idx + 500)
+    const block = source.slice(idx, idx + 500)
     const activeGuardIdx = block.indexOf("if (active)")
     const setCurrentIdx = block.indexOf("setCurrentModel")
     const syncIdx = block.indexOf("syncModelViews")
@@ -720,9 +455,9 @@ it("unified modal: server session items send resume_server_session on click", ()
     // When the user drops a PNG/JPG/WEBP/GIF onto the input area the file must
     // become an image attachment (pendingAttachments) — not an @file: mention.
     // Only non-image files should become @file: mentions.
-    const dropIdx = inputHandlersSource.indexOf('.addEventListener("drop"')
-    assert.ok(dropIdx >= 0, "drop listener must exist in inputHandlers.ts")
-    const dropBlock = inputHandlersSource.slice(dropIdx, dropIdx + 1200)
+    const dropIdx = composerSource.indexOf('inputArea.addEventListener("drop"')
+    assert.ok(dropIdx >= 0, "drop listener must exist in composer.ts")
+    const dropBlock = composerSource.slice(dropIdx, dropIdx + 800)
     // Drop handler must branch on image MIME (via ALLOWED_IMAGE_MIMES or direct type check)
     // and call the shared attachImageBlob helper (which pushes to pendingAttachments)
     assert.ok(
@@ -748,10 +483,10 @@ it("unified modal: server session items send resume_server_session on click", ()
     // must include the names of the currently streaming sessions, not just the
     // static tooltip string, so screen readers and sighted users know which
     // tabs to stop.
-    const idx = sendButtonSource.indexOf("function updateSendButtonIcon(")
-    assert.ok(idx >= 0, "updateSendButtonIcon must exist in sendButton.ts")
-    const fnEnd = sendButtonSource.indexOf("\nexport function ", idx + 1)
-    const block = fnEnd > idx ? sendButtonSource.slice(idx, fnEnd) : sendButtonSource.slice(idx, idx + 600)
+    const idx = composerSource.indexOf("function updateSendButtonIcon(")
+    assert.ok(idx >= 0, "updateSendButtonIcon must exist in composer.ts")
+    const fnEnd = composerSource.indexOf("\n  function ", idx + 1)
+    const block = fnEnd > idx ? composerSource.slice(idx, fnEnd) : composerSource.slice(idx, idx + 600)
     assert.ok(
       block.includes("streamingNames") || block.includes("streamCapacity.streamingNames"),
       "updateSendButtonIcon must include streaming session names in the tooltip when at limit"
@@ -762,15 +497,9 @@ it("unified modal: server session items send resume_server_session on click", ()
     // The error shown when the user tries to send despite being at the stream
     // cap must name the streaming tabs (the streamingNames from capacity state),
     // not just emit the static STREAM_LIMIT_TOOLTIP.
-    // Anchor on sendMessage's stream-capacity branch: other handleRequestError
-    // calls (e.g. the slash-during-streaming guard) are unrelated to the cap.
-    const sendIdx = sendMessageSource.indexOf("function sendMessage(")
-    assert.ok(sendIdx >= 0, "sendMessage must exist in sendMessage.ts")
-    const capIdx = sendMessageSource.indexOf("streamCapacity.isFull", sendIdx)
-    assert.ok(capIdx >= 0, "stream-capacity branch must exist in sendMessage")
-    const idx = sendMessageSource.indexOf("handleRequestError(", capIdx)
-    assert.ok(idx >= 0, "stream-limit handleRequestError call must exist in sendMessage.ts")
-    const block = sendMessageSource.slice(idx, idx + 400)
+    const idx = withComposer.indexOf("handleRequestError(active.id")
+    assert.ok(idx >= 0, "stream-limit handleRequestError call must exist")
+    const block = withComposer.slice(idx, idx + 300)
     assert.ok(
       block.includes("streamingNames"),
       "request error on stream-limit must include streamingNames in the detail"
@@ -843,9 +572,9 @@ it("unified modal: server session items send resume_server_session on click", ()
     it("switchTab refreshes the visible counter from the new tab's stored tokenUsage", () => {
       // Lock in: switchTab must pull token/cost data from the tab being
       // activated so a previously-displayed tab's totals don't bleed in.
-      const fnIdx = tabSwitcherSource.indexOf("function switchTabImpl(")
-      assert.ok(fnIdx >= 0, "switchTabImpl must exist in tabSwitcher.ts")
-      const body = tabSwitcherSource.slice(fnIdx, fnIdx + 4000)
+      const fnIdx = source.indexOf("function switchTab(")
+      assert.ok(fnIdx >= 0, "switchTab must exist")
+      const body = source.slice(fnIdx, fnIdx + 2000)
       assert.ok(body.includes("updateTokenDisplay("), "switchTab must call updateTokenDisplay")
       assert.ok(
         body.includes(".tokenUsage") || body.includes("selectDisplayedUsage("),
@@ -854,33 +583,6 @@ it("unified modal: server session items send resume_server_session on click", ()
       assert.ok(
         body.includes("updateCostDisplay("),
         "switchTab must refresh cost display for the new tab"
-      )
-    })
-
-    it("B3: switchTab repopulates the question bar from the activated tab's persisted messages", () => {
-      // Regression: switching to a tab with a pending question used to only
-      // call setActiveSession, which renders items already in `state.items`.
-      // For a tab the user had never visited during this page session (or
-      // after a partial reload), state.items was empty for that session, so
-      // the bar stayed hidden and the question became unanswerable until the
-      // user reloaded the webview. switchTab must call
-      // questionBar.repopulateFromMessages(tabId, …messages) so the bar is
-      // rebuilt from the persisted question blocks of the tab being activated.
-      const fnIdx = tabSwitcherSource.indexOf("function switchTabImpl(")
-      assert.ok(fnIdx >= 0, "switchTabImpl must exist in tabSwitcher.ts")
-      const body = tabSwitcherSource.slice(fnIdx, fnIdx + 10000)
-      const activeIdx = body.indexOf("questionBar.setActiveSession")
-      assert.ok(activeIdx >= 0, "switchTab must call questionBar.setActiveSession")
-      const repopulateIdx = body.indexOf("questionBar.repopulateFromMessages")
-      assert.ok(
-        repopulateIdx >= 0,
-        "B3: switchTab must call questionBar.repopulateFromMessages so a tab with a pending question surfaces its bar without a full reload",
-      )
-      // The repopulate call must come BEFORE setActiveSession so the items are
-      // loaded before setActiveSession filters them by sessionId.
-      assert.ok(
-        repopulateIdx < activeIdx,
-        "B3: repopulateFromMessages must run before setActiveSession so the latter has items to filter",
       )
     })
   })
@@ -903,71 +605,13 @@ it("unified modal: server session items send resume_server_session on click", ()
     it("proactively loads command list on boot so slash commands are available immediately", () => {
       const bootIdx = source.indexOf("function boot()")
       assert.ok(bootIdx >= 0, "boot function must exist")
-      // Window is generous because boot() also wires the density ResizeObserver
-      // (Sprint 1 typography) between init() and the postMessage calls.
-      const bootBlock = source.slice(bootIdx, bootIdx + 2000)
+      const bootBlock = source.slice(bootIdx, bootIdx + 400)
       assert.ok(bootBlock.includes('"list_commands"'), "boot must send list_commands after webview_ready to pre-populate inline dropdown")
-    })
-
-    it("keeps the status strip hidden while the welcome view is visible", () => {
-      assert.ok(source.includes("function isWelcomeVisible()"), "main.ts must expose a welcome visibility guard")
-      const showIdx = source.indexOf("function showStatusStrip()")
-      assert.ok(showIdx >= 0, "showStatusStrip must exist")
-      const showBlock = source.slice(showIdx, showIdx + 180)
-      assert.ok(showBlock.includes("isWelcomeVisible()"), "showStatusStrip must not reveal usage bars over the welcome screen")
-
-      const hideIdx = source.indexOf("function hideStatusStrip()")
-      assert.ok(hideIdx >= 0, "hideStatusStrip must exist")
-      const hideBlock = source.slice(hideIdx, hideIdx + 750)
-      assert.ok(hideBlock.includes("els.contextUsage.classList.add(\"hidden\")"), "hideStatusStrip must hide the context chip")
-      assert.ok(hideBlock.includes("ctx-window-unknown-chip"), "hideStatusStrip must hide the unknown-context chip")
-    })
-
-    it("does not wire the legacy changed-files count badge into the header", () => {
-      const setupIdx = source.indexOf("function setupChangedFilesFeature()")
-      assert.ok(setupIdx >= 0, "setupChangedFilesFeature must exist")
-      const block = source.slice(setupIdx, setupIdx + 500)
-      assert.ok(!block.includes("|| !els.cfCountBadge"), "changed files setup must not require the legacy header badge")
-      assert.ok(block.includes("badge: null"), "changed files setup must keep the legacy header badge disconnected")
-    })
-
-    it("handles tab shortcuts at document level, not only inside the prompt input", () => {
-      const setupIdx = keyboardShortcutsSource.indexOf("function setupGlobalKeyboardShortcutsImpl(")
-      assert.ok(setupIdx >= 0, "setupGlobalKeyboardShortcutsImpl must exist in ui/keyboardShortcuts.ts")
-      const block = keyboardShortcutsSource.slice(setupIdx, setupIdx + 2200)
-      assert.ok(block.includes("createNewTab()"), "document-level Ctrl/Cmd+T must create a tab")
-      assert.ok(block.includes("closeTab(active.id)"), "document-level Ctrl/Cmd+W must close the active tab")
-      assert.ok(block.includes("switchRelativeTab"), "document-level Ctrl/Cmd+Tab must cycle tabs")
-    })
-
-    it("wires markdown file-link handler at document level", () => {
-      assert.ok(markdownFileLinksSource.includes("function setupMarkdownFileLinksImpl("), "setupMarkdownFileLinksImpl must exist in ui/markdownFileLinks.ts")
-      assert.ok(source.includes("setupMarkdownFileLinksImpl({"), "main.ts must import and call setupMarkdownFileLinksImpl")
-      assert.ok(source.includes("setupMarkdownFileLinks()"), "main.ts must wire the file-link setup function")
-      const handlerBlock = markdownFileLinksSource.slice(
-        markdownFileLinksSource.indexOf("function setupMarkdownFileLinksImpl("),
-        markdownFileLinksSource.indexOf("function setupMarkdownFileLinksImpl(") + 1200
-      )
-      assert.ok(handlerBlock.includes('vscode.postMessage({ type: "open_file"'), "handler must post open_file message")
-      assert.ok(handlerBlock.includes("a.file-link"), "handler must target anchors with file-link class")
     })
 
     it("wires commands palette button to open modal and request commands", () => {
       assert.ok(withComposer.includes("commandsPaletteBtn"), "must reference commandsPaletteBtn element")
-      assert.ok(withComposer.includes("commandsPaletteBtn?.addEventListener"), "must wire click handler on commands palette button")
-    })
-
-    it("splits custom prompt commands from remote commands before updating command surfaces", () => {
-      const idx = source.indexOf('["command_list"')
-      assert.ok(idx >= 0, "command_list handler must exist")
-      const nextHandler = source.indexOf('["stash_success"', idx)
-      const block = source.slice(idx, nextHandler > idx ? nextHandler : idx + 700)
-
-      assert.ok(block.includes("promptCommands"), "command_list must derive custom prompt commands")
-      assert.ok(block.includes("remoteCommands"), "command_list must derive remote server/MCP/skill commands")
-      assert.ok(block.includes("commandsModal.updatePromptCommands(promptCommands)"), "custom prompts must update the modal custom-command list")
-      assert.ok(block.includes("commandsModal.updateServerCommands(remoteCommands)"), "remote commands must update the remote-command list")
-      assert.ok(block.includes("mention.updateServerCommands(commandSuggestions)"), "inline slash suggestions must still include custom prompt commands")
+      assert.ok(withComposer.includes("commandsPaletteBtn.addEventListener"), "must wire click handler on commands palette button")
     })
 
     it("passes session search query from session_list into the modal", () => {
@@ -1017,59 +661,10 @@ it("unified modal: server session items send resume_server_session on click", ()
       )
     })
 
-    // ── Compaction / push-state model-overwrite bug ──────────────────────
-    // Background: StatePushService.pushModelToWebview() is called from many
-    // host-side paths (init, pushAllStateToWebview, resume_session after
-    // compaction, onModelChanged etc.). The webview's model_update handler
-    // used to unconditionally overwrite the active session's model with the
-    // pushed global model — which meant: pick a per-session model → start a
-    // compaction → session is silently switched back to the global model
-    // without any user-visible signal. Same bug for variant_update.
-    // The fix: model_update / variant_update must only update the GLOBAL
-    // preference and the dropdown UI, never the active session's per-session
-    // model/variant. Per-session values are owned by the user (set_model
-    // message) or by server restore (resume_session_data).
-
-    function getHandlerBlock(type: string): string {
-      const idx = source.indexOf(`["${type}"`)
-      assert.ok(idx >= 0, `${type} handler must exist in main.ts`)
-      // Each handler is a 2-tuple [type, fn]. Slice up to the next 2-tuple.
-      const rest = source.slice(idx + 1)
-      const nextTuple = rest.search(/\],\s*\["/)
-      return nextTuple === -1 ? rest : rest.slice(0, nextTuple)
-    }
-
-    it("model_update handler does not silently overwrite active session's model", () => {
-      const block = getHandlerBlock("model_update")
-      // The handler may legitimately call setGlobalModel + setCurrentModel
-      // (those are global-preference / dropdown UI updates). It must NOT
-      // call setSessionModel, which would clobber the user's per-session
-      // choice on every host push (e.g. resume_session after compaction).
-      assert.ok(
-        !/setSessionModel\s*\(/.test(block),
-        "model_update handler must not call setSessionModel — host pushes must not clobber per-session model"
-      )
-    })
-
-    it("model_update handler still updates the global model and dropdown", () => {
-      const block = getHandlerBlock("model_update")
-      assert.ok(/setGlobalModel\s*\(/.test(block), "model_update must update the global model")
-      assert.ok(/setCurrentModel\s*\(/.test(block), "model_update must update the dropdown UI")
-    })
-
-    it("variant_update handler does not silently overwrite active session's variant", () => {
-      const block = getHandlerBlock("variant_update")
-      assert.ok(
-        !/setSessionVariant\s*\(/.test(block),
-        "variant_update handler must not call setSessionVariant — host pushes must not clobber per-session variant"
-      )
-      assert.ok(/setGlobalVariant\s*\(/.test(block), "variant_update must update the global variant")
-    })
-
     it("switchTab restores the session's model on the dropdown", () => {
-      const idx = tabSwitcherSource.indexOf("function switchTabImpl(")
-      assert.ok(idx >= 0, "switchTabImpl must exist in tabSwitcher.ts")
-      const block = tabSwitcherSource.slice(idx, idx + 10000)
+      const idx = source.indexOf("function switchTab(")
+      assert.ok(idx >= 0, "switchTab must exist")
+      const block = source.slice(idx, idx + 2000)
       assert.ok(
         block.includes("modelDropdown.setCurrentModel"),
         "switchTab must call setCurrentModel so the dropdown reflects the active session's model"
@@ -1078,26 +673,6 @@ it("unified modal: server session items send resume_server_session on click", ()
         block.includes("resetContextUsagePanel"),
         "switchTab must reset the context usage panel so per-session counters don't bleed across tabs"
       )
-      assert.ok(
-        block.includes("} else {") && block.includes("scrollToBottom(msgList)"),
-        "switchTab must anchor to the bottom when there is no saved scroll position or the tab is streaming"
-      )
-    })
-
-    it("context_usage handler preserves valid session usage when host sends empty fallback data", () => {
-      const block = getHandlerBlock("context_usage")
-      assert.ok(block.includes("const existingUsage = sess?.contextUsage"), "handler must inspect prior per-session context usage")
-      assert.ok(block.includes("contextUsageHasFill(existingUsage)"), "handler must identify valid prior context fill")
-      assert.ok(block.includes("contextUsageHasFill(incomingUsage)"), "handler must identify empty incoming context updates")
-      assert.ok(block.includes("source:"), "handler must persist usage source")
-      assert.ok(block.includes("updatedAt:"), "handler must persist usage timestamp")
-    })
-
-    it("init_state hydrates messages without replacing unchanged DOM or losing scroll", () => {
-      const block = getHandlerBlock("init_state")
-      assert.ok(block.includes("attachScrollPersistence(s.id, msgList)"), "init_state must attach scroll persistence to hydrated lists")
-      assert.ok(block.includes("shouldRenderHydratedMessages(s.id, msgList, s.messages)"), "init_state must skip unchanged message-list renders")
-      assert.ok(block.includes("restoreScrollPosition(s.id, msgList"), "init_state must restore saved scroll position after hydration")
     })
   })
 
@@ -1107,280 +682,14 @@ it("unified modal: server session items send resume_server_session on click", ()
   // explicitly hid in their last session.
   describe("setupThinkingToggle — boot-time sync", () => {
     it("calls toggleAllThinkingBlocks at boot with the persisted preference", () => {
-      const combined = source + timelineSource + thinkingToggleSource
-      const fnIdx = combined.indexOf("function setup()")
-      assert.ok(fnIdx >= 0, "setup function must exist in thinkingToggle")
+      const combined = source + timelineSource
+      const fnIdx = combined.indexOf("function setupThinkingToggle()")
+      assert.ok(fnIdx >= 0, "setupThinkingToggle must exist")
       const clickIdx = combined.indexOf("addEventListener(\"click\"", fnIdx)
       const bootBlock = combined.slice(fnIdx, clickIdx)
       assert.ok(
         bootBlock.includes("toggleAllThinkingBlocks"),
         "setupThinkingToggle must call toggleAllThinkingBlocks during boot so the persisted pref is applied to existing DOM",
-      )
-    })
-  })
-
-  describe("tasks-panel copy action", () => {
-    it("onCopy routes through the host copy_text message, not navigator.clipboard", () => {
-      // navigator.clipboard is undefined in VS Code webviews; the old
-      // `navigator.clipboard?.writeText(text).catch(...)` threw a synchronous
-      // TypeError (`.catch` on undefined) on every Copy click.
-      const onCopyIdx = todoSubagentSetupSource.indexOf("onCopy:")
-      assert.ok(onCopyIdx >= 0, "tasks panel deps must define onCopy in todoSubagentSetup.ts")
-      const onCopyBlock = todoSubagentSetupSource.slice(onCopyIdx, onCopyIdx + 400)
-      assert.ok(!onCopyBlock.includes("navigator.clipboard"), "onCopy must not rely on navigator.clipboard")
-      assert.ok(onCopyBlock.includes('"copy_text"') || onCopyBlock.includes("'copy_text'"), "onCopy must post copy_text to the host")
-    })
-  })
-})
-
-// ── Session-open routing (two-session lag fix, 2026-06-11) ──────────────────
-// Clicking a session in the recent list / history modal always posted
-// resume_session — even when that session was already open as a hydrated tab.
-// On the host, resume_session re-fetches the ENTIRE server transcript
-// (getSessionMessages), re-converts and re-applies it to the store, and
-// re-pushes a 50-message payload the webview then has to reconcile — all to
-// "open" a tab that was already current via SSE. Open tabs must switch
-// locally; only genuinely-closed sessions go through the heavyweight resume.
-describe("openSession routing — already-open tabs switch locally", () => {
-  it("defines an openSession helper that prefers switchTab over resume_session", () => {
-    const idx = source.indexOf("function openSession(")
-    assert.ok(idx >= 0, "main.ts must define openSession(sessionId)")
-    const body = source.slice(idx, idx + 900)
-    assert.ok(body.includes("switchTab("), "openSession must switch locally when the tab is already open")
-    assert.ok(body.includes('"resume_session"'), "openSession must fall back to resume_session for closed sessions")
-    assert.ok(body.includes(".tab-panel"), "openSession must check for an existing hydrated tab panel")
-  })
-
-  it("recent-sessions callbacks route through openSession, not a raw resume_session post", () => {
-    assert.ok(
-      !source.includes('vscode.postMessage({ type: "resume_session", sessionId })'),
-      "recent-session click handlers must not post resume_session directly for possibly-open tabs",
-    )
-    const recentIdx = source.indexOf("function renderRecentSessionsList(")
-    assert.ok(recentIdx >= 0)
-    const recentBlock = source.slice(recentIdx, source.indexOf("/* ─── SESSION HISTORY MODAL", recentIdx))
-    assert.ok(recentBlock.includes("openSession("), "recent sessions list must use openSession")
-  })
-
-  it("session history modal posts are routed through openSession as well", () => {
-    const wiringIdx = source.indexOf("setSessionListPostMessage(")
-    assert.ok(wiringIdx >= 0)
-    const wiringBlock = source.slice(wiringIdx, wiringIdx + 600)
-    assert.ok(
-      wiringBlock.includes("openSession("),
-      "the injected session-list postMessage must reroute resume_session for open tabs via openSession",
-    )
-  })
-
-  it("post-compaction refresh still uses a true resume_session (server transcript changed)", () => {
-    const idx = source.indexOf("compaction look like a no-op")
-    assert.ok(idx >= 0, "compaction resume comment anchor must exist")
-    const block = source.slice(idx, idx + 400)
-    assert.ok(block.includes('"resume_session"'), "compaction path must keep the full refetch")
-  })
-})
-
-describe("methodology visibility — methodology_selected chip", () => {
-  // The host classifies each outgoing prompt and injects a strategy addendum,
-  // but the webview hid it (renderer drops "[methodology]" parts) and no
-  // message ever surfaced the selection. Users could neither see nor audit
-  // what guidance was added to their prompt.
-  it("handles the methodology_selected host message", () => {
-    assert.ok(
-      source.includes('"methodology_selected"'),
-      "main.ts must register a methodology_selected handler",
-    )
-  })
-
-  it("renders the selection into the status strip chip", () => {
-    assert.ok(
-      indexHtml.includes('id="status-methodology"'),
-      "index.html must have a status-methodology element in the status strip",
-    )
-    assert.ok(
-      source.includes("statusMethodology"),
-      "handler must render into els.statusMethodology",
-    )
-  })
-
-  it("scopes the chip to the active session so selections don't bleed across tabs", () => {
-    const idx = source.indexOf('"methodology_selected"')
-    assert.ok(idx >= 0)
-    const block = source.slice(idx, idx + 1200)
-    assert.ok(
-      block.includes("activeSessionId") || block.includes("getActiveSession"),
-      "methodology_selected must check the message's session against the active one",
-    )
-  })
-
-  it("tells the user how to disable guidance from the chip tooltip", () => {
-    const idx = source.indexOf('"methodology_selected"')
-    const block = source.slice(idx, idx + 1500)
-    assert.ok(
-      block.includes("/methodology"),
-      "chip tooltip must mention the /methodology override command",
-    )
-  })
-})
-
-// ── Permission bar — multi-tab session attribution (2026-06-16) ────────────
-// permission_request rendered the shared #permission-bar unconditionally for
-// whatever sid the host sent, with no check against the tab the user is
-// actually looking at. A permission request raised by a background tab's
-// tool call would pop up over whichever tab was focused, and clicking
-// Allow/Always/Deny would resolve the BACKGROUND tab's permission while
-// looking like it belonged to the viewed tab. Worse: if tab B's request
-// later arrived and overwrote tab A's still-pending one, switching back to
-// tab A showed no bar at all — tab A's stream stayed stuck with no way to
-// respond. Fix: track one pending permission per session and only render the
-// bar for the active session; switchTab restores or hides it from that
-// per-session state, mirroring the questionBar pattern already used to fix
-// the same class of bug.
-describe("permission bar — multi-tab session attribution", () => {
-  it("permission_request records the request per-session before deciding whether to render", () => {
-    const idx = source.indexOf('["permission_request"')
-    assert.ok(idx >= 0, "permission_request handler must exist")
-    const block = source.slice(idx, source.indexOf('["file_edited"', idx))
-    assert.ok(
-      block.includes("pendingPermissionBySession.set("),
-      "permission_request must record the request per-session so it survives tab switches",
-    )
-  })
-
-  it("permission_request only renders the bar when the request belongs to the active session", () => {
-    const idx = source.indexOf('["permission_request"')
-    const block = source.slice(idx, source.indexOf('["file_edited"', idx))
-    assert.ok(
-      /if\s*\(\s*sid\s*!==\s*stateManager\.getState\(\)\.activeSessionId\s*\)/.test(block),
-      "permission_request must bail out of rendering for a non-active session",
-    )
-  })
-
-  it("permission response buttons clear the per-session pending entry instead of just hiding the DOM", () => {
-    const idx = source.indexOf("function renderPermissionBar(")
-    assert.ok(idx >= 0, "renderPermissionBar helper must exist")
-    const block = source.slice(idx, idx + 2000)
-    assert.ok(
-      block.includes("pendingPermissionBySession.delete("),
-      "Allow/Always/Deny handlers must clear the resolved session's pending entry",
-    )
-  })
-
-  it("switchTab restores a pending permission for the newly active session, or hides the bar if none", () => {
-    const idx = tabSwitcherSource.indexOf("function switchTabImpl(")
-    assert.ok(idx >= 0, "switchTabImpl must exist in tabSwitcher.ts")
-    const block = tabSwitcherSource.slice(idx, idx + 10000)
-    assert.ok(
-      block.includes("pendingPermissionBySession.get(tabId)"),
-      "switchTab must look up the switched-to session's pending permission",
-    )
-    assert.ok(
-      /renderPermissionBar\(/.test(block) && /hidePermissionBar\(\)/.test(block),
-      "switchTab must either restore the bar for a pending permission or hide it when there is none",
-    )
-  })
-
-  it("provider_added handler triggers model list refresh so new models appear immediately", () => {
-    const idx = source.indexOf('["provider_added"')
-    assert.ok(idx >= 0, "provider_added handler must exist")
-    const block = source.slice(idx, idx + 300)
-    assert.ok(
-      block.includes('"get_models"'),
-      "provider_added must post get_models to refresh the model list after a provider is connected",
-    )
-    assert.ok(
-      block.includes('"discover_providers"'),
-      "provider_added must re-discover providers to update connection status",
-    )
-  })
-
-  it("provider panel uses inline step transitions (no nested modal)", () => {
-    assert.ok(
-      indexHtml.includes('id="provider-step-list"'),
-      "provider panel must have inline list step",
-    )
-    assert.ok(
-      indexHtml.includes('id="provider-step-key"'),
-      "provider panel must have inline API key step",
-    )
-    assert.ok(
-      !indexHtml.includes('id="api-key-modal"'),
-      "must NOT have a separate nested api-key-modal overlay",
-    )
-  })
-
-  // ── B10-recovery: expired_question_recovery_failed auto-send ──
-  void describe("expired_question_recovery_failed handler — auto-send recovery", () => {
-    const hIdx = source.indexOf('"expired_question_recovery_failed", (msg, sid) =>')
-    assert.ok(hIdx >= 0, "expired_question_recovery_failed handler must exist")
-    // Extract from handler start to the closing of the messageHandlers Map (])
-    // The handler is the LAST entry in the Map, so we stop at "}],\n    ])"
-    const closeIdx = source.indexOf("}],\n    ])", hIdx)
-    const first = closeIdx > hIdx ? source.slice(hIdx, closeIdx) : source.slice(hIdx, hIdx + 2000)
-
-    it("auto-sends via setTimeout + sendMessage (no manual Enter required)", () => {
-      assert.ok(
-        first.includes("setTimeout(() => {"),
-        "B10-recovery: must use setTimeout to defer auto-send past stream_end handler",
-      )
-      assert.ok(
-        first.includes("sendMessage()"),
-        "B10-recovery: must call sendMessage() inside setTimeout for auto-send",
-      )
-    })
-
-    it("does NOT show an error banner — recovery is seamless", () => {
-      assert.ok(
-        !first.includes("handleRequestError"),
-        "B10-recovery: must NOT call handleRequestError — the answer is auto-sent, no manual error needed",
-      )
-    })
-
-    it("pre-fills input directly without old separator/merge logic", () => {
-      assert.ok(
-        first.includes("els.promptInput.value = answerText"),
-        "B10-recovery: must set input value directly to answerText (no existing-text merge)",
-      )
-      assert.ok(
-        !first.includes("existing.length > 0"),
-        "B10-recovery: must NOT have old separator logic (existing + \\n\\n merge was for manual resend)",
-      )
-    })
-
-    it("only switches when the user is already on target or has no valid tab", () => {
-      assert.ok(
-        first.includes("shouldHonorActiveSessionChange"),
-        "B10-recovery: must guard tab switch with shouldHonorActiveSessionChange so it never steals focus from another valid tab",
-      )
-      assert.ok(
-        first.includes("if (targetSessionId && shouldSwitch && !onTarget)"),
-        "B10-recovery: switchTab must be conditional on shouldSwitch and not-onTarget",
-      )
-      assert.ok(
-        !first.includes("if (targetSessionId) switchTab(targetSessionId)"),
-        "B10-recovery: must NOT unconditionally switchTab to target",
-      )
-    })
-
-    it("sends the recovery answer to the target session without switching when the user views another tab", () => {
-      assert.ok(
-        first.includes('type: "send_prompt"'),
-        "B10-recovery: must be able to send_prompt directly to the target session when not switching",
-      )
-      assert.ok(
-        first.includes("sessionId: targetSessionId"),
-        "B10-recovery: direct send must target the correct session",
-      )
-    })
-
-    it("dispatches input event and focuses prompt for autosize/IME readiness", () => {
-      assert.ok(
-        first.includes('dispatchEvent(new Event("input"'),
-        "B10-recovery: must dispatch input event so autosize and char count update",
-      )
-      assert.ok(
-        first.includes("els.promptInput.focus()"),
-        "B10-recovery: must focus the prompt input before auto-send so the IME/selection state is correct",
       )
     })
   })

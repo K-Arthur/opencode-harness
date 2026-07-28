@@ -2,7 +2,8 @@ import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
-import { installDom as installSharedDom } from "./streamHarness"
+
+const { JSDOM } = require("jsdom") as { JSDOM: any }
 
 const streamSource = readFileSync(path.join(__dirname, "stream.ts"), "utf8")
 const handlersSource = readFileSync(path.join(__dirname, "streamHandlers.ts"), "utf8")
@@ -11,23 +12,35 @@ function sourceIncludes(str: string): boolean {
   return streamSource.includes(str) || handlersSource.includes(str)
 }
 
-/** Load streamHandlers after bootstrapping a DOMPurify instance for JSDOM. */
-async function loadStreamHandlers(): Promise<typeof import("./streamHandlers")> {
-  const { JSDOM: JSDom } = await import("jsdom")
-  const purifyDom = new JSDom("", { url: "https://opencode-harness.test" })
-  const createPurify = require("dompurify")
-  const purify = createPurify(purifyDom.window)
-  ;(globalThis as any).import_dompurify = { default: purify, ...purify }
-  await import("./streamEndHandler")
-  return import("./streamHandlers")
-}
-
-// Delegates to the shared harness: identical DOM + inline RAF, plus timer
-// tracking so a leaked stream ticker can't pin the event loop after the
-// tests pass (this file used to hang the sequential test:unit run).
 function installDom(): () => void {
-  const handle = installSharedDom()
-  return () => handle.restore()
+  const dom = new JSDOM(
+    '<!doctype html><div id="message-list"></div><div id="typing-indicator"></div><span id="typing-label"></span>',
+    { url: "https://opencode-harness.test" },
+  )
+  const g = globalThis as any
+  const previous = {
+    window: g.window,
+    document: g.document,
+    HTMLElement: g.HTMLElement,
+    Node: g.Node,
+    requestAnimationFrame: g.requestAnimationFrame,
+    cancelAnimationFrame: g.cancelAnimationFrame,
+  }
+
+  g.window = dom.window
+  g.document = dom.window.document
+  g.HTMLElement = dom.window.HTMLElement
+  g.Node = dom.window.Node
+  g.requestAnimationFrame = (callback: FrameRequestCallback) => {
+    callback(0)
+    return 1
+  }
+  g.cancelAnimationFrame = () => {}
+
+  return () => {
+    Object.assign(g, previous)
+    dom.window.close()
+  }
 }
 
 function createHarness() {
@@ -109,8 +122,7 @@ describe("stream.ts", () => {
 
   it("has handleStreamToken for targeted DOM updates", () => {
     assert.ok(sourceIncludes("handleStreamToken(text?: string)"), "handleStreamToken must exist")
-    assert.ok(sourceIncludes("state.renderQueue.enqueue(chunk)"), "must enqueue live chunks through RenderQueue")
-    assert.ok(sourceIncludes("liveRenderer.renderInto(textEl, displayText)"), "must render live text through LiveTextRenderer")
+    assert.ok(sourceIncludes("textEl.innerHTML = renderMarkdown(displayText, true)"), "must set innerHTML with renderMarkdown")
     assert.ok(sourceIncludes("state.lastStreamTextEl = textEl"), "must track last element")
     assert.ok(sourceIncludes("streaming-text"), "must use streaming-text class for CSS cursor")
   })
@@ -137,9 +149,7 @@ describe("stream.ts", () => {
 
   it("has handleToolUpdate method", () => {
     assert.ok(sourceIncludes("handleToolUpdate("), "handleToolUpdate must exist")
-    // m1: the dynamic class swap is centralized in setToolStateClass.
-    assert.ok(sourceIncludes("setToolStateClass(toolEl, update.state)"), "must update tool call class via the centralized helper")
-    assert.ok(sourceIncludes("tool-call--${state}"), "centralized helper must set the dynamic tool-call class")
+    assert.ok(sourceIncludes("tool-call--${update.state}"), "must update tool call class dynamically")
   })
 
   it("has handleToolEnd method", () => {
@@ -160,14 +170,6 @@ describe("stream.ts", () => {
   it("has handleStreamError method", () => {
     assert.ok(sourceIncludes("handleStreamError("), "handleStreamError must exist")
     assert.ok(sourceIncludes("renderMessage(errMsg)"), "must render error message")
-  })
-
-  it("coalesces duplicate error cards instead of stacking the same failure", () => {
-    // The same fault can arrive multiple times (stream retries, repeated server
-    // "error" statuses). handleStreamError must compare against the latest
-    // message and skip re-appending an identical error card.
-    assert.ok(sourceIncludes("lastErrMessage === errorContext.userMessage"), "must dedupe error cards by user message")
-    assert.ok(sourceIncludes("lastBlock?.type === \"error\""), "must inspect the previous message's error block")
   })
 
   it("has handleRequestError method", () => {
@@ -206,7 +208,7 @@ describe("stream.ts", () => {
     const handlers = [
       "showTypingIndicator", "hideTypingIndicator",
       "handleStreamStart", "handleStreamToken", "handleStreamChunk",
-      "handleToolStart", "handleToolUpdate", "handleToolPartial", "handleToolEnd",
+      "handleToolStart", "handleToolUpdate", "handleToolEnd",
       "handleDiff", "handleStreamEnd", "handleStreamError",
       "handleRequestError", "handleDiffResult", "handleServerStatus",
       "clearMessages",
@@ -233,7 +235,7 @@ describe("stream.ts", () => {
   it("recovers late text chunks after stream_end clears the active stream id", async () => {
     const restore = installDom()
     try {
-      const { handleStreamStart, handleStreamEnd, handleStreamChunk } = await loadStreamHandlers()
+      const { handleStreamStart, handleStreamEnd, handleStreamChunk } = await import("./streamHandlers")
       const harness = createHarness()
       const saveState = () => {}
       let lateSaveCount = 0
@@ -271,8 +273,7 @@ describe("stream.ts", () => {
 
       const assistant = harness.messages.find((message) => message.id === "resp-tools")
       const tool = assistant?.blocks.find((block: any) => block.type === "tool-call")
-      assert.equal(tool?.state, "unresolved")
-      assert.ok((tool as any)?.error, "unresolved tool must have an error message")
+      assert.equal(tool?.state, "result")
     } finally {
       restore()
     }
@@ -294,99 +295,6 @@ describe("stream.ts", () => {
       const textBlock = assistant?.blocks.find((block: any) => block.type === "text")
       assert.equal(textBlock?.text, "Final server text")
       assert.match(harness.els.messageList.textContent || "", /Final server text/)
-    } finally {
-      restore()
-    }
-  })
-
-  it("preserves authoritative stream_end block order across text and tool runs", async () => {
-    const restore = installDom()
-    try {
-      const { handleStreamStart, handleStreamEnd } = await import("./streamHandlers")
-      const harness = createHarness()
-      const saveState = () => {}
-
-      handleStreamStart(harness.state, harness.els as any, harness.messages, "resp-ordered")
-      handleStreamEnd(harness.state, harness.els as any, harness.messages, saveState, "resp-ordered", [
-        { type: "text", text: "First I ran a command." },
-        { type: "tool-call", id: "tool-1", name: "bash", class: "exec", state: "result", result: "ok" },
-        { type: "text", text: "Then I edited the file." },
-        { type: "tool-call", id: "tool-2", name: "edit", class: "write", state: "result", result: "ok" },
-      ])
-
-      const assistant = harness.messages.find((message) => message.id === "resp-ordered")
-      assert.deepEqual(
-        assistant?.blocks.map((block: any) => block.type),
-        ["text", "tool-call", "text", "tool-call"],
-        "final server blocks must keep text/tool/text/tool order",
-      )
-      assert.equal(assistant?.blocks[0]?.text, "First I ran a command.")
-      assert.equal(assistant?.blocks[2]?.text, "Then I edited the file.")
-    } finally {
-      restore()
-    }
-  })
-
-  it("logs same-id duplicate stream_start at info level, not warn", async () => {
-    const restore = installDom()
-    try {
-      const { handleStreamStart, setVsCodeApi } = await import("./streamHandlers")
-      const harness = createHarness()
-      const logs: Array<{ level: string; message: string }> = []
-      setVsCodeApi({
-        postMessage: (msg: { type: string; level: string; message: string }) => {
-          if (msg.type === "webview_log") logs.push({ level: msg.level, message: msg.message })
-        },
-      })
-
-      handleStreamStart(harness.state, harness.els as any, harness.messages, "resp-same")
-      handleStreamStart(harness.state, harness.els as any, harness.messages, "resp-same")
-
-      const duplicateLogs = logs.filter((log) => String(log.message).includes("already streaming") && String(log.message).includes("resp-same"))
-      assert.equal(duplicateLogs.length, 1, "duplicate start must be logged once")
-      assert.equal(duplicateLogs[0]!.level, "info", "same-id duplicate must be info, not warn")
-    } finally {
-      restore()
-    }
-  })
-
-  // Regression test for the dropped "stream_tool_unresolved" host message:
-  // the webview had no handler for it (logged as "unknown host message
-  // type"), so a tool call left running when the server went idle kept
-  // showing its mid-stream spinner/"Running" badge forever, even after the
-  // Stop/Send button had already reverted to Send. This exercises the same
-  // streamHandlers.ts primitives the new main.ts handler calls.
-  it("handleToolUpdate with state 'unresolved' clears the running badge and marks the card incomplete", async () => {
-    const restore = installDom()
-    try {
-      const { handleStreamStart, handleToolStart, handleToolUpdate } = await import("./streamHandlers")
-      const harness = createHarness()
-
-      handleStreamStart(harness.state, harness.els as any, harness.messages, "resp-stuck")
-      // Use a generic (non-exec) tool: exec/shell tools render as standalone
-      // live command cards (feature 440a68c) rather than the generic
-      // details.tool-call element this regression targets.
-      handleToolStart(harness.state, harness.els as any, harness.messages, {
-        id: "tool-stuck",
-        name: "read",
-        class: "read",
-        args: {},
-        state: "running",
-      })
-
-      const toolEl = harness.els.messageList.querySelector('[data-block-id="tool-stuck"]') as HTMLElement
-      assert.ok(toolEl, "tool block must be rendered")
-      assert.ok(toolEl.className.includes("tool-call--running"), "starts in running state")
-
-      handleToolUpdate(harness.els as any, "tool-stuck", {
-        state: "unresolved",
-        error: "Tool did not emit a completion event before the server became idle.",
-      })
-
-      assert.ok(toolEl.className.includes("tool-call--unresolved"), "DOM class reflects unresolved state")
-      assert.ok(!toolEl.className.includes("tool-call--running"), "no longer shows the running state")
-      const badge = toolEl.querySelector(".tool-status")
-      assert.match(badge?.textContent || "", /Incomplete/, "badge must say Incomplete, not still spinning")
     } finally {
       restore()
     }

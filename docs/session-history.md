@@ -8,7 +8,6 @@ The welcome screen search box provides live access to previous OpenCode sessions
 - The extension host handles that request in `MessageRouter.handleListSessions`.
 - When the OpenCode server is running, the host uses the SDK-backed `SessionManager.listSessions()` path, which calls `client.session.list()`.
 - Unknown top-level server sessions are imported into `SessionStore` with `needsBackfill: true`; child/subagent sessions are excluded from the history list.
-- Child/subagent sessions for the active chat tab are exposed through the Subagent Activity panel instead. Detail and cancel actions must target a child returned by `getChildSessions(activeCliSessionId)` before the host reads messages or aborts the child session.
 - Session identity is canonicalized around the OpenCode server session id (`ses_...`). Legacy local entries that already point at the same server id through `cliSessionId` are merged into the server-keyed record during migration/recovery.
 - The filtered `session_list` response is sent back to the webview and rendered in the welcome recent-sessions area.
 
@@ -48,12 +47,6 @@ Live stream finalization uses different semantics. `StreamCoordinator` treats th
 assistant tokens as a per-turn fallback and calls `SessionStore.accumulateTokenUsage()` only
 when the normal step-finish path has not already advanced the session totals. This prevents a
 late final-fetch event from replacing cumulative totals restored from older history.
-
-Context-window fill is stored separately from spend totals. `SessionStore.contextUsage` records
-the latest valid fill for each session (`tokens`, `maxTokens`, `percent`, source, timestamp, and
-optional breakdown/cost) so restored sessions can rehydrate the status strip without waiting for
-a fresh context estimate. Missing context fields or zero fallback updates from the host/webview
-must preserve a prior non-zero reading.
 
 ## Session Titles
 

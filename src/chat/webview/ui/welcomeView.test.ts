@@ -23,14 +23,10 @@ describe("welcomeView.ts", () => {
   function createDeps() {
     const dom = new JSDOM(`
       <button id="welcome-new-btn"></button>
-      <button id="welcome-temp-btn"></button>
-      <div class="welcome-search-wrapper">
-        <div id="welcome-search-input">
-          <span class="search-icon"></span>
-          <input aria-label="Search sessions" />
-        </div>
+      <div id="welcome-search-input">
+        <span class="search-icon"></span>
+        <input aria-label="Search sessions" />
       </div>
-      <span id="welcome-model-ctx" role="button" tabindex="0"></span>
       <div id="welcome-recent-sessions"></div>
       <div id="welcome-greeting"></div>
     `)
@@ -39,25 +35,20 @@ describe("welcomeView.ts", () => {
 
     const messages: Array<Record<string, unknown>> = []
     const renderedQueries: string[] = []
-    const openModelCalls = { n: 0 }
     const deps: WelcomeViewDeps = {
       els: {
         welcomeView: document.createElement("div"),
         welcomeNewBtn: document.getElementById("welcome-new-btn") as HTMLButtonElement,
-        welcomeTempBtn: document.getElementById("welcome-temp-btn") as HTMLButtonElement,
-        welcomeModelCtx: document.getElementById("welcome-model-ctx"),
+        welcomeModelCtx: null,
         welcomeContinueBtn: null,
         welcomeModelName: null,
         welcomeSearchInput: document.getElementById("welcome-search-input"),
         promptInput: document.createElement("textarea"),
-        welcomeModelEmptyBanner: null,
-        welcomeEmptyBannerLink: null,
       },
       postMessage: (msg) => { messages.push(msg) },
       getAllSessions: () => [],
       getState: () => ({}),
-      openModelManager: () => { openModelCalls.n++ },
-      sendMessage: () => {},
+      openModelManager: () => {},
       renderRecentSessionsList: (query = "") => { renderedQueries.push(query) },
       hideStatusStrip: () => {},
       applyTimelineVisibility: () => {},
@@ -69,17 +60,8 @@ describe("welcomeView.ts", () => {
     }
 
     setupWelcomeActions(deps)
-    return { dom, deps, messages, renderedQueries, openModelCalls, input: deps.els.welcomeSearchInput!.querySelector("input")! }
+    return { dom, messages, renderedQueries, input: deps.els.welcomeSearchInput!.querySelector("input")! }
   }
-
-  it("starts a temporary chat from the welcome action", () => {
-    const { dom, messages } = createDeps()
-    const tempBtn = document.getElementById("welcome-temp-btn") as HTMLButtonElement
-
-    tempBtn.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }))
-
-    assert.deepEqual(messages, [{ type: "new_temp_session" }])
-  })
 
   it("submits the trimmed session search when Enter is pressed with no local result", () => {
     const { dom, messages, renderedQueries, input } = createDeps()
@@ -151,27 +133,5 @@ describe("welcomeView.ts", () => {
     }))
 
     assert.deepEqual(messages, [{ type: "delete_session", targetSessionId: "sess_delete_me" }])
-  })
-
-  it("opens the model picker when the model chip is activated by keyboard (Enter)", () => {
-    const { dom, openModelCalls, messages } = createDeps()
-    const chip = document.getElementById("welcome-model-ctx")!
-    chip.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }))
-    assert.equal(openModelCalls.n, 1, "Enter opens the model manager (keyboard accessible)")
-    assert.deepEqual(messages, [{ type: "get_models" }])
-  })
-
-  it("opens the model picker when the model chip is activated by keyboard (Space)", () => {
-    const { dom, openModelCalls } = createDeps()
-    const chip = document.getElementById("welcome-model-ctx")!
-    chip.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: " ", bubbles: true }))
-    assert.equal(openModelCalls.n, 1, "Space opens the model manager")
-  })
-
-  it("does not open the model picker on unrelated keys", () => {
-    const { dom, openModelCalls } = createDeps()
-    const chip = document.getElementById("welcome-model-ctx")!
-    chip.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "a", bubbles: true }))
-    assert.equal(openModelCalls.n, 0)
   })
 })

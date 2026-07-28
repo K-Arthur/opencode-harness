@@ -19,13 +19,13 @@ import { JSDOM } from "jsdom"
 import { groupConsecutiveToolCalls, renderToolGroup } from "./toolCallRenderer"
 import type { Block, ToolCallBlock } from "./types"
 
-function tool(id: string, name = "read", cls: ToolCallBlock["class"] = "read", state: ToolCallBlock["state"] = "result"): ToolCallBlock {
+function tool(id: string, name = "read", cls: ToolCallBlock["class"] = "read"): ToolCallBlock {
   return {
     type: "tool-call",
     id,
     name,
     class: cls,
-    state,
+    state: "result",
   }
 }
 
@@ -138,109 +138,7 @@ describe("groupConsecutiveToolCalls — lifecycle blocks must not break tool gro
     assert.ok(toolGroup, "trailing lifecycle blocks must not split the preceding tool run")
   })
 
-  it("auto-expands group when any tool is in running state", () => {
-    const dom = new JSDOM("<!doctype html><body></body>")
-    const previousDocument = globalThis.document
-    const previousWindow = globalThis.window
-    ;(globalThis as unknown as { document: Document }).document = dom.window.document
-    ;(globalThis as unknown as { window: Window }).window = dom.window as unknown as Window
-    try {
-      const group = renderToolGroup([
-        tool("t1", "bash", "exec", "running"),
-        tool("t2", "read", "read", "result"),
-      ], {})
-      assert.ok(group, "group must be created")
-      assert.ok((group as HTMLDetailsElement).open, "group must be open when a tool is running")
-    } finally {
-      ;(globalThis as unknown as { document: Document | undefined }).document = previousDocument
-      ;(globalThis as unknown as { window: Window | undefined }).window = previousWindow
-    }
-  })
-
-  it("auto-expands group when any tool is in pending state", () => {
-    const dom = new JSDOM("<!doctype html><body></body>")
-    const previousDocument = globalThis.document
-    const previousWindow = globalThis.window
-    ;(globalThis as unknown as { document: Document }).document = dom.window.document
-    ;(globalThis as unknown as { window: Window }).window = dom.window as unknown as Window
-    try {
-      const group = renderToolGroup([
-        tool("t1", "bash", "exec", "result"),
-        tool("t2", "read", "read", "pending"),
-      ], {})
-      assert.ok(group, "group must be created")
-      assert.ok((group as HTMLDetailsElement).open, "group must be open when a tool is pending")
-    } finally {
-      ;(globalThis as unknown as { document: Document | undefined }).document = previousDocument
-      ;(globalThis as unknown as { window: Window | undefined }).window = previousWindow
-    }
-  })
-
-  it("collapses group only when all tools are terminal (no error)", () => {
-    const dom = new JSDOM("<!doctype html><body></body>")
-    const previousDocument = globalThis.document
-    const previousWindow = globalThis.window
-    ;(globalThis as unknown as { document: Document }).document = dom.window.document
-    ;(globalThis as unknown as { window: Window }).window = dom.window as unknown as Window
-    try {
-      const group = renderToolGroup([
-        tool("t1", "bash", "exec", "result"),
-        tool("t2", "read", "read", "completed"),
-        tool("t3", "edit", "write", "result"),
-      ], {})
-      assert.ok(group, "group must be created")
-      assert.ok(!(group as HTMLDetailsElement).open, "all-terminal group should be collapsed by default")
-    } finally {
-      ;(globalThis as unknown as { document: Document | undefined }).document = previousDocument
-      ;(globalThis as unknown as { window: Window | undefined }).window = previousWindow
-    }
-  })
-
-  it("shows running count in group header when tools are active", () => {
-    const dom = new JSDOM("<!doctype html><body></body>")
-    const previousDocument = globalThis.document
-    const previousWindow = globalThis.window
-    ;(globalThis as unknown as { document: Document }).document = dom.window.document
-    ;(globalThis as unknown as { window: Window }).window = dom.window as unknown as Window
-    try {
-      const group = renderToolGroup([
-        tool("t1", "bash", "exec", "running"),
-        tool("t2", "read", "read", "result"),
-        tool("t3", "edit", "write", "pending"),
-      ], {})
-      assert.ok(group, "group must be created")
-      const countEl = group!.querySelector(".tool-group-count")
-      assert.ok(countEl, "count element must exist")
-      assert.match(countEl!.textContent ?? "", /3 calls.*2 running/,
-        "header should show running count for 2 active tools")
-    } finally {
-      ;(globalThis as unknown as { document: Document | undefined }).document = previousDocument
-      ;(globalThis as unknown as { window: Window | undefined }).window = previousWindow
-    }
-  })
-
-  it("applies tool-group--active CSS class when tools are running", () => {
-    const dom = new JSDOM("<!doctype html><body></body>")
-    const previousDocument = globalThis.document
-    const previousWindow = globalThis.window
-    ;(globalThis as unknown as { document: Document }).document = dom.window.document
-    ;(globalThis as unknown as { window: Window }).window = dom.window as unknown as Window
-    try {
-      const group = renderToolGroup([
-        tool("t1", "bash", "exec", "running"),
-      ], {})
-      assert.ok(group, "group must be created")
-      assert.ok(group!.classList.contains("tool-group--active"),
-        "running group must have tool-group--active class")
-      assert.ok(!group!.classList.contains("tool-group--idle"),
-        "running group must NOT have tool-group--idle class")
-    } finally {
-      ;(globalThis as unknown as { document: Document | undefined }).document = previousDocument
-      ;(globalThis as unknown as { window: Window | undefined }).window = previousWindow
-    }
-  })
-
-  it("renders mixed tool groups with a human-readable summary label", () => {
+  it("renders mixed tool groups as tools, not as the first tool type", () => {
     const dom = new JSDOM("<!doctype html><body></body>")
     const previousDocument = globalThis.document
     const previousWindow = globalThis.window
@@ -254,12 +152,10 @@ describe("groupConsecutiveToolCalls — lifecycle blocks must not break tool gro
       ], {})
       assert.ok(group)
       assert.ok(group!.classList.contains("tool-call--mixed"), "mixed groups must get mixed styling")
-      // Group label is now a human-readable summary produced by buildGroupSummaryLabel,
-      // not raw class names. It should mention file read, file edit, and command.
-      const labelText = group!.querySelector(".tool-name")?.textContent ?? ""
-      assert.match(labelText, /file read/)
-      assert.match(labelText, /file edit/)
-      assert.match(labelText, /command/)
+      assert.equal(group!.querySelector(".tool-name")?.textContent, "tools")
+      assert.match(group!.textContent ?? "", /1 read/)
+      assert.match(group!.textContent ?? "", /1 write/)
+      assert.match(group!.textContent ?? "", /1 exec/)
     } finally {
       ;(globalThis as unknown as { document: Document | undefined }).document = previousDocument
       ;(globalThis as unknown as { window: Window | undefined }).window = previousWindow

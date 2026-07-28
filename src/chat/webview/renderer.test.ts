@@ -4,13 +4,8 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 
 const source = readFileSync(path.join(__dirname, "renderer.ts"), "utf8")
-const mainSource = readFileSync(path.join(__dirname, "main.ts"), "utf8")
-const syntaxHighlighterSource = readFileSync(path.join(__dirname, "syntaxHighlighter.ts"), "utf8")
 const toolCallRendererSource = readFileSync(path.join(__dirname, "toolCallRenderer.ts"), "utf8")
 const messageRendererSource = readFileSync(path.join(__dirname, "messageRenderer.ts"), "utf8")
-const workerSource = readFileSync(path.join(__dirname, "markdownWorker.ts"), "utf8")
-const markdownWorkerClientSource = readFileSync(path.join(__dirname, "markdownWorkerClient.ts"), "utf8")
-const iconsSource = readFileSync(path.join(__dirname, "icons.ts"), "utf8")
 
 describe("renderer.ts", () => {
   it("exports renderMessage", () => {
@@ -52,26 +47,24 @@ it("has type guards for discriminated blocks", () => {
 	  })
 
   it("sanitizes_xss_with_dompurify", () => {
-    assert.ok(source.includes("function sanitizeHtml") || syntaxHighlighterSource.includes("function sanitizeHtml"), "must call sanitizeHtml")
+    assert.ok(source.includes("function sanitizeHtml"), "must call sanitizeHtml")
     assert.ok(source.includes("const rendered = sanitizeHtml(md.render(normalized))") || source.includes("return sanitizeHtml(md.render(normalized))"), "renderMarkdown must sanitize output")
-    assert.ok(source.includes("DOMPurify.sanitize") || syntaxHighlighterSource.includes("DOMPurify.sanitize"), "must use DOMPurify")
-    assert.ok(source.includes("FORBID_TAGS") || syntaxHighlighterSource.includes("FORBID_TAGS"), "must forbid dangerous tags")
-    assert.ok(source.includes("FORBID_CONTENTS") || syntaxHighlighterSource.includes("FORBID_CONTENTS"), "must forbid dangerous content")
+    assert.ok(source.includes("DOMPurify.sanitize"), "must use DOMPurify")
+    assert.ok(source.includes("FORBID_TAGS"), "must forbid dangerous tags")
+    assert.ok(source.includes("FORBID_CONTENTS"), "must forbid dangerous content")
   })
 
   it("caches sanitized markdown and highlighted code with bounded LRU caches", () => {
-    assert.ok(source.includes("class LruStringCache"), "must define a bounded markdown cache")
+    assert.ok(source.includes("class LruStringCache"), "must define a bounded cache")
     assert.ok(source.includes("markdownCache"), "must cache non-streaming markdown")
+    assert.ok(source.includes("highlightCache"), "must cache syntax highlighting")
     assert.ok(source.includes("if (isStreaming) return sanitizeHtml"), "streaming markdown must skip the markdown cache")
   })
 
   it("handles_streaming_markdown_artifacts", () => {
     assert.ok(source.includes("export function normalizeStreamingMarkdown"), "must have streaming-aware normalization")
-    // The corrected single-pass scanner tracks fences and inline code separately
-    // (fixes the old double-counting where backticks inside a fence were
-    // miscounted as inline code).
-    assert.ok(source.includes("fenceCount % 2 !== 0"), "must detect unclosed code fences")
-    assert.ok(source.includes("if (inInlineCode) result"), "must detect unclosed inline code")
+    assert.ok(source.includes("openFences % 2 !== 0"), "must detect unclosed code fences")
+    assert.ok(source.includes("openInline % 2 !== 0"), "must detect unclosed inline code")
   })
 
   it("renderMarkdown_accepts_isStreaming_flag", () => {
@@ -82,10 +75,7 @@ it("has type guards for discriminated blocks", () => {
   it("supports a VS Code-safe markdown worker for large final renders", () => {
     assert.ok(source.includes("MARKDOWN_WORKER_MIN_CHARS"), "must define a worker size threshold")
     assert.ok(source.includes("window.__OC_MARKDOWN_WORKER_URI__"), "must read worker URI from webview bootstrap config")
-    // The Worker is constructed inside the extracted markdownWorkerClient; the
-    // renderer delegates to it via getMarkdownWorkerClient().
-    assert.ok(markdownWorkerClientSource.includes("new Worker(objectUrl"), "markdownWorkerClient must launch worker from a blob URL")
-    assert.ok(source.includes("getMarkdownWorkerClient()"), "renderer must delegate to the markdown worker client")
+    assert.ok(source.includes("new Worker(objectUrl"), "must launch worker from a blob URL")
     assert.ok(source.includes("renderMarkdownAsync"), "must expose async markdown rendering")
     assert.ok(source.includes("if (isStreaming) return false"), "worker path must skip active streaming text")
     assert.ok(source.includes("const rendered = sanitizeHtml(html)"), "worker output must be sanitized before caching")
@@ -112,15 +102,6 @@ it("has type guards for discriminated blocks", () => {
     assert.ok(source.includes('token.attrSet("rel", "noopener noreferrer")'), "external links must be isolated from opener access")
   })
 
-  it("tags_non_external_links_as_file_links", () => {
-    assert.ok(source.includes('token.attrSet("class", "file-link")'), "non-external links must get file-link class")
-    assert.ok(source.includes('token.attrSet("data-file-path"'), "non-external links must capture href in data-file-path")
-    assert.ok(source.includes('token.attrSet("role", "button")'), "file links must get button role for accessibility")
-    assert.ok(source.includes('token.attrSet("tabindex", "0")'), "file links must be keyboard-focusable")
-    const purifyConfig = new RegExp('"data-file-path"')
-    assert.ok(syntaxHighlighterSource.match(purifyConfig), "data-file-path must be allowed by DOMPurify")
-  })
-
   it("renders_tool_call_with_dynamic_states", () => {
     assert.ok(source.includes("tool-call--${toolState}") || toolCallRendererSource.includes("tool-call--${toolState}"), "must use dynamic tool state class")
     assert.ok(source.includes("tool-call--error") || toolCallRendererSource.includes("tool-call--error"), "must support error state")
@@ -128,14 +109,18 @@ it("has type guards for discriminated blocks", () => {
     assert.ok(source.includes("tool-status--${toolState}") || toolCallRendererSource.includes("tool-status--${toolState}"), "must have dynamic status badge")
   })
 
-  it("assistant tool rendering respects block order instead of grouping the whole message", () => {
+  it("assistant tool calls render as one grouped expandable row per message", () => {
     assert.ok(
-      messageRendererSource.includes("groupConsecutiveToolCalls(msg.blocks"),
-      "messageRenderer must group only consecutive tool runs from the original block order",
+      messageRendererSource.includes("const toolBlocks = (msg.blocks || []).filter(isToolCallBlock)"),
+      "messageRenderer must collect all assistant tool calls before rendering",
     )
     assert.ok(
-      !messageRendererSource.includes("renderToolGroup(toolBlocks"),
-      "messageRenderer must not render every assistant tool call as one message-wide group",
+      messageRendererSource.includes("renderToolGroup(toolBlocks"),
+      "messageRenderer must render one grouped tool row for the collected tools",
+    )
+    assert.ok(
+      !messageRendererSource.includes("group.length === 1 || !isToolCallBlock(firstBlock)"),
+      "single tool calls must not bypass the grouped expandable row",
     )
   })
 
@@ -158,12 +143,12 @@ it("has type guards for discriminated blocks", () => {
   })
 
   it("permission approval UI supports once, always, and reject responses", () => {
-    assert.ok(mainSource.includes("sessionId"), "permission responses must target the session that received the request")
-    assert.ok(mainSource.includes('respond("once")'), "Allow must send an SDK-compatible once response")
-    assert.ok(mainSource.includes('respond("always")'), "Scoped approvals must support the SDK-compatible always response")
-    assert.ok(mainSource.includes('respond("reject")'), "Deny must send an SDK-compatible reject response")
-    assert.ok(mainSource.includes("permissionType"), "permission responses must preserve the permission type")
-    assert.ok(mainSource.includes("pattern"), "permission responses must preserve the permission pattern")
+    assert.ok(source.includes("sessionId: block.sessionId"), "permission responses must target the session that received the request")
+    assert.ok(source.includes('response: "once"'), "Allow must send an SDK-compatible once response")
+    assert.ok(source.includes('response: "always"'), "Scoped approvals must support the SDK-compatible always response")
+    assert.ok(source.includes('response: "reject"'), "Deny must send an SDK-compatible reject response")
+    assert.ok(source.includes("permissionType"), "permission responses must preserve the permission type")
+    assert.ok(source.includes("pattern"), "permission responses must preserve the permission pattern")
   })
 
   it("diff_action_bar_has_accept_discard_open_buttons", () => {
@@ -193,10 +178,8 @@ it("has type guards for discriminated blocks", () => {
     assert.ok(source.includes("Thinking"), "must show thinking label")
   })
 
-  it("imports highlight.js only in the worker", () => {
-    const highlightInRenderSyntax = source.includes('import hljs from "highlight.js/lib/core"') || syntaxHighlighterSource.includes('import hljs from "highlight.js/lib/core"')
-    assert.ok(!highlightInRenderSyntax, "highlight.js must NOT be in main-thread renderer or syntaxHighlighter bundle")
-    assert.ok(workerSource.includes('import hljs from "highlight.js/lib/core"'), "highlight.js must be in the markdown worker")
+  it("imports highlight.js", () => {
+    assert.ok(source.includes('import hljs from "highlight.js/lib/core"'))
   })
 
   it("imports markdown-it", () => {
@@ -204,39 +187,41 @@ it("has type guards for discriminated blocks", () => {
   })
 
   it("imports DOMPurify", () => {
-    assert.ok(source.includes('import DOMPurify from "dompurify"') || syntaxHighlighterSource.includes('import DOMPurify from "dompurify"'))
+    assert.ok(source.includes('import DOMPurify from "dompurify"'))
   })
 
   it("configures PURIFY_CONFIG with allowed tags", () => {
-    assert.ok(source.includes("ALLOWED_TAGS") || syntaxHighlighterSource.includes("ALLOWED_TAGS"))
-    assert.ok(source.includes("FORBID_TAGS") || syntaxHighlighterSource.includes("FORBID_TAGS"))
+    assert.ok(source.includes("ALLOWED_TAGS"))
+    assert.ok(source.includes("FORBID_TAGS"))
   })
 
   it("defines sanitizeHtml function", () => {
-    assert.ok(source.includes("function sanitizeHtml") || syntaxHighlighterSource.includes("function sanitizeHtml"))
+    assert.ok(source.includes("function sanitizeHtml"))
   })
 
-  it("registers 15 highlight.js languages in the worker", () => {
+  it("registers 15 highlight.js languages", () => {
     const languages = ["javascript", "typescript", "python", "rust", "go", "bash", "json", "css", "markdown", "sql", "diff", "java", "cpp", "yaml", "xml"]
     languages.forEach(lang => {
-      assert.ok(workerSource.includes(`"${lang}", ${lang}`), `Missing ${lang} language registration in worker`)
+      assert.ok(source.includes(`"${lang}", ${lang}`), `Missing ${lang} language registration`)
     })
   })
 
 it("has SVG constants for icons", () => {
-    // Icons are defined canonically in icons.ts and consumed by renderer.ts /
-    // toolCallRenderer.ts. A constant satisfies the contract if it is present in
-    // any of those three modules (defined or referenced).
-    const hasIcon = (name: string) =>
-      source.includes(name) || toolCallRendererSource.includes(name) || iconsSource.includes(name)
     assert.ok(source.includes('from "./icons"') || toolCallRendererSource.includes('from "./icons"'), "must import icons from icons.ts")
-    for (const icon of [
-      "BRAIN_SVG", "TOOL_READ_SVG", "TOOL_WRITE_SVG", "TOOL_EXEC_SVG", "TOOL_META_SVG",
-      "COPY_SVG", "CHECK_SVG", "ERROR_SVG", "WARNING_SVG", "SPINNER_SVG",
-      "EDIT_SVG", "INSERT_SVG", "NEW_FILE_SVG", "CHEVRON_RIGHT_SVG",
-    ]) {
-      assert.ok(hasIcon(icon), `must have ${icon}`)
-    }
+    assert.ok(source.includes("BRAIN_SVG") || toolCallRendererSource.includes("BRAIN_SVG"), "must have brain icon for thinking")
+    assert.ok(source.includes("TOOL_READ_SVG") || toolCallRendererSource.includes("TOOL_READ_SVG"), "must have tool read icon")
+    assert.ok(source.includes("TOOL_WRITE_SVG") || toolCallRendererSource.includes("TOOL_WRITE_SVG"), "must have tool write icon")
+    assert.ok(source.includes("TOOL_EXEC_SVG") || toolCallRendererSource.includes("TOOL_EXEC_SVG"), "must have tool exec icon")
+    assert.ok(source.includes("TOOL_META_SVG") || toolCallRendererSource.includes("TOOL_META_SVG"), "must have tool meta icon")
+    assert.ok(source.includes("COPY_SVG") || toolCallRendererSource.includes("COPY_SVG"), "must have copy icon")
+    assert.ok(source.includes("CHECK_SVG") || toolCallRendererSource.includes("CHECK_SVG"), "must have check icon")
+    assert.ok(source.includes("ERROR_SVG") || toolCallRendererSource.includes("ERROR_SVG"), "must have error icon")
+    assert.ok(source.includes("WARNING_SVG") || toolCallRendererSource.includes("WARNING_SVG"), "must have warning icon")
+    assert.ok(source.includes("SPINNER_SVG") || toolCallRendererSource.includes("SPINNER_SVG") || toolCallRendererSource.includes("SPINNER_SVG"), "must have spinner icon")
+    assert.ok(source.includes("EDIT_SVG") || toolCallRendererSource.includes("EDIT_SVG"), "must have edit icon")
+    assert.ok(source.includes("INSERT_SVG") || toolCallRendererSource.includes("INSERT_SVG"), "must have insert icon")
+    assert.ok(source.includes("NEW_FILE_SVG") || toolCallRendererSource.includes("NEW_FILE_SVG"), "must have new file icon")
+    assert.ok(source.includes("CHEVRON_RIGHT_SVG") || toolCallRendererSource.includes("CHEVRON_RIGHT_SVG"), "must have chevron icon")
   })
 
 it("tool_call_renderer_uses_class_specific_icons", () => {

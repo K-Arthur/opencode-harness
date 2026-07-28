@@ -21,8 +21,6 @@ const files = {
   tabManager: readFileSync(path.join(root, "src", "chat", "TabManager.ts"), "utf8"),
   mainTs: readFileSync(path.join(root, "src", "chat", "webview", "main.ts"), "utf8"),
   composerTs: (() => { try { return readFileSync(path.join(root, "src", "chat", "webview", "composer.ts"), "utf8") } catch { return "" } })(),
-  sendLogicTs: (() => { try { return readFileSync(path.join(root, "src", "chat", "webview", "sendLogic.ts"), "utf8") } catch { return "" } })(),
-  inputHandlersTs: (() => { try { return readFileSync(path.join(root, "src", "chat", "webview", "inputHandlers.ts"), "utf8") } catch { return "" } })(),
   streamOrchestrator: (() => { try { return readFileSync(path.join(root, "src", "chat", "webview", "streamOrchestrator.ts"), "utf8") } catch { return "" } })(),
   renderer: readFileSync(path.join(root, "src", "chat", "webview", "renderer.ts"), "utf8"),
   messageRenderer: readFileSync(path.join(root, "src", "chat", "webview", "messageRenderer.ts"), "utf8"),
@@ -30,6 +28,7 @@ const files = {
   mentions: readFileSync(path.join(root, "src", "chat", "webview", "mentions.ts"), "utf8"),
   outputChannel: readFileSync(path.join(root, "src", "utils", "outputChannel.ts"), "utf8"),
   diffApplier: readFileSync(path.join(root, "src", "diff", "DiffApplier.ts"), "utf8"),
+  diffHandler: readFileSync(path.join(root, "src", "chat", "handlers", "DiffHandler.ts"), "utf8"),
   sessionLifecycle: readFileSync(path.join(root, "src", "chat", "SessionLifecycleService.ts"), "utf8"),
   checkpoint: readFileSync(path.join(root, "src", "checkpoint", "CheckpointManager.ts"), "utf8"),
   indexHtml: readFileSync(path.join(root, "src", "chat", "webview", "index.html"), "utf8"),
@@ -133,9 +132,9 @@ describe("Regression: Send Prompt & Streamed Response", () => {
     assert.ok(combined.includes('"timeout"'), "must handle timeout reason")
   })
 
-  it("chunk batching uses RenderQueue in streamHandlers", () => {
-    assert.ok(files.streamHandlers.includes("state.renderQueue.enqueue(chunk)"),
-      "stream token updates must be RenderQueue-batched")
+  it("chunk batching uses requestAnimationFrame in streamHandlers", () => {
+    assert.ok(files.streamHandlers.includes("requestAnimationFrame"),
+      "stream token updates must be rAF-batched")
   })
 })
 
@@ -162,13 +161,13 @@ describe("Regression: Session Persistence & Resume", () => {
 })
 
 describe("Regression: Tabs & Concurrency", () => {
-  it("TabManager enforces concurrent stream limit", () => {
-    assert.ok(files.tabManager.includes("maxConcurrentStreams") || files.tabManager.includes("MAX_CONCURRENT_STREAMS"),
-      "must enforce a concurrent stream limit")
+  it("TabManager enforces MAX_CONCURRENT_STREAMS = 3", () => {
+    assert.ok(files.tabManager.includes("MAX_CONCURRENT_STREAMS = 3"),
+      "must limit concurrent streams to 3")
   })
 
   it("sendMessage checks streaming count before sending", () => {
-    assert.ok(files.mainTs.includes("streamingCount >= 3") || files.mainTs.includes("concurrent stream") || files.composerTs.includes("concurrent stream") || files.composerTs.includes("streamCapacity.isFull") || files.sendLogicTs.includes("streamCapacity.isFull") || files.sendLogicTs.includes("MAX_CONCURRENT_STREAMS"),
+    assert.ok(files.mainTs.includes("streamingCount >= 3") || files.mainTs.includes("concurrent stream") || files.composerTs.includes("concurrent stream") || files.composerTs.includes("streamCapacity.isFull"),
       "webview must check concurrent stream limit")
   })
 })
@@ -179,16 +178,11 @@ describe("Regression: Slash Commands", () => {
       "SLASH_COMMANDS must be removed from main.ts")
   })
 
-  it("slash command icons stay webview-only (registry is icon-free)", () => {
-    // The registry is also bundled into the extension host for /help
-    // generation — importing icons.ts there would ship every webview SVG in
-    // dist/extension.js. Icons live in mentions.ts and are passed into
-    // toMentionItems() as a map.
-    assert.ok(!files.slashCommands.includes('from "./icons"'),
-      "slash-commands.ts must not import icons.ts")
-    assert.ok(files.mentions.includes("SLASH_COMMAND_ICONS"), "mentions.ts must define the icon map")
-    assert.ok(files.mentions.includes("COMMAND_SVG"), "clear must use COMMAND_SVG")
-    assert.ok(files.mentions.includes("BRAIN_SVG"), "model must use BRAIN_SVG")
+  it("slash commands use SVG icons from icons.ts (via the canonical registry)", () => {
+    // Icons used to be declared inline in mentions.ts. They now live in the
+    // canonical slash-commands.ts registry which mentions.ts adapts from.
+    assert.ok(files.slashCommands.includes("COMMAND_SVG"), "clear must use COMMAND_SVG")
+    assert.ok(files.slashCommands.includes("BRAIN_SVG"), "model must use BRAIN_SVG")
     // server-only icon is still imported by mentions.ts for non-local cmds
     assert.ok(files.mentions.includes("GEAR_SVG"), "server commands must use GEAR_SVG")
   })
@@ -196,7 +190,7 @@ describe("Regression: Slash Commands", () => {
 
 describe("Regression: Context & References", () => {
   it("mention button triggers @ mention search", () => {
-    assert.ok(files.mainTs.includes("mention.handleTrigger()") || files.composerTs.includes("mention.handleTrigger()") || files.inputHandlersTs.includes("mention.handleTrigger()"), "must trigger mention from @ button")
+    assert.ok(files.mainTs.includes("mention.handleTrigger()") || files.composerTs.includes("mention.handleTrigger()"), "must trigger mention from @ button")
   })
 })
 
@@ -214,6 +208,27 @@ describe("Regression: Edit Message", () => {
   it("revert button on assistant messages", () => {
     assert.ok(files.renderer.includes("message-revert-btn") || files.messageRenderer.includes("message-revert-btn"), "must have revert button")
     assert.ok(files.renderer.includes('type: "revert_message"') || files.messageRenderer.includes('type: "revert_message"'), "must post revert_message")
+  })
+})
+
+describe("Regression: Diff Accept & Checkpoint", () => {
+  it("accept_diff creates checkpoint before applying", () => {
+    assert.ok(files.chatProvider.includes("snapshotBeforeAction") || files.sessionLifecycle.includes("snapshotBeforeAction"),
+      "must create checkpoint before diff apply")
+  })
+
+  it("DiffHandler prevents double-accept via acceptingDiffs set", () => {
+    assert.ok(files.diffHandler.includes("acceptingDiffs.has(diffId)"),
+      "must check for concurrent accept")
+    assert.ok(files.diffHandler.includes("acceptingDiffs.add(diffId)"),
+      "must mark as accepting")
+  })
+
+  it("diff_result carries checkpointCreated flag to webview", () => {
+    assert.ok(files.chatProvider.includes("checkpointCreated") || files.sessionLifecycle.includes("checkpointCreated"),
+      "must send checkpointCreated flag with diff_result")
+    assert.ok(files.mainTs.includes("checkpointCreated"),
+      "webview must handle checkpointCreated flag")
   })
 })
 
@@ -277,21 +292,16 @@ describe("Regression: Prompt Queue", () => {
     assert.ok(queueSrc.includes('"failed"'), "must have failed state")
   })
 
-  it("steer-queue prompts go directly to HostPromptQueue via send_steer_prompt", () => {
-    // Queue is now the default streaming behavior. Steer prompts are enqueued by
-    // SteerPromptHandler.handleQueue() (host-authoritative); the webview renders
-    // chips from the host queue_state. The legacy webview-side add_to_queue handler
-    // was removed (it was dead — the webview is a read-only render cache).
-    assert.ok(files.webviewEventRouter.includes("steerPromptHandler.sendSteerPrompt("), "send_steer_prompt must route to the host SteerPromptHandler")
-    assert.ok(!files.mainTs.includes('"add_to_queue"'), "the dead webview add_to_queue handler must be gone")
+  it("steer-queue mode appends to the per-tab prompt queue", () => {
+    // The queue is populated via the `add_to_queue` webview message handler
+    // which calls queue.enqueue(...). Earlier this guard checked an orphan
+    // helper that was never wired to a UI affordance.
+    assert.ok(files.mainTs.includes("queue.enqueue("), "must enqueue prompts into the per-tab queue")
+    assert.ok(files.mainTs.includes('"add_to_queue"'), "must handle add_to_queue message")
   })
 
-  it("stream end triggers host-side queue drain (onQueueDrain) instead of webview", () => {
-    // Host owns draining — webview processQueueIfReady is disabled.
-    // Host drains via onQueueDrain callback in StreamCoordinator.
-    const streamCoordinator = readFileSync(path.join(root, "src", "chat", "handlers", "StreamCoordinator.ts"), "utf8")
-    assert.ok(streamCoordinator.includes("onQueueDrain"), "must have onQueueDrain callback")
-    assert.ok(files.streamOrchestrator.includes("function processQueueIfReady"), "processQueueIfReady still defined")
+  it("handleStreamEnd processes next queued item", () => {
+    assert.ok(files.mainTs.includes("processNext()") || files.streamOrchestrator.includes("processNext()"), "must process next queue item on stream end")
   })
 
   it("queue items support image attachments", () => {

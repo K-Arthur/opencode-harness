@@ -2,28 +2,13 @@
 
 # OpenCode Harness — Project Constitution
 
-## ⚠️ Working Tree Is Ephemeral — Commit To Preserve Work
-An external checkpoint process (opencode `oc-ckp-*` checkpoints + other agent
-harnesses) periodically runs `git stash` / `git reset → HEAD` in this workspace,
-**discarding all uncommitted changes** (they land in `git stash list`, not the
-tree — see the recurring `reset: moving to HEAD` in `git reflog`). Only commits
-survive. Therefore, every agent/model and human MUST:
-1. **Commit completed, verified work before yielding the turn** — never leave
-   finished work uncommitted; prefer small, frequent commits.
-2. **Never** run `git reset --hard`, `git checkout -- <live edits>`, or
-   `git stash` against the working tree.
-3. If edits vanished, recover from `git stash list` (`git checkout "stash@{0}" -- <files>`).
-4. Rebuild/reinstall the extension only via `npm run reinstall` (see
-   `docs/development/rebuild-and-reinstall.md`) — never hand-install a same-version
-   `.vsix` (it ships a stale build).
-
 ## Identity
 - **Project**: OpenCode Harness — VS Code extension integrating opencode AI agent
 - **Type**: VS Code extension (library/package for VS Code marketplace)
 - **Runtime**: TypeScript / Node.js with VS Code Extension API ^1.98.0
 - **Server**: Client to opencode HTTP server (localhost:4096) via @opencode-ai/sdk
-- **Version**: 0.4.48
-- **Status**: Production audit complete — typecheck clean, full unit suite green (tsx 4237 + mjs 1004 passing, 0 failing), noUncheckedIndexedAccess enforced
+- **Version**: 0.2.17
+- **Status**: Production audit complete — typecheck clean, 2104 unit tests (2097 passing, 7 skipped), 14 Playwright E2E tests, 0 failing, noUncheckedIndexedAccess enforced
 
 ## Hardening Milestone (2026-05-04)
 - Full production-readiness audit completed: **151 issues identified across 5 phases**
@@ -54,23 +39,11 @@ survive. Therefore, every agent/model and human MUST:
 11. **Pure functions**: Domain logic, validation, transformations = pure. Side effects at edges.
 12. **Immutability by default**: `const` over `let`, `readonly` on properties.
 
-### Code Quality Gates (2026-06-25 triage)
-Before editing any hotspot file, confirm you do not regress complexity or add deps:
-- `src/chat/webview/main.ts` — 84 deps, I=1.0, 3 top-5 hotspots. Extract to new modules, never add imports.
-- `src/chat/webview/toolCallRenderer.ts` — `createToolResultPanel` (cc=105). Extract sub-functions, never add branches.
-- `src/chat/webview/messageRenderer.ts` — `renderMessage` (cc=90). Extract, don't enlarge.
-- `src/chat/webview/streamOrchestrator.ts` — `createStreamOrchestrator` (cc=102), I=0.875.
-- `src/chat/handlers/StreamCoordinator.ts` — Ce=31, I=0.816. Inject deps, don't import.
-
-Pre-commit self-check: `get_repo_health` → confirm `cycle_count` ≤ current, `avg_complexity` not regressed.
-
 ### Testing
 13. **Coverage**: ≥80% overall, ≥90% new/changed code, ≥65% mutation score (MSI).
 14. **TDD gates**: `test:` commit before `feat:` commit. Red phase evidence required.
 15. **Test naming**: `rejects_expired_tokens` not `test_auth`. One behavior per test.
 16. **Property-based**: Add fast-check tests for pure functions with wide input ranges.
-17. **Webview E2E coupling**: Any DOM or message-contract change in `src/chat/webview/` must include the matching `tests/webview/` update. Run the relevant project before committing (`--project=chromium-webview` for webview, `--project=chromium` for visual). Do not commit source-only UI changes.
-18. **Preserve test fixes**: the checkpoint process discards uncommitted changes. A test fix that is not committed is a regression that will come back. Commit green tests immediately.
 
 ### Security
 17. **Zero secrets in code**: API keys, tokens → environment variables only.
@@ -107,100 +80,3 @@ Pre-commit self-check: `get_repo_health` → confirm `cycle_count` ≤ current, 
 - PRD: docs/PRD.md
 - ADRs: docs/adrs/
 - Standards: .opencode/standards/
-
-
-## Code Exploration Policy
-
-Always use jCodemunch-MCP tools for code navigation. Never fall back to Read, Grep, Glob, or Bash for code exploration.
-**Exception:** Use `Read` when you need to edit a file — the agent harness requires a `Read` before `Edit`/`Write` will succeed. Use jCodemunch tools to *find and understand* code, then `Read` only the specific file you're about to modify.
-
-**Start any session:**
-1. `resolve_repo { "path": "." }` — confirm the project is indexed. If not: `index_folder { "path": "." }`
-2. `suggest_queries` — when the repo is unfamiliar
-
-**Finding code:**
-- symbol by name → `search_symbols` (add `kind=`, `language=`, `file_pattern=`, `decorator=` to narrow)
-- decorator-aware queries → `search_symbols(decorator="X")` to find symbols with a specific decorator (e.g. `@property`, `@route`); combine with set-difference to find symbols *lacking* a decorator (e.g. "which endpoints lack CSRF protection?")
-- string, comment, config value → `search_text` (supports regex, `context_lines`)
-- database columns (dbt/SQLMesh) → `search_columns`
-
-**Reading code:**
-- before opening any file → `get_file_outline` first
-- one or more symbols → `get_symbol_source` (single ID → flat object; array → batch)
-- symbol + its imports → `get_context_bundle`
-- specific line range only → `get_file_content` (last resort)
-
-**Repo structure:**
-- `get_repo_outline` → dirs, languages, symbol counts
-- `get_file_tree` → file layout, filter with `path_prefix`
-
-**Relationships & impact:**
-- what imports this file → `find_importers`
-- where is this name used → `find_references`
-- is this identifier used anywhere → `check_references`
-- file dependency graph → `get_dependency_graph`
-- what breaks if I change X → `get_blast_radius`
-- what symbols actually changed since last commit → `get_changed_symbols`
-- find unreachable/dead code → `find_dead_code`
-- class hierarchy → `get_class_hierarchy`
-
-## Session-Aware Routing
-
-**Opening move for any task:**
-1. `plan_turn { "repo": "...", "query": "your task description", "model": "<your-model-id>" }` — get confidence + recommended files; the `model` parameter narrows the exposed tool list to match your capabilities at zero extra requests.
-2. Obey the confidence level:
-   - `high` → go directly to recommended symbols, max 2 supplementary reads
-   - `medium` → explore recommended files, max 5 supplementary reads
-   - `low` → the feature likely doesn't exist. Report the gap to the user. Do NOT search further hoping to find it.
-
-**Interpreting search results:**
-- If `search_symbols` returns `negative_evidence` with `verdict: "no_implementation_found"`:
-  - Do NOT re-search with different terms hoping to find it
-  - Do NOT assume a related file (e.g. auth middleware) implements the missing feature (e.g. CSRF)
-  - DO report: "No existing implementation found for X. This would need to be created."
-  - DO check `related_existing` files — they show what's nearby, not what exists
-- If `verdict: "low_confidence_matches"`: examine the matches critically before assuming they implement the feature
-
-**After editing files:**
-- If PostToolUse hooks are installed (Claude Code only), edited files are auto-reindexed
-- Otherwise, call `register_edit` with edited file paths to invalidate caches and keep the index fresh
-- For bulk edits (5+ files), always use `register_edit` with all paths to batch-invalidate
-
-**Token efficiency:**
-- If `_meta` contains `budget_warning`: stop exploring and work with what you have
-- If `auto_compacted: true` appears: results were automatically compressed due to turn budget
-- Use `get_session_context` to check what you've already read — avoid re-reading the same files
-
-## Model-Driven Tool Tiering
-
-Your jcodemunch-mcp server narrows the exposed tool list based on the model you are running as. To avoid wasting requests on primitives when a composite would do, always include `model="<your-model-id>"` in your opening `plan_turn` call.
-
-Replace `<your-model-id>` with your active model:
-- Claude Opus variants → `claude-opus-4-7` (or any `claude-opus-*`)
-- Claude Sonnet variants → `claude-sonnet-4-6`
-- Claude Haiku variants → `claude-haiku-4-5`
-- GPT-4o / GPT-5 / o1 / Llama → use the model id as printed by your runner
-
-The `model=` parameter rides on the existing `plan_turn` call — it does **not** add a separate tool invocation. If `plan_turn` is not appropriate for a non-code task, call `announce_model(model="...")` once instead.
-
-## Agent skills
-
-### Issue tracker
-
-GitHub Issues in `K-Arthur/opencode-harness`. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Default canonical names. See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Single-context repo. See `docs/agents/domain.md`.
-
-## UI Methodology Standards
-
-All webview UI work must follow the standards in
-[`CONVENTIONS.md` § UI Methodology Standards](CONVENTIONS.md#ui-methodology-standards):
-design-system tokens first, zero emoji policy (SVG icons only from `icons.ts`),
-WCAG 2.2 AA minimum, icon usage standards, TDD-first, and cascade review
-checkpoints.

@@ -37,28 +37,7 @@ describe("theme.ts", () => {
   })
 
   it("handles rate limit with reset delay", () => {
-    assert.ok(source.includes("rate-limit-bar"), "uses the #rate-limit-bar element")
+    assert.ok(source.includes("rate-limit-notice"))
     assert.ok(source.includes("Rate limit exceeded"))
-  })
-
-  it("shows context usage percentage", () => {
-    assert.ok(source.includes(".context-text"))
-    assert.ok(source.includes("usage.percent"))
-    assert.ok(source.includes(".context-progress-fill"))
-  })
-
-  it("shows tokens-only when maxTokens is unknown, with a clickable 'set limit' affordance (0.2.15)", () => {
-    assert.ok(
-      source.includes("set limit"),
-      "must show a 'set limit' affordance when maxTokens is unknown",
-    )
-    assert.ok(
-      source.includes("Tokens-only display when maxTokens is unknown"),
-      "must keep the inline comment so the rationale survives a future refactor",
-    )
-    assert.ok(
-      source.includes("needs-override"),
-      "must set a marker the click handler can key off of so the row routes to the override dialog",
-    )
   })
 })

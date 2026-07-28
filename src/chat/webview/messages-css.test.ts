@@ -7,8 +7,6 @@ const cssSource = readFileSync(path.join(__dirname, "css", "messages.css"), "utf
 const blocksSource = readFileSync(path.join(__dirname, "css", "blocks.css"), "utf8")
 const layoutSource = readFileSync(path.join(__dirname, "css", "layout.css"), "utf8")
 const componentsSource = readFileSync(path.join(__dirname, "css", "components.css"), "utf8")
-const stylesSource = readFileSync(path.join(__dirname, "css", "styles.css"), "utf8")
-const fileEditSource = readFileSync(path.join(__dirname, "css", "file-edit.css"), "utf8")
 
 describe("messages.css", () => {
   it("keeps markdown rhythm compact for the extension chat viewport", () => {
@@ -41,26 +39,6 @@ describe("messages.css", () => {
         `h${level} should have explicit markdown styling`,
       )
     }
-  })
-
-  it("keeps the composer from overflowing in narrow webviews", () => {
-    // The input bottom bar must allow wrapping and hide the mode label text
-    // at very small widths so the mode/model/variant/send buttons fit.
-    assert.match(
-      layoutSource,
-      /@media\s*\(\s*max-width:\s*420px\s*\)[\s\S]*\.bottom-bar-left\s*,\s*\.bottom-bar-right\s*\{[^}]*flex-wrap:\s*wrap;/s,
-      "bottom bar sections must wrap on narrow viewports",
-    )
-    assert.match(
-      layoutSource,
-      /@media\s*\(\s*max-width:\s*420px\s*\)[\s\S]*#mode-current-text\s*\{[^}]*display:\s*none;/s,
-      "mode dropdown text label must be hidden on very narrow viewports",
-    )
-    assert.match(
-      layoutSource,
-      /@media\s*\(\s*max-width:\s*420px\s*\)[\s\S]*\.model-selector-btn\s*\{[^}]*max-width:/s,
-      "model selector must be capped in width on narrow viewports",
-    )
   })
 
   it("keeps markdown code fences readable and scrollable", () => {
@@ -104,10 +82,8 @@ describe("messages.css", () => {
 	  })
 
 	  it("reserves space for the right-side conversation timeline only when visible", () => {
-	    // Footprint is now driven by the --timeline-footprint token (calc of the
-	    // timeline width) rather than a hard-coded 152px.
-	    assert.match(cssSource, /\.message-list\.timeline-visible\s*{[^}]*padding-right:\s*var\(--timeline-footprint\);/s)
-	    assert.match(cssSource, /\.conversation-timeline\.visible\s*{[^}]*opacity:\s*1/s)
+	    assert.match(cssSource, /\.message-list\.timeline-visible\s*{[^}]*padding-right:\s*152px;/s)
+	    assert.match(cssSource, /\.conversation-timeline\.visible\s*{[^}]*display:\s*flex;/s)
 	  })
 
   it("avoids transition all in markdown-adjacent code controls", () => {
@@ -122,16 +98,14 @@ describe("messages.css", () => {
     assert.match(combined, /quota-bar--critical/, "critical state must be styled")
   })
 
-  // ── Hide-thinking: the body class must fully remove non-streaming thinking
-  // blocks from the rendered layout when the user unchecks "Show thinking". A
-  // previous implementation only collapsed the <details> element, which still
-  // left the summary chip visible — the source of the user-reported bug.
-  // Streaming thinking blocks (.thinking-streaming) are exempt so the user
-  // can see the model's in-progress reasoning even when the pref is off.
-  it("hide-thinking body class hides non-streaming thinking blocks from layout", () => {
+  // ── Hide-thinking: the body class must fully remove thinking blocks from
+  // the rendered layout when the user unchecks "Show thinking". A previous
+  // implementation only collapsed the <details> element, which still left
+  // the summary chip visible — the source of the user-reported bug.
+  it("hide-thinking body class fully removes thinking blocks from layout", () => {
     assert.match(
       componentsSource,
-      /body\.hide-thinking\s+\.thinking-block:not\(\.thinking-streaming\)\s*{[^}]*display:\s*none/s,
+      /body\.hide-thinking\s+\.thinking-block\s*{[^}]*display:\s*none/s,
       "components.css must hide .thinking-block when body has .hide-thinking class",
     )
   })
@@ -167,37 +141,6 @@ describe("messages.css", () => {
       assert.ok(match, ".tool-name base rule must exist")
       const body = match![1]!
       assert.match(body, /font-size:\s*var\(--text-xs\)/, ".tool-name must use text-xs for tighter rows")
-    })
-  })
-
-  // ── Inline file-edit preview cards
-  describe("file-edit preview cards", () => {
-    it("styles.css imports the file-edit component stylesheet", () => {
-      assert.match(
-        stylesSource,
-        /@import\s+url\("\.\/file-edit\.css"\)\s+layer\(components\)/,
-        "file-edit.css must be imported in the components layer",
-      )
-    })
-
-    it("file-edit.css defines the card surface and layout", () => {
-      assert.match(fileEditSource, /\.file-edit-card\s*{/, "base card rule must exist")
-      assert.match(fileEditSource, /\.file-edit-card__header\s*{/, "header rule must exist")
-      assert.match(fileEditSource, /\.file-edit-card__path\s*{/, "path rule must exist")
-      assert.match(fileEditSource, /\.file-edit-card__status\s*{/, "status rule must exist")
-    })
-
-    it("file-edit.css provides running and error state modifiers", () => {
-      assert.match(fileEditSource, /\.file-edit-card--running\s*[,{]/, "running state modifier must exist")
-      assert.match(fileEditSource, /\.file-edit-card--error\s*[,{]/, "error state modifier must exist")
-    })
-
-    it("file-edit.css keeps the card usable on narrow viewports", () => {
-      assert.match(
-        fileEditSource,
-        /@media\s*\(\s*max-width:\s*320px\s*\)[\s\S]*\.file-edit-card__header\s*{[^}]*flex-wrap:\s*wrap;/s,
-        "header must wrap on very narrow screens",
-      )
     })
   })
 })

@@ -1,10 +1,5 @@
 # Tech Spec: OpenCode Harness
 
-> **Status:** Independent, unofficial, beta. This extension is **not developed
-> by, affiliated with, or endorsed by the OpenCode team.** It is a
-> community-built VS Code client for the opencode CLI agent. See
-> [`limitations.md`](limitations.md) for SDK constraints and beta status.
-
 ## Overview
 OpenCode Harness is a VS Code extension that integrates the opencode AI coding agent into the editor. It follows a Client-Server model where the extension acts as a client to the opencode HTTP server, communicating via the `@opencode-ai/sdk` package using REST API calls and SSE event streams.
 
@@ -62,12 +57,11 @@ OpenCode Harness is a VS Code extension that integrates the opencode AI coding a
 - **Framework**: VS Code Extension API (^1.98.0)
 - **SDK**: @opencode-ai/sdk (official opencode SDK)
 - **UI**: Webview (HTML/CSS/TypeScript embedded in VS Code extension)
-- **Testing**: Playwright (E2E), Node.js built-in test runner (unit + behavioral), Mocha (integration via vscode-test). `npm test` runs `'tests/unit/*.test.mjs'` (64 MJS files, ~1205 tests), `'src/**/*.test.ts'` (303 TS files, ~4280 tests — single-quoted so Node 26 handles `**` recursion; unquoted shell expansion would silently skip `src/chat/handlers/`, `src/chat/webview/` etc.), `'tests/unit/*.test.ts'` (5 TS behavioral files), `tests/webview/message-contract.test.ts`, and `tests/integration/message-roundtrip.test.mjs`.
+- **Testing**: Playwright (E2E), Node.js built-in test runner (unit + behavioral), Mocha (integration via vscode-test)
 - **Build**: esbuild, npm
 - **Password/security**: Auto-generated `OPENCODE_SERVER_PASSWORD` per local server session, HTTP Basic auth via SDK client headers, environment allowlist for child processes
 
 ### Data Flow
-0. On activation → `ensureOpencodeAndStart` checks the opencode CLI is present (`OpencodeInstaller`). If missing and not in remote-attach mode, it installs per the `opencode.autoInstall` setting (prompt-once by default) before starting the server. See ADR `docs/adrs/2026-05-31-cli-auto-install.md`.
 1. User opens chat panel → Extension activates ChatProvider with TabManager
 2. First chat open → Extension starts opencode server (`opencode serve`)
 3. User sends message in webview → MessageRouter routes to appropriate handler
@@ -80,9 +74,9 @@ OpenCode Harness is a VS Code extension that integrates the opencode AI coding a
 
 SSE events are dispatched to tabs via the `event.sessionID → tab` mapping maintained in `TabManager.cliSessionIndex`. Because the opencode server may emit events for a new session **before** the extension's `await session.create(...)` resolves and `setCliSessionId` runs, `ChatProvider.handleServerEvent` buffers events whose target mapping has not yet been registered:
 
-- **Buffer**: `src/chat/PendingEventBuffer.ts` — per-`cliSessionId` FIFO queue, 10-second TTL, 200-event-per-session cap. An `expiredSessions` denylist silently discards new events for sessions whose TTL already expired without a tab mapping, preventing repeated buffer/drop cycles for grandchild or orphan sessions. `drain()` clears the denylist so a later-discovered session can buffer again.
+- **Buffer**: `src/chat/PendingEventBuffer.ts` — per-`cliSessionId` FIFO queue, 5-second TTL, 200-event-per-session cap.
 - **Replay trigger**: `TabManager.onCliSessionIdRegistered` fires when `setCliSessionId(tabId, cliSessionId)` succeeds; `ChatProvider` drains the buffer for that session and replays each event through the regular handler dispatch.
-- **Expiry**: events that age past the TTL are dropped and a single warn-level log line is emitted per session, citing the dropped count. Future events for that session are silently discarded (denylist).
+- **Expiry**: events that age past the TTL are dropped and a single warn-level log line is emitted per session, citing the dropped count.
 - **Diagnostics**: `TabManager.setCliSessionId` logs at `error` level if the tabId is unknown — making the rare "mapping lost" case visible in the output channel.
 
 See `docs/adrs/ADR-009-pending-event-buffer.md` for the full motivation and alternatives.
@@ -90,110 +84,6 @@ See `docs/adrs/ADR-009-pending-event-buffer.md` for the full motivation and alte
 ### Backfill Retry Bound
 
 `ChatProvider.backfillRecoveredSessions` uses a 4-step exponential backoff (`BACKFILL_RETRY_DELAYS_MS = [1500, 4000, 8000, 16000]`) when the opencode server returns an empty messages array on `session.messages()`. After the last attempt, `SessionStore.clearNeedsBackfill(sessionId)` is called for any session that is still empty, so subsequent `sessions_recovered` events stop re-trying and stop spamming "Empty response …" log lines. The session is treated as genuinely empty on the server.
-
-### Session/Tab Attribution Races (Fixed, 2026-06-16)
-
-Two related multi-tab attribution bugs, both rooted in a message lacking an explicit session id and a fallback path silently defaulting to "whichever tab is active right now":
-
-- **Question-bar cross-tab bleed**: live-stream question blocks are built before `handleStreamStart` stamps a `sessionId` on the streaming `ChatMessage`, so `block.sessionId` is always empty at the point `onQuestionBlock` fires. `main.ts` called `questionBar.addQuestion(block, messageId)` with no third `sid` argument, so `addQuestion`'s fallback chain (`block.sessionId || envelopeSessionId || _activeSessionId`) landed on `_activeSessionId` — silently misattributing a background tab's question to whichever tab the user currently had open. The same gap existed in `questionBar.repopulateFromMessages`, which runs on tab switch *before* `setActiveSession(tabId)` updates `_activeSessionId` for the new tab. Fix: both call sites now pass the already-in-scope tab/session id as `addQuestion`'s third argument. Tests: `questionBar.session.test.ts`, `toolLifecycle.test.ts`.
-- **Tab-switch echo causing visible snap-back**: `WebviewEventRouter`'s `switch_tab` handler called `sessionStore.setActive(sessionId)` unconditionally, which always broadcasts `active_session_changed` back to the webview — but the webview had already applied the switch locally before sending `switch_tab`, making this a pure echo. Under rapid switching, a stale echo for an earlier switch could arrive after the user had moved to a third tab, forcing a visible snap back to the superseded tab. Fix: `SessionStore.setActive(id, opts?: { silent?: boolean })` skips the `_onActiveSessionChanged` broadcast when `silent: true`; the `switch_tab` handler now passes it. Tests: `SessionStore.test.ts`, `WebviewEventRouter.test.ts`.
-- **Permission-bar cross-tab bleed**: `permission_request` rendered the shared `#permission-bar` unconditionally for whatever `sid` the host sent, with no check against the tab actually in view. A permission raised by a background tab's tool call would pop up over the focused tab, and clicking Allow/Always/Deny resolved the *background* tab's permission while appearing to belong to the viewed one; a second tab's request arriving later would silently overwrite the first tab's still-pending one, so switching back showed no bar and that tab's stream stayed stuck with no way to respond. Fix: a `pendingPermissionBySession` map (keyed by session id) tracks one pending request per session, mirroring the `_activeSessionId`/fallback-chain pattern already used by the question bar. `permission_request` always records into the map first, then bails out of rendering when `sid !== stateManager.getState().activeSessionId`. Two hoisted helpers, `renderPermissionBar(sid, req)` and `hidePermissionBar()`, factor out the previously-inline DOM/button construction so `switchTab` can call them too: it looks up `pendingPermissionBySession.get(tabId)` after applying the switch and either restores that tab's bar or hides it, so the bar never keeps showing a request that belongs to the tab just switched away from. The buttons' shared `respond(response)` closure (rather than three separate inline click handlers) calls `pendingPermissionBySession.delete(sid)` before hiding, so a resolved request can't be restored on a later switch. Tests: `main.test.ts` (`describe("permission bar — multi-tab session attribution")`); `renderer.test.ts`'s pre-existing once/always/reject coverage updated to assert against the `respond("once"|"always"|"reject")` call sites instead of literal `response: "once"` text now that the three handlers share one parameterized function.
-
-### Message Drop Prevention (Fixed, 2026-06-29)
-
-Three classes of silent message drops were identified from production logs and fixed:
-
-- **`workspace_files` oversized payload**: `HostMessageBatcher` enforces a 256KB `maxPayloadBytes` guard to prevent the webview's `postMessage` channel from stalling on large payloads. `workspace_files` messages for large workspaces can exceed 256KB, and the size guard silently dropped them — the webview never received the file list, breaking `@file:` mentions. Fix: added `workspace_files` to `IMMEDIATE_TYPES`, a set of message types that bypass the size guard because they are one-shot, low-frequency, and essential for webview functionality. Test: `HostMessageBatcher.test.ts`.
-- **`PendingEventBuffer` repeated drops**: child session events arriving before the `SubagentHeartbeat` discovers the child's tab mapping were buffered with a 10s TTL. When the TTL expired (grandchild or orphan sessions that never get a mapping), every subsequent event for that session was re-buffered and re-dropped, producing repeated warnings. Fix: an `expiredSessions` denylist in `PendingEventBuffer` silently discards new events for sessions whose TTL already expired. `drain()` clears the denylist so a session later discovered by the heartbeat can buffer again. Tests: `PendingEventBuffer.test.ts`.
-- **`run_activity_update` duplicate drops**: `StreamCoordinator.postRunActivitySnapshot` posted a `run_activity_update` message on every heartbeat, tool, and subagent event, even when the slim snapshot content hadn't changed. The `HostMessageBatcher`'s dedup guard (window=16) dropped the 17th identical message, producing duplicate-drop warnings. Fix: a JSON fingerprint dirty-check in `postRunActivitySnapshot` skips posting when the slim snapshot content hasn't changed since the last post. The fingerprint is cleared on `cleanupTab` to prevent stale state after tab reuse. Tests: `StreamCoordinator.test.ts`.
-
-### Question Bar Resurrection on Tab Switch (Fixed, 2026-06-29)
-
-`questionBar.repopulateFromMessages` re-added answered questions to the question bar from the session's persisted message list on every tab switch. This caused the bar to pop back up when the user closed it and returned to the tab — answered questions are already visible in the chat transcript, so the bar should only show interactive (unanswered) questions. Fix: `repopulateFromMessages` no longer re-adds answered questions; it only calls `setActiveSession` to filter the existing `state.items` to the active session. Tests: `questionBar.test.ts`, `questionBar.session.test.ts`.
-
-### Sessionless `file_edited` Cross-Session Contamination (Fixed, 2026-06-29)
-
-`ChatProvider.resolveSessionlessFileEditTab` attributed sessionless `file_edited` events (events with no `sessionId` from the server) to a uniquely streaming tab, or to the active tab when no tabs were streaming. When multiple sessions were streaming, the event was dropped unconditionally — losing file change tracking. The fix adds a middle path: when multiple sessions are streaming and the active tab is one of them, the event is attributed to the active tab. If the active tab isn't streaming, the event is dropped rather than guessed — attributing to a random streaming tab causes file changes from session A to appear in session B's dropdown. The webview's `changed-files-dropdown` is session-scoped by construction (`_currentSessionId` gates all rendering), so the contamination could only originate from the host sending the wrong `sessionId` in the `file_edited` message. Tests: `ChatProvider.test.ts`.
-
-### Stuck `maybeFinalizeStream` After Grace Timeout (Fixed, 2026-06-29)
-
-`ToolCallTracker.markUnresolvedPendingToolCalls` marked tools as "unresolved" in the `RunActivityTracker` after the 30s grace timeout, but didn't remove the tool IDs from `activeToolCallIds`. `StreamCoordinator.getFinalizeDeferReason` checks `activeToolCallIds` (not the tracker status), so it kept returning "1 tool call(s) still running" and `maybeFinalizeStream` deferred forever — the stream never finalized and the spinner stayed active. Fix: `markUnresolvedPendingToolCalls` now removes each unresolved tool ID from `activeToolCallIds` and deletes the map entry when the set is empty. Tests: `ToolCallTracker.test.ts`.
-
-### Finalize Deadlock & Message-Ordering Regressions (Fixed, 2026-07-02)
-
-Log-driven root causes for "generation stopping" / "output disappearing" reported on v0.4.43:
-
-- **Deadlock**: `runMaybeFinalizeStream`'s quiet-period defer returned a promise that resolves only when its timer fires; the timer called the public `maybeFinalizeStream`, which found that same still-pending promise in `finalizePromises` and chained onto it — circular wait, the stream never finalized, and every later trigger chained onto the dead promise. Fix: the timer calls the internal `runMaybeFinalizeStream` directly. Additionally, `cancelPendingStatusFinalize` now settles the deferred promise via `pendingStatusFinalizeResolvers` — a cancelled-but-unsettled defer left a permanently-pending entry in `finalizePromises` with the same stuck outcome. Tests: `StreamCoordinator.finalizeIntegrity.test.ts`.
-- **Ordering**: the opencode server's `session.messages` returns NEWEST-first when called with `limit` (SQL `orderBy desc`, unreversed) but oldest-first without. Position-based `[...messages].reverse().find(assistant)` therefore picked the OLDEST assistant in the limited window — the previous turn — and `fetchFinalBlocks` replaced just-streamed output with stale content at stream end. Fix: `pickLatestAssistant` (`src/chat/handlers/finalMessagePicker.ts`) selects by `info.time.created` with the id as tiebreak, independent of array order; used by `fetchFinalBlocks`, `reconcileAfterReconnect`, and `StreamTimeoutManager.probeActiveRun` (the latter two also moved to the O(1) `limit=5` fetch).
-- **Focus stealing**: `streamOrchestrator.handleStreamStart` force-switched the active tab to any session that started or replayed a stream. Now mirrors the `sessionFocus.ts` policy — switch only when nothing valid is in focus. Tests: `streamOrchestrator.test.ts`.
-
-### Queueing & Steering Robustness (2026-07-02)
-
-The prompt queue is host-authoritative: `HostPromptQueue` (persisted to `workspaceState`) is the source of truth; the webview's `PromptQueue` is a render cache synced via `queue_state`. Fixes to the contract:
-
-- **`send_queue_item` (Send Now)**: previously honored only the head item (`peek()` + id compare) and silently ignored others while the webview optimistically removed them — ghost sends on the next drain. Now: `HostPromptQueue.moveToFront(sessionId, id)` promotes the item (sending items stay anchored); busy tabs (streaming or `waitingForCompletion`) leave it queued as next-to-drain instead of failing against `reserveStreamSlotOrReject`; idle tabs dequeue + drain immediately. Every path posts `queue_state`. The webview no longer mutates locally on Send Now.
-- **Keyboard reorder**: Alt+Arrow/Home/End posted `fromIndex === toIndex` (computed after the local move) — host no-op, order reverted on next sync. Real indices now posted.
-- **`queue_state` rendering**: syncs every session's cache but renders only the active session (the queue container lives in the shared input area); the old empty-branch queried a non-existent `tab-panel-${sid}` id, leaving stale chips after drain.
-- **Paused queue resume**: queues only drain at stream end, so an idle session with queued items (post-abort with `drainAfterAbort=false`, or restored after reload) never drains. The hint now reads "N queued — paused" with a **Send next** button posting `resume_queue` (host handler pre-existed with no UI trigger).
-
-Tests: `HostPromptQueue.sendNow.test.ts` (behavioral), `queueRenderer.test.ts` (JSDOM behavioral).
-
-### Session Lifecycle State Integrity (Fixed, 2026-07-01)
-
-Six root causes behind "completed session shows as running" / "running session shows as done":
-
-- **Fix 1 — Activity-sequence guard**: Replaced the 1500ms quiet-period timer in `runMaybeFinalizeStream` (G5) with a microtask-based sequence check. `activitySeqs` tracks a per-tab counter bumped by every tool/step event; the sequence is captured before scheduling finalization, then re-checked in `queueMicrotask` — any interleaved activity atomically cancels the finalize. Eliminates the race where a tool event arrived at 1501ms and wrongly triggered completion.
-
-- **Fix 2 — pendingStream restoration**: `TabManager.captureStreamingSnapshot` now also captures tabs in the finalizing phase (`waitingForCompletion === true`, `isStreaming === false`) with `pendingStream: true`. On VS Code reload, `getPendingStreamTabs()` includes these tabs in the `reconcileAfterReconnect` candidate set so dropped `stream_end` events are re-emitted.
-
-- **Fix 3 — Finalizer chain**: When two finalize triggers fired concurrently, the second returned the same in-flight promise and its result was lost. Now the second trigger chains `.then()` on the existing promise and re-runs finalization if the first returned `false`.
-
-- **Fix 4 — EventDeduplicator**: TTL-based SSE event dedup (`EventDeduplicator`) that survives reconnects. Unlike `EventNormalizer` (reset on reconnect), the deduplicator is retained across reconnections to catch server-replayed event IDs.
-
-- **Fix 5 — Paginated final fetch**: Replaced `getSessionMessages` (full history, O(n)) with `getMessages(limit=5)` in `fetchFinalBlocks` — O(1) network cost regardless of session length.
-
-- **Fix 6 — Idle watchdog at 300s**: Raised from 90s to 300s (`IDLE_WATCHDOG_TIMEOUT_MS`) to accommodate DeepSeek-R1/Qwen-QwQ long reasoning silences that were triggering spurious reconnects.
-
-- **Fix 7 — Heartbeat fingerprint**: Replaced `JSON.stringify(slim)` with a field-level hash string (`runId§tools:id:status:updatedAt§subagents:id:status:updatedAt`) in `postRunActivitySnapshot` to avoid per-tick GC pressure.
-
-### Frontend Progression Tracking & Notifications (2026-07-01)
-
-- **Elapsed time ticker**: `handleStreamStart` sets `_elapsedStart` on the typing indicator DOM element and starts a 1s `setInterval` that updates a `.typing-elapsed` span (`• 12s`). `showTypingIndicator` appends the elapsed span whenever `_elapsedStart` is set; `hideTypingIndicator` clears the timer.
-- **`notifyTurnOutcome(sessionId, reason)`**: Replaces `notifyTurnComplete`. Fires `showInformationMessage` (success) or `showErrorMessage` (error/timeout) with the session name when the webview is hidden. Also posts a `generation_outcome` webview message for in-webview toasts.
-- **In-webview toast (`showGenerationToast`)**: Green 3-second auto-dismiss on success; red persistent toast with dismiss button on failure. Uses `--z-tooltip` z-index layer and design-system color tokens (`color-mix`). Only shown for the active session.
-
-### Sticky-Header Collision In Modals (Fixed, 2026-06-16)
-
-`.keyboard-shortcuts-content` set `overflow-y: auto` directly on the container holding *both* the modal header (title + close button) and the shortcuts `<table>`. `.keyboard-shortcuts-table thead th` is `position: sticky; top: 0`, which sticks relative to the nearest scrolling ancestor — the same container — so as the user scrolled, the modal header scrolled away while the sticky column-header row caught at the top of that same scroll box, overlapping the title and close button it had just displaced. Every other modal in this codebase (session history, API key) avoids this by structuring `.modal-content` as a non-scrolling `.modal-header` plus a separate `.modal-body` (`flex: 1; overflow-y: auto`) sibling that scrolls independently — the keyboard-shortcuts modal was the one place that skipped the `.modal-body` wrapper and let the header live inside the scroll box. Fix: `setupKeyboardShortcutsModal` now wraps the `<table>` in a `.modal-body` div, reusing the existing rule rather than adding new CSS; `.keyboard-shortcuts-content` keeps only its `max-width` override. Audited all five `position: sticky` usages in the webview CSS (`cf-summary-bar`, `#input-area`, `.model-dropdown-search-container`, `.diff-action-bar`, plus this one) — only the keyboard-shortcuts thead shared a scroll container with another element that itself needed to stay fixed; the rest are each the sole sticky element in their scroll box (sticky-first-item or sticky-bottom-bar patterns) and don't have this failure mode. Test: `keyboardShortcutsModal.test.ts` (`"keeps the header out of the scrolling body so it can't collide with the sticky table header"`).
-
-### Streaming Visual Polish (2026-06-16)
-
-The streaming-state indicators (assistant role dot, timeline-item dot, message bubble, typing dots, stream cursor, tab-bar indicator) were upgraded from flat opacity/color blinks to a cohesive glow-pulse treatment, reusing existing tokens rather than adding new ones:
-
-- `pulse-active` (shared by `.message.assistant.streaming .message-role::after` and `.timeline-item.streaming .timeline-item-role::after` in `messages.css`) now scales (`transform: scale`) and emits an expanding `box-shadow` ring between `--oc-accent-border` and `--oc-accent-glow`, instead of only changing opacity.
-- `.message.assistant.streaming .message-bubble` gained `bubble-stream-pulse`, an ambient box-shadow breathing alongside the pre-existing `border-left-color` shift.
-- `.typing-dots span` (`typing-bounce` keyframe, `animations.css`) now scales and fades in addition to translating, plus a static glow.
-- `.stream-cursor` and `.streaming-text::after` switched their blink timing function from `step-end` to `ease-in-out` (matches VS Code's native caret fade) and gained a small glow.
-- `streaming-pulse` (`animations.css`, drives `.tab-btn.streaming .tab-indicator` in `layout.css`) had a dead no-op `transform: scale(1)` at both keyframe stops; it now scales through 1.3 and emits a glow ring like the others.
-
-This is a "box-shadow ping ring" idiom with precedent already in this codebase (`subagent-highlight-pulse` in `blocks.css`, `message-flash` in `messages.css`) — chosen over adding DOM nodes/pseudo-rings because `box-shadow` keyframes are cheap at the size and concurrency this renders at (CLAUDE.md caps streaming to 3 concurrent tabs). `transform`/`opacity` changes remain compositor-only as before; only `box-shadow` adds paint cost, and only on already-animating elements.
-
-Every new `box-shadow`/`transform` declaration is covered by the existing `prefers-reduced-motion: reduce` and `forced-colors: active` rules in `accessibility.css`/`messages.css`/`layout.css`, extended (not replaced) per component. `question-bar.css` and the SVG-based premium spinner were deliberately left untouched — the former is an interactive control surface where heavy motion would compete with clickable affordances, the latter is already a separate, polished system.
-
-### Marketplace Icon Redesign (2026-06-16)
-
-`package.json`'s `icon` field (`media/opencode-icon-256.png`) is the asset rendered by the VS Code Marketplace and the Extensions view — distinct from `media/opencode-activity.svg` (the activity-bar icon, a deliberately simple monochrome `currentColor` SVG per VS Code convention) and from the in-product header logo in `src/chat/webview/index.html`. The previous PNG was a flat 1-bit-feeling black square with a plain white rectangular cutout, no gradient or depth, which read as visually undersized/plain relative to other Marketplace listings.
-
-The redesign keeps the exact brand silhouette (the frame-with-cutout shape, `d="M0 0h480v600H0V0zm120 120h240v360H120V120z"`, officially commented "OpenCode mark: single geometric O" in `media/opencode.svg` and reused verbatim by `media/opencode-activity.svg` and the webview header's `.oc-logo`) rather than introducing a new mark. The color story was corrected to match the project's actual established brand palette: `media/opencode-logo.svg` and `media/opencode-wordmark-dark.svg` render this same mark family in neutral warm-charcoal/off-white (`#4B4646`/`#B7B1B1`/`#F1ECEC`), not blue — an earlier draft of this icon used a `#0078d4`-family blue gradient (matching the webview's dynamic `--oc-accent` default, which is just VS Code's button-background token, not a fixed brand color) and was discarded in favor of the neutral palette for brand consistency.
-
-Implementation (`media/opencode-icon.svg`, rasterized to `media/opencode-icon-256.png` via `rsvg-convert`):
-- Full-bleed 256×256 canvas, warm-charcoal linear gradient background (`#3e3938` → `#151312`) — opaque, not transparent, so the icon supplies its own backdrop and renders identically regardless of surrounding light/dark chrome (verified by compositing over white, `#1e1e1e`, and light-gray backdrops).
-- A low-opacity radial "sheen" gradient in the top-left for a glassy highlight.
-- The brand mark scaled/centered (`transform: translate(56.4 38.5) scale(0.298333)` against the canonical 480×600 path) and filled with an off-white linear gradient (`#fcfafa` → `#cdc6c5`), matching the established wordmark tones.
-- The cutout is not a flat hole: a dark "well" gradient fills it, with an extra-dark semi-transparent strip at the top (simulating shadow cast by the frame's overhanging lip) and a thin bright highlight line at the very top inner edge (simulating light catching that edge) — drawn by layering rects before/after the evenodd frame path within the same transform, so the hole reveals depth instead of a flat color.
-- No new hues, no animation — depth comes entirely from gradients/shadow within the existing neutral palette, kept legible down to 32px (verified via nearest-neighbor upscale of a 32px render).
-
-`media/opencode-icon-96.png` and `media/opencode-apple-touch-icon.png` share the old flat style but are unreferenced anywhere in the codebase (confirmed via grep — only `opencode-icon-256.png` is wired up, through `package.json`); left untouched as out of scope for this change.
 
 ### Context And Token Usage Accounting
 
@@ -214,34 +104,6 @@ context indicator.
 `ContextMonitor.setTokenLimit(limit, sessionId?)` updates the denominator for the active
 session without emitting sessionless stale usage. If that session already has recorded context
 fill, the monitor re-emits the latest usage for that session with the new denominator.
-
-### Active File Tracking & Context Tray
-
-The extension tracks the user's active VS Code editor and surfaces it as context in the chat
-webview through a three-layer system:
-
-- **`ActiveFileTracker`** (`src/chat/ActiveFileTracker.ts`): Host-side tracker that listens to
-  `onDidChangeActiveTextEditor` and `onDidChangeTextEditorSelection`. Posts `active_file`
-  messages to the webview with path, languageId, lineCount, and selection info. When a
-  non-empty selection exists, `getActiveFileContent()` returns only the selected lines;
-  otherwise it returns the full file content. Manages per-session include/exclude state via
-  `handleToggleActiveFile()`, which resets when switching files.
-- **`WorkspaceFileIndex`** (`src/chat/WorkspaceFileIndex.ts`): Indexes workspace files via
-  `vscode.workspace.findFiles`, excluding `node_modules`. Watches file create/delete/rename
-  and posts `workspace_files` messages to the webview. Provides `asRelativePath()` for
-  resolving URIs to workspace-relative paths.
-- **`ContextTrayManager`** (`src/chat/webview/ui/contextTray.ts`): Webview-side manager for
-  all attached context items (`active_file`, `picked_file`, `image`, `document`). Provides
-  token estimation (768 tokens/image, ~chars/4 for text), a collapsible tray UI with item
-  chips and a token budget bar (128K budget), and `getAttachmentsForPayload()` which returns
-  only image/document items as `Attachment[]`.
-- **`AttachmentManager`** (`src/chat/webview/ui/attachments.ts`): Manages the active file
-  chip, toggle state, and selection info. `isActiveFileIncluded()` gates whether the active
-  file is injected into `send_prompt`. Dismissed files are excluded from the payload.
-
-The `send_prompt` message is enriched by `sendMessage.ts` when the active file is included:
-the text is prefixed with `@file:<path>` (quoted if the path contains spaces), and a
-`contextItems` array carries selection metadata for non-workspace file content injection.
 
 Token usage has two write modes:
 
@@ -285,9 +147,8 @@ The debug Extension Development Host must open the intended workspace folder. If
 - `DiffHandler` - Tracks and presents code diffs
 - `DiffApplier` - Previews diffs through read-only virtual documents and `vscode.diff`; applies accepted edits through `WorkspaceEdit`
 - `CheckpointManager` - Stores explicit file snapshots in extension storage and restores them through `workspace.fs`/`WorkspaceEdit` without changing git state
-- `SessionStore.addChangedFiles(sessionId, files)` - Canonical backend changed-file registration with path normalization, dedupe, stable order, and persistence. Stats entries now include optional `status` ("A"|"M"|"D").
-- `fileStatusClassifier` (`src/chat/diff/fileStatusClassifier.ts`) - Classifies changed files as Added/Modified/Deleted via `git status --porcelain` with before/after content inference fallback. Injectable I/O for unit-testability.
-- `changed_files_update` - Canonical frontend sync for the changed-files strip/dropdown. The host posts `{ type, sessionId, files: Array<{ path, added, removed, status?, isPlanDocument? }> }` after backend persistence; `file_edited` remains a compatibility incremental event. `workspace_file_added`/`workspace_file_deleted` are emitted as explicit signals for added/deleted files.
+- `SessionStore.addChangedFiles(sessionId, files)` - Canonical backend changed-file registration with path normalization, dedupe, stable order, and persistence
+- `changed_files_update` - Canonical frontend sync for the changed-files strip/dropdown. The host posts `{ type, sessionId, files: Array<{ path, added, removed }> }` after backend persistence; `file_edited` remains a compatibility incremental event.
 - `ContextMonitor` - Tracks context usage and provides optimization suggestions
 - `SkillManager` - Manages skill enablement and performance tracking
 - `SkillPreferencesStore` - Persists per-skill enable/disable preferences in `vscode.Memento` (`globalState`); consulted by `WebviewEventRouter.resolveAllSkills` for the modal and by the methodology advisor's skill hinter
@@ -298,9 +159,6 @@ The debug Extension Development Host must open the intended workspace folder. If
 ## Security & Compliance
 - Extension does NOT handle API keys directly (opencode server manages auth)
 - All communication is local (HTTP on localhost:4096)
-- Chat webviews use a nonce-based Content Security Policy with `default-src 'none'`, nonce-restricted scripts/styles, constrained image/font sources, and no frame/form/base navigation.
-- Remote server auth tokens are read from VS Code SecretStorage. Legacy plaintext settings are migrated and cleared.
-- Non-loopback remote server URLs must use HTTPS.
 - Extension gracefully degrades when server is unavailable
 - No telemetry/analytics without user consent
 - VS Code's built-in security model is used for webview sandboxing
@@ -320,18 +178,12 @@ The debug Extension Development Host must open the intended workspace folder. If
 The following features were audited against the opencode CLI and enhanced for the VS Code extension context:
 
 ### Theming
-- **Theme engine architecture**: `ThemeManager` delegates analysis, mutation, and webview sync to three subagent modules:
-  - `ThemeAnalyzer` — reads VS Code active color theme kind, resolves effective presets, checks market theme availability, and maps presets to VS Code workbench themes.
-  - `ThemeStateMutator` — deep-merges and resets OpenCode color/token overrides under the `workbench.colorCustomizations.opencodeHarness` namespace, preserving unrelated user settings and supporting workspace and global targets.
-  - `ThemeWebviewBridge` — listens for VS Code `onDidChangeActiveColorTheme` and `onDidChangeConfiguration` events and pushes live CSS variable updates to the chat webview.
 - **File watching**: `ThemeManager` watches `tui.json` and theme `.json` files via `createFileSystemWatcher`; auto-reloads on change.
 - **Quick-pick preset command**: `opencode-harness.previewTheme` opens a VS Code QuickPick with all 4 presets + discovered CLI themes and applies the selection live. Labeled "Quick-pick preset" in the settings menu to distinguish it from the in-webview modal.
-- **Personalized modal**: The settings menu "Customize theme" entry opens a webview theme customizer that sends `get_theme_config` / `update_theme_config`; `ChatProvider` validates and writes `opencode.theme`, then pushes refreshed CSS variables. The modal is organized into a default-open "Common" section, "Messages", "Syntax", "Diff", "Tools", "Markdown", and "Advanced" sections, each with paired `<input type="color">` pickers and text inputs. Color pickers display the current theme color when no override is set and update the live preview swatch as the user edits. Actions are **Cancel** (close without saving), **Restore defaults** (clear overrides), and **Apply** (save and close).
+- **Personalized modal**: The settings menu "Customize theme" entry opens a webview theme customizer that sends `get_theme_config` / `update_theme_config`; `ChatProvider` validates and writes `opencode.theme`, then pushes refreshed CSS variables. The modal supports 7 color override fields (accent, panel bg/fg, user message bg, input border, markdown heading, diff added bg) each with a paired `<input type="color">` picker synced bidirectionally with the text field. A **Preview** button applies the config without saving or closing. A **Reset overrides** button clears all overrides and restores preset defaults.
 - **CLI field parity**: `ThemeManager.FIELD_MAP` maps CLI fields for primary/secondary/accent, panel/editor/element backgrounds, active/subtle borders, semantic colors, syntax variables/punctuation, diff metadata/backgrounds/line numbers, and Markdown text/link/code/list/image fields.
-- **CSS variable cascade**: `ThemeManager.CSS_VAR_MAP` injects computed values into `:root` via a nonce-guarded `<style>` tag. `--bg-secondary` and `--bg-tertiary` are intentionally excluded from injection so that `tokens.css`'s `color-mix()` depth layering (96%/90% panel/fg blend) is preserved. `--bg-primary` and `--oc-glass-bg` continue to be injected. The map now includes `listHoverBg`, `buttonSecondaryBg`, `buttonSecondaryHover`, `buttonSecondaryFg`, `listActiveBg`, `listActiveFg`, and `userMessageBg` tokens for full coverage of list, button, and message-bubble surfaces.
-- **OC-token-primary cascade**: All CSS files use `var(--oc-*, var(--vscode-*))` ordering — OpenCode tokens are primary, VS Code native theme variables are fallbacks. This ensures the chat webview respects the selected OpenCode preset (light, dark, high-contrast) regardless of the VS Code workbench theme kind. Previously, many CSS rules used `--vscode-*` as primary, causing the webview to stay dark when the OpenCode preset was set to light.
+- **CSS variable cascade**: `ThemeManager.CSS_VAR_MAP` injects computed values into `:root` via a nonce-guarded `<style>` tag. `--bg-secondary` and `--bg-tertiary` are intentionally excluded from injection so that `tokens.css`'s `color-mix()` depth layering (96%/90% panel/fg blend) is preserved. `--bg-primary` and `--oc-glass-bg` continue to be injected.
 - **Light-theme correctness**: `tokens.css` `.vscode-light` block declares overrides for `--user-message-bg`, `--oc-user-msg-bg`, `--bg-code`, `--oc-tool-bg`, and all shadow tokens directly on `<body>`. Because CSS custom properties declared on `body` are inherited by all descendants, these light-theme values override any stale dark values that `ThemeManager` may have injected into `:root` — ensuring message bubbles and code blocks render correctly in light VS Code themes.
-- **Hybrid workbench toggle**: The `opencode.theme.switchWorkbenchTheme` setting (default `false`) controls whether switching the OpenCode chat preset also switches the VS Code workbench color theme. When enabled, `ThemeController.handleUpdateThemeConfig` calls `themeManager.activateTheme()` to apply the matching VS Code workbench theme. When disabled, only the chat webview appearance changes. A checkbox toggle in the theme customizer modal sends `update_switch_workbench_theme` messages to the host, which updates the setting via `ThemeController.handleSwitchWorkbenchTheme`.
 - **forced-colors**: `accessibility.css` uses `ButtonText`, `ButtonFace`, `CanvasText`, `Canvas`, `LinkText`, `GrayText` system color keywords.
 - **Settings schema**: `package.json` documents CLI-aligned overridable theme properties.
 
@@ -442,49 +294,29 @@ Welcome-page session search and pasted-image attachments share a webview-side co
 - **Legacy fallback**: `opencode.mcpServers` remains a fallback for older extension installs but does not override OpenCode config entries.
 - **Write target**: Add/update/remove/toggle operations write the primary OpenCode config file and create `{ "mcp": {} }` when the file does not exist.
 - **Remote MCP support**: MCP config rows accept command-based and URL-based server definitions; disabled state treats `disabled: true` and `enabled: false` consistently.
-- **Validation**: Server names, stdio commands, args, env, headers, remote URLs, `when` filters, and reported tool names are validated. Non-loopback remote MCP URLs must use HTTPS.
 - **Configuration schema**: `opencode.mcpServers` documents stdio, HTTP, and SSE fallback entries with `command`/`args`/`env` plus `url`/`headers` remote fields.
 
 ### Message Rendering & Timeline
 - **Guarded streaming finalization**: Tool-only interim completions defer finalization until active tools resolve or final text arrives, preventing late chunks from rendering outside their original message.
 - **Markdown normalization**: Chunk-sensitive list markers/headings are normalized before `markdown-it`; hard line breaks are disabled for standard chat Markdown rhythm.
 - **Conversation Timeline**: The header timeline toggle restores a right-side turn timeline with role previews, tool counts, active-turn tracking, and responsive padding only while visible.
-- **Timeline × lazy-loaded history (2026-06-10)**: long sessions render only the last page (`INITIAL_LOAD_COUNT=50`); the timeline lists ALL turns from `session.messages`. `more_messages` pages are inserted into `session.messages` (deduped by id) before rendering and the timeline refreshes immediately (no debounce). Clicking a turn whose message has no DOM node first expands condensed history groups, then posts `request_more_messages` (chased across at most 3 pages via `pendingTimelineScroll`) and scrolls once rendered — `scrollToTurn` returns a boolean so the silent no-op path is gone. Unloaded turns carry `timeline-item--unloaded` (dimmed) with a "Load earlier history and jump…" aria-label. A header-toolbar toggle (`#timeline-toggle-header-btn`) mirrors the settings-menu entry and Ctrl+Alt+T; `aria-pressed` stays in sync on both.
 - **Show-thinking toggle (visibility, not collapse)**: The settings-menu "Show thinking" item drives a `hide-thinking` body class. CSS hides every `.thinking-block` outright (`display: none`) — the previous implementation only flipped each `<details>` to closed, which left the summary chip in the layout. Per-block `<details>` state is still flipped for screen-reader / snapshot coherence. `setupThinkingToggle()` now also calls `toggleAllThinkingBlocks()` at boot so the persisted pref takes effect immediately rather than after a double-click.
 - **Codex-style compact tool blocks**: Tool calls render as one-line entries (`min-height: var(--size-target-min)` = 24 px) with no card border — only the existing left accent stripe survives so tool class is still color-coded at a glance. Expanded args / result panels keep their full styling when the user opens the `<details>`. This replaces the prior bordered-card treatment that produced a "wall of cards" for multi-tool turns.
-- **Tool group summary labels**: `groupSummary.ts` exports `buildGroupSummaryLabel(blocks)` which maps tool class names to user-readable action categories ("file read", "file edit", "command", "web search", etc.) and formats them as: "3 file reads, 1 command, 2 edits". Used by `renderToolGroup()` as the collapsed `<summary>` header.
-- **JSON viewer**: `jsonViewer.ts` renders object/array tool args as a collapsible DOM tree (up to `maxDepth=3` levels) with colored value types (string=green, number=blue, boolean/null=orange) and a Copy JSON toolbar button. In `createToolArgsPanel()`, a 10 KB size guard gates the tree: serialized JSON ≤10,240 bytes uses the tree; larger payloads fall back to truncated plain text to avoid DOM bloat on large file-write `content` arguments.
-- **Web search result renderer**: `webSearchRenderer.ts` exports `isWebSearchTool(block)` and `renderWebSearchResult(block)`. Detection covers websearch, web_search, webfetch, fetch, browse, tavily_search, serper_search, brave_search, and any name containing "search" or "fetch". Structured JSON arrays are rendered as domain+title+snippet cards (snippet truncated at 200 chars). `{ results: [...] }` and similar wrapper shapes are unwrapped. Unrecognized formats fall back to a `<pre>` with max 2000 chars.
-- **Write-class file action buttons**: `appendWriteToolActions()` in `toolCallRenderer.ts` reads the file-path arg and appends "Open", "Copy path", "Reveal in Explorer" buttons to write/edit tool summaries. "Reveal in Explorer" uses a new `reveal_in_explorer` webview message type added to the `WebviewMessage` union; validated in `WebviewMessageValidator`; handled in `WebviewEventRouter` via `vscode.commands.executeCommand("revealInExplorer", Uri.file(path))`.
-- **Host clipboard round-trip (`copy_text`, 2026-06-10)**: webviews frequently lack `navigator.clipboard`, so all copy actions (Commands tab "Copy"/"Copy output") post `{ type: "copy_text", text }` — validated (non-empty trimmed string) and handled in `WebviewEventRouter` via `vscode.env.clipboard.writeText` with a status-bar confirmation.
-- **Subagent session navigation (`open_subagent_session`, 2026-06-10)**: subagent cards and the detail view render an "Open session" action when the activity carries a child `sessionId`. The handler imports the server child session locally (`SessionStore.importOneServerSession`) and resumes it as a regular tab (`SessionLifecycleService.handleResumeSession`). Requires `childSessionId` (validated).
-- **Cumulative token contract (2026-06-10)**: `step_tokens` and the final `token_usage` fallback carry `cumulative` (host session `tokenUsage`) and `cumulativeCost`. The webview SETs these via `applyTokenUsageTotals()` (idempotent under replay); payloads without `cumulative` fall back to the legacy delta-accumulation path with the 30s dedup window. Host `SessionStore` is the canonical ledger — see `docs/adrs/2026-06-10-token-accounting-host-source-of-truth.md`.
-- **Error display humanization**: `handleStreamError` in `streamHandlers.ts` routes raw JSON error message strings through `mapOpencodeError()` before constructing an `ErrorContext`. `renderErrorBlock` in `renderer.ts` uses `humanizeErrorCode(code)` to convert SDK/transport codes (`QUOTA_EXCEEDED`, `RATE_LIMITED`, `stream_error`, etc.) to natural-language labels. Both Retry and Dismiss actions are always rendered regardless of the `retryable` flag.
-- **Thinking block sub-type classification**: `classifyThinkingContent(content)` in `renderer.ts` is a pure function that inspects the first 200 chars of thinking-block text for heuristic markers — numbered steps/Plan: → "Planning", I'll use/will call/tool: → "Tool selection", I need to/Let me think/Looking at → "Reasoning". The chip is rendered as a small `.thinking-subtype` span (per-type CSS color class) immediately after the "Thinking" label.
-- **Subagent keyboard navigation + aggregate stats**: `applyRovingTabindex(list)` in `subagent-panel.ts` establishes a roving tabindex pattern (ArrowUp/Down/Home/End) across `.subagent-item` elements. `renderAggregateStats(container, activities)` inserts a `role="status" aria-live="polite"` stats bar: "N subagents · M running · K done · Xs total". The list container carries `role="listbox"`, items carry `role="option"`.
-- **Semantic status CSS tokens**: `tokens.css` adds `--oc-status-running`, `--oc-status-success`, `--oc-status-error`, `--oc-status-warning`, `--oc-status-pending`, `--oc-status-cancelled`, and `--oc-surface-elevated` for consistent status and elevation coloring across the UI.
 
 ### Permission Modes (Feature 6 — Enhanced)
-- **3 modes**: Plan (planning agent + review-only policy), Build (build agent + standard approval flow), Auto (build agent + permission auto-approval after confirmation). Legacy `"normal"` webview payloads normalize to Build.
-- **Mode selector**: Webview header control with tooltips, ARIA labels, and `Ctrl/Cmd+Alt+1/2/3` shortcuts; disabled during streaming. The webview posts `change_mode` and waits for host `mode_change_result` before updating the visible mode.
-- **Plan mode enforcement**: Diffs show "Review" label; accept button becomes "Approve & Apply". Mutating permission requests are rejected except direct file mutations targeting `.opencode/plans/*.md`.
-- **Plan prose rendering**: Assistant prose that looks like a plan receives the `PROPOSED PLAN` treatment only when the session is in Plan mode. User messages are never formatted as proposed plans.
-- **Auto mode warning**: One-time confirmation with "Don't show again" persisted to `globalState` as `opencode.autoModeConfirmed`; warning close/confirm paths use the modal focus cleanup flow.
-- **Validation**: `change_mode` requires a known mode value and invalid/cancelled transitions return `mode_change_result` with the previous mode.
+- **3 modes**: Plan (review before apply), Auto (apply without asking), Normal (ask per action).
+- **Mode selector**: Button group in webview header; disabled during streaming; updates immediately.
+- **Plan mode enforcement**: Diffs show "Review" label; accept button becomes "Approve & Apply".
+- **Auto mode warning**: One-time confirmation with "Don't show again" persisted to `globalState`.
 
-### Prompt Queue (Feature 17 — Updated Phase 2)
-- **Host-authoritative FIFO queue**: `HostPromptQueue` (`src/chat/HostPromptQueue.ts`) is single source of truth, persisted to `workspaceState`. Webview `promptQueues` Map is a read-only render cache synced via `queue_state` messages.
-- **Queue states**: `queued → sending → completed | failed`. In-place dequeue: items stay in array with `state="sending"`, removed only on `confirmCompleted()`.
-- **Image attachment support**: `QueuedPrompt` includes `attachments: Attachment[]`; queued prompts preserve pasted images.
-- **Queue UI**: Chips with state badges (ARIA listbox pattern), Arrow key navigation, Delete/Backspace to remove, F2 to edit, Alt+Arrow reorder, drag reorder, retry on failed items, clear-all button when >1 queued. `add_to_queue` handler creates queue if missing (backward compat).
+### Prompt Queue (Feature 17 — New)
+- **Per-tab queue**: Each tab gets its own `PromptQueue` instance. Items auto-advance on `stream_end` (unless aborted).
+- **Queue states**: `queued → sending → streaming → completed | failed`
+- **Image attachment support**: `QueueItem` includes `attachments: Attachment[]`; queued prompts preserve pasted images.
+- **Queue UI**: Chips with state badges, click-to-edit on queued items, retry on failed items, clear-all button when >1 queued.
 - **Slash command**: `/queue` shows queue status; `LOCAL_COMMANDS` includes `/queue` with MCP_SVG icon.
-- **Tab-close cleanup**: Queue cleared and DOM container removed on tab close; `remove_from_queue` posted to host.
-- **Persisted**: Host queue survives webview and VS Code reloads via `workspaceState` (key: `opencode.hostPromptQueue`). Snapshot includes "sending" items for crash recovery — `markStuckSendingAsQueued()` on restore.
-- **Capacity**: 50 items per session hard cap. Queue-full rejection returns `postRequestError`.
-- **Drain**: Host owns draining via `onQueueDrain` callback in `StreamCoordinator`. Webview-side `processQueueIfReady` disabled (host-authoritative). `drainAfterAbort` setting (default false) controls abort behavior.
-- **SessionStore**: Host-drained prompts now record user message in `SessionStore` via `drainQueuedPrompt()` before `startPrompt()`.
-- **Steer queue**: `SteerPromptHandler.handleQueue()` enqueues directly to `HostPromptQueue` (no webview round-trip).
-- **Keyboard shortcuts**: `↑`/`↓` navigate, `Home`/`End` jump, `Delete`/`Backspace` remove, `F2` edit, `Alt+↑`/`↓` reorder, `Escape` exit. Documented in `?` help modal.
+- **Tab-close cleanup**: Queue cleared and DOM container removed on tab close.
+- **Not persisted**: In-memory only — webview reload clears queue (intentional).
 
 ### Scroll Markers & Jump-to-Bottom (Feature 18 — New)
 - **Scroll markers**: Positioned `.scroll-marker-dot` elements in the message list scrollbar gutter for user messages; click-to-jump with `scrollIntoView()` and flash animation.
@@ -514,7 +346,7 @@ Welcome-page session search and pasted-image attachments share a webview-side co
 - **Narrowed retry policy**: `isRetryableError` uses targeted patterns (`econnrefused`, `econnreset`, `enotfound`, `enetunreach`, `socket hang up`) instead of broad `/socket/i`.
 - **Stored-port auth verification**: Port reuse now verifies authentication via SDK API call before reconnecting.
 - **User-configured password respected**: `OPENCODE_SERVER_PASSWORD` in parent environment is used instead of generating one.
-- **Remote URL validation**: Remote attach validates URL format and rejects non-HTTPS remote URLs outside localhost/loopback.
+- **Remote URL validation**: Remote attach validates URL format and warns on non-HTTPS remote URLs outside localhost.
 
 ### Unified Session Modal (Feature 21 — New)
 - **Single list**: Replaced the LOCAL/SERVER two-tab modal with a unified list that merges `SessionStore` sessions and server sessions.
@@ -524,21 +356,11 @@ Welcome-page session search and pasted-image attachments share a webview-side co
 - **`resume_server_session` message**: Clicking a server-only session sends `{ type: "resume_server_session", serverSessionId, title, directory }` from the webview. `ChatProvider` calls `sessionStore.importOneServerSession()` then `handleResumeSession()`. If the session directory differs from the current VS Code workspace, an information message offers "Open Folder" or "Continue Here".
 - **`SessionStore.importOneServerSession(serverId, title?, directory?)`**: Idempotent — returns the existing session if `cliSessionId === serverId` already exists; otherwise creates a new session keyed by `serverId` with `needsBackfill: true` and `workspacePath` from the server session's directory (not the current VS Code workspace).
 - **Workspace folder change listener**: If the server is already running when a workspace folder is added, an information message offers to restart the server in the new workspace directory. (`src/extension.ts`)
-- **All sessions visible**: `list_server_sessions` handler no longer filters by current workspace — shows all non-subagent sessions, sorted by `updated` descending, with an `isCurrentWorkspace` flag for UI badging. The `chooseHistorySession` command palette picker also shows all sessions regardless of workspace; cross-workspace sessions are badged with the workspace folder name in the detail line.
+- **All sessions visible**: `list_server_sessions` handler no longer filters by current workspace — shows all non-subagent sessions, sorted by `updated` descending, with an `isCurrentWorkspace` flag for UI badging.
 - **Recovery consolidation**: `SessionStore.importServerSessions` and `migrateLocalIdsToServerIds` merge duplicate local/server records that reference the same server id, preserving richer local transcript data while keeping the server-keyed row as canonical.
 
-### Subagent Activity (Child Sessions)
-- **History exclusion, activity inclusion**: OpenCode child sessions remain excluded from welcome/history lists, but the chat webview can request `get_subagent_activities` for the active tab's CLI session. The host maps child sessions to `SubagentActivity` rows with title, summary, timestamps, parent id, and live/completed metadata.
-- **Detail hydration**: Opening an activity posts `get_subagent_detail`; the host returns `subagent_detail` with the child session summary and text messages, and the webview replaces the loading state with summary/result/message sections.
-- **Action guard**: `get_subagent_detail` and `cancel_subagent` require a `subagentId` and verify that the id appears in `getChildSessions(activeCliSessionId)` before reading details or aborting. Unauthorized child ids return `webview_request_error` instead of crossing session boundaries.
-- **UI states**: `SubagentActivity.status` supports `running`, `completed`, `failed`, `cancelled`, and `pending`; runtime rows use the same status/progress CSS hooks covered by visual fixtures.
-- **childSessionId + error fields**: `ActivityPartHandler` includes `childSessionId` (linked OpenCode child session ID) and `error` (failure detail) in subtask data payloads. `ChatProvider.recordSubagentActivity` passes `childSessionId` through to the subagent tracking layer.
-- **SubagentHeartbeat polling**: `SubagentHeartbeat` (`src/chat/handlers/SubagentHeartbeat.ts`) polls `/session/children` every 5s per tab, cross-references child session IDs against tracked `SubagentRunState`, links newly discovered children to subagents, and marks subagents as completed when a child session disappears. Initialized in `StreamCoordinator`, started after prompt accept, stopped in `cleanupTab`.
-- **CSS regression prevention**: The subagent panel and inline card use state-specific CSS classes (`.subagent-item--running/completed/failed`, `.subagent-card--completed/failed`, `.subagent-header`, `.subagent-status`). A structural test (`src/chat/webview/css/cssCoverage.test.ts`) asserts every class emitted by `subagentCard.ts` and `fileEditCard.ts` has at least one matching CSS rule, catching regressions caused by ephemeral-tree wipes. Visual tests in `subagent-panel.spec.ts` include computed-style assertions (border colors, transforms) not just text content. See `docs/development/css-regression-prevention.md` for the full recovery and prevention guide.
-
 ### Changed-Files Chip Bar (Feature 22 — Fixed)
-- **Canonical changed-file sync**: Backend `SessionStore.addChangedFiles()` registers normalized paths from `file_edited` and `session.diff` events. The host posts `changed_files_update` as `{ type, sessionId, files: Array<{ path: string; added: number; removed: number }> }`; the frontend uses it as the canonical state for the `#changed-files-strip`, the inline `#changed-files-panel`, and the todos panel. Rendering is scoped to the active session and tab switches clear stale chips when the new session has no changed files. Legacy/live `file_edited` remains `{ type, sessionId, file }` and merges through the same dedupe path.
-- **Layering**: the strip is rendered above the sticky composer (`#input-area`) so it is clickable. Fixed dropdowns (`#model-dropdown-container`, `#variant-dropdown-container`, `#mention-dropdown`, `#slash-autocomplete`, `#mode-dropdown-menu`) are portaled to a root-level `#dropdown-portal` so they can still render above the strip.
+- **Canonical changed-file sync**: Backend `SessionStore.addChangedFiles()` registers normalized paths from `file_edited` and `session.diff` events. The host posts `changed_files_update` as `{ type, sessionId, files: Array<{ path: string; added: number; removed: number }> }`; the frontend uses it as the canonical state for both the chip bar and todos panel. Rendering is scoped to the active session and tab switches clear stale chips when the new session has no changed files. Legacy/live `file_edited` remains `{ type, sessionId, file }` and merges through the same dedupe path.
 - **Deduplication**: Restructured handler to hoist the `filePath` extraction and dedup check before `addMessage` so the test's 600-char window assertion passes.
 - **Cleared on session start**: `session.changedFiles` is reset when streaming begins so the chip bar shows only the current turn's changes.
 
@@ -554,8 +376,7 @@ Welcome-page session search and pasted-image attachments share a webview-side co
 - **`clearAll()` with dry-run**: Returns per-category counts (empty, test-named, orphaned, archived, corrupted); produces JSON backup log before deletion.
 - **Resume re-attaches server session**: `handleResumeSession` is async and calls `ensureSession(cliSessionId)`.
 - **Empty-session cleanup**: `SessionStore.deleteIfEmpty()` removes opened-but-unused sessions and empty local `pendingServerLink` placeholders on tab close; `pruneEmptySessions()` periodically removes inactive empty sessions using `opencode.sessions.emptySessionTtlMinutes` and `opencode.sessions.cleanupIntervalMinutes`. Only server-imported sessions with `needsBackfill` are exempt while empty.
-- **Open-tab restore**: `ChatProvider.pushInitStateToWebview()` restores the previously open tabs for the current workspace when `opencode.sessions.restoreOpenTabs` is enabled. Closed historical sessions remain in the session list but are not auto-selected during visibility/focus sync; closing the last active tab clears the host active-session pointer.
-- **Crash restore signal**: `ServerLifecycle` clears stale process/port state on unexpected exit before scheduling reconnect, and `SessionManager` emits `server_disconnected` so streaming tabs can snapshot restoration state before recovery.
+- **Open-tab restore**: `ChatProvider.pushInitStateToWebview()` restores previously open non-empty tabs for the current workspace when `opencode.sessions.restoreOpenTabs` is enabled.
 
 ### Webview Send Flow (Feature 24 — Fixed)
 - **Context-chip safety**: Prompt context chips render through full webview `ElementRefs`, not the attachment-only refs used by the attachment manager. Missing chip containers are handled as a logged no-op instead of throwing.
@@ -622,36 +443,10 @@ Welcome-page session search and pasted-image attachments share a webview-side co
 - **Blocks Buffer Gold-Standard**: `TabManager` maintains a `blocksBuffer: Block[]` per tab. This local cache captures all text chunks, tool-calls, skills, and thinking blocks in real-time.
 - **Race Condition Fallback**: `finalizeStream` prioritized the `blocksBuffer` over the server-side transcript if the fetched message is incomplete or significantly shorter (server-lag protection).
 - **Skill & Tool Persistence**: Updated `partsToBlocks` to handle `skill` and `skill_badge` part types; webview merges server-side blocks with local blocks to prevent "wiping" non-persisted server metadata (like thinking content).
-- **TTFB timeout**: `StreamTimeoutManager` resolves the timeout from the `opencode.streaming.ttfbTimeoutMs` workspace setting (default 180s, clamped 60s–10min) and clears it on the first chunk. The separate chunk-inactivity timeout was removed; `STREAM_STUCK_MS` (45min) serves as the single hard-cap inactivity watchdog.
+- **TTFB vs completion timeout split**: `TTFB_TIMEOUT_MS = 30000` (first byte) and `CHUNK_INACTIVITY_TIMEOUT_MS = 60000` (inter-chunk silence). TTFB timer is cleared on first chunk; completion timer resets on every chunk.
 - **Idempotent `finalizeStream`**: `finalizingTabs` Set guards against concurrent calls from `message_complete` + `server_status idle`, preventing duplicate message persistence and DOM corruption.
 - **Stream lifecycle state machine**: `StreamLifecycleState` enum (`idle | sending | streaming | completing | error | timeout`) with `setStreamState()` logging transitions for observability.
 - **Session-scoped error routing**: `postRequestError(message, sessionId?)` includes `sessionId` so the webview routes errors to the correct tab. Unknown-session `server_error` falls back to the active tab instead of being silently dropped.
-
-### PTY Terminal (audit §14.1/§14.2)
-
-Live PTY terminal visibility via the opencode SDK PTY API (v1.17.7+). The host-side `PtyService` (`src/terminal/PtyService.ts`) wraps the SDK PTY endpoints (`pty.list`, `pty.create`, `pty.connect`, `pty.remove`, `pty.input`, `pty.resize`). The webview `terminal-panel.ts` folds `pty.*` lifecycle events + byte chunks into renderable state via the pure `ptyReducer` from `ptyModel.ts`.
-
-**Architecture:**
-- **Host**: `PtyService` (SDK wrapper) → `PtyEventHandler` in `EventNormalizer` normalizes `pty.created/updated/exited/deleted` → `ChatProvider.handleServerEvent` forwards to webview as `pty_created/updated/exited/deleted`. `pushTerminalCapabilityToWebview()` probes `ptyService.listSessions()` on connect and posts `terminal_capability { ptySupported }` + `pty_sessions` for hydration.
-- **Webview**: `terminal-panel.ts` renders one card per PTY (status dot, command, exit code, runtime, Cancel, bounded stdout). `WebviewEventRouter` handles `pty_connect/cancel/send_input/resize/list`. Output streams via WebSocket → `pty_output` messages.
-- **Graceful degradation**: When `ptySupported === false`, the terminal toggle stays hidden and the Tasks panel's polling approximation remains the terminal surface (constitution rule #6).
-
-**PTY terminals are a global resource** — the `ptyId` is carried as `sessionId` in lifecycle events, not a chat session id. The panel shows all PTYs regardless of active chat tab.
-
-**Tests**: `src/terminal/ptyModel.test.ts` (reducer lifecycle + capability probe), `src/chat/webview/terminal-panel.test.ts` (module + wiring contract). Full message contract: [`docs/webview-messages.md` § PTY Terminal](docs/webview-messages.md#pty-terminal-audit-14142).
-
-### Session SDK Method Coverage (audit §11 — P1.4, P3.2, P3.3)
-
-The `SessionClient` wraps the opencode SDK v2 session endpoints. The following methods were added to close the audit gaps:
-
-| Method | SDK endpoint | Purpose | Audit task |
-|--------|-------------|---------|-----------|
-| `runShell(sessionId, command, opts?)` | `session.shell()` | Execute a shell command in session context; returns `{ messageId, text }`. `shell.started`/`shell.ended` events fire via `SessionNextHandler` for live terminal visibility. | P1.4 |
-| `shareSession(sessionId)` | `session.share()` | Create a shareable link; returns the updated `Session` with `share.url`. | P3.2 |
-| `unshareSession(sessionId)` | `session.unshare()` | Remove the shareable link; returns the updated `Session` with `share` cleared. | P3.2 |
-| `importFromFile()` → `parseSessionExport(json)` | (local, no SDK call) | Import a session from a JSON file mirroring the export format. Mints a fresh session id (imports are local copies). | P3.3 |
-
-All three SDK methods are delegated through `SessionManager` and tested in `tests/unit/session-client-v2-domain.test.mjs` (7 new tests). The import parser is tested in `src/session/SessionImporter.test.ts` (12 tests). The import command is registered as `opencode-harness.importConversationJson` in `package.json`.
 
 ### Component Inventory (Post-Parity Audit)
 
@@ -661,11 +456,8 @@ All three SDK methods are delegated through `SessionManager` and tested in `test
 | `TabManager` | `src/chat/TabManager.ts` | Multi-tab state (max 3 concurrent streams) |
 | `SessionStore` | `src/session/SessionStore.ts` | Persistent session storage in VS Code globalState |
 | `SessionManager` | `src/session/SessionManager.ts` | opencode server lifecycle, SDK client, session CRUD |
-| `OpencodeInstaller` | `src/install/OpencodeInstaller.ts` | Detects a missing opencode CLI on activation and installs it (prompt-once / auto / off); locates the binary in known dirs + PATH |
-| `installPlan` (pure) | `src/install/installPlan.ts` | vscode-free planning: per-platform install strategy + known binary locations (`~/.opencode/bin`, npm-global, Homebrew) |
 | `SessionExporter` | `src/session/SessionExporter.ts` | Markdown export of session conversations |
 | `StreamCoordinator` | `src/chat/handlers/StreamCoordinator.ts` | Per-tab SSE streaming with watchdog, TTFB/completion timeout split, idempotent finalize guard, stream state machine |
-| `SubagentHeartbeat` | `src/chat/handlers/SubagentHeartbeat.ts` | Per-tab `/session/children` polling (5s interval), child session discovery, subagent lifecycle linkage |
 | `MessageRouter` | `src/chat/handlers/MessageRouter.ts` | Webview-to-handler message dispatch |
 | `DiffHandler` | `src/chat/handlers/DiffHandler.ts` | Diff tracking, accept/reject lifecycle |
 | `ContextEngine` | `src/context/ContextEngine.ts` | Workspace context gathering (files, git, diagnostics) |
@@ -673,10 +465,7 @@ All three SDK methods are delegated through `SessionManager` and tested in `test
 | `ModelManager` | `src/model/ModelManager.ts` | Model list from server, caching, QuickPick |
 | `RateLimitMonitor` | `src/monitor/RateLimitMonitor.ts` | Rate limit headers, countdown, status bar |
 | `CheckpointManager` | `src/checkpoint/CheckpointManager.ts` | Extension-local file snapshots, `WorkspaceEdit` restore |
-| `ThemeManager` | `src/theme/ThemeManager.ts` | Theme presets, CLI theme files, CSS variable injection; orchestrates `ThemeAnalyzer`, `ThemeStateMutator`, and `ThemeWebviewBridge` |
-| `ThemeAnalyzer` | `src/theme/ThemeAnalyzer.ts` | Active VS Code theme kind, preset resolution, market theme availability |
-| `ThemeStateMutator` | `src/theme/ThemeStateMutator.ts` | Safe namespace-isolated merge/reset of `workbench.colorCustomizations.opencodeHarness` |
-| `ThemeWebviewBridge` | `src/theme/ThemeWebviewBridge.ts` | Listens for VS Code theme/config changes and pushes live CSS variable updates to the webview |
+| `ThemeManager` | `src/theme/ThemeManager.ts` | Theme presets, CLI theme files, CSS variable injection |
 | `PromptManager` | `src/prompts/PromptManager.ts` | Custom slash commands from `.opencode/prompts/*.md` |
 | `InlineActionProvider` | `src/inline/InlineActionProvider.ts` | CodeLens actions (Explain, Refactor, Generate Tests) |
 | `ChunkBatcher` | `src/chat/ChunkBatcher.ts` | Streaming text chunk batching (50ms flush) |
