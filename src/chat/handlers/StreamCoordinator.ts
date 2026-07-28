@@ -9,7 +9,7 @@ import { RateLimitMonitor } from "../../monitor/RateLimitMonitor"
 import { estimateContextTokens, parseModelRef, estimateTokens } from "../../utils/tokenCounter"
 import { ModelManager } from "../../model/ModelManager"
 import { log } from "../../utils/outputChannel"
-import type { Block, ChatMessage } from "../types"
+import type { AttachmentSummary, Block, ChatMessage } from "../types"
 import type { Part } from "@opencode-ai/sdk/v2"
 import { partsToBlocks as sdkConvertPartsToBlocks } from "../../session/sdkMessageConverter"
 import { isLocalPlaceholderSessionId } from "../../session/sessionUtils"
@@ -65,6 +65,7 @@ export interface StartPromptConfig {
   callbacks: StreamCallbacks
   variant?: string
   attachments?: Array<{ data: string; mimeType: string }>
+  attachmentSummary?: AttachmentSummary
   routeRole?: AgentRole
   identity?: PromptRunIdentity
 }
@@ -1024,7 +1025,20 @@ export class StreamCoordinator {
     const tab = this.tabManager.getTab(tabId)
     if (!tab) return
 
-    const workflow = selectWorkflow(text, attachments.length > 0, text.length)
+    const fallbackSummary: AttachmentSummary = {
+      total: attachments.length,
+      imageCount: attachments.filter((a) => ["image/png", "image/jpeg", "image/gif", "image/webp"].includes(a.mimeType)).length,
+      documentCount: 0,
+      hasImages: attachments.length > 0,
+      hasDocuments: false,
+      hasUnsupportedImages: false,
+      estimatedBytes: attachments.reduce((s, a) => s + a.data.length, 0),
+    }
+    fallbackSummary.documentCount = fallbackSummary.total - fallbackSummary.imageCount
+    fallbackSummary.hasDocuments = fallbackSummary.documentCount > 0
+    const attachmentSummary = config.attachmentSummary ?? fallbackSummary
+
+    const workflow = selectWorkflow(text, attachmentSummary, text.length)
     const roleModels: Partial<Record<AgentRole, string>> = {}
     const roles: AgentRole[] = ["planning", "implementation", "review", "debugging", "visualReview"]
     for (const role of roles) {
@@ -1048,7 +1062,7 @@ export class StreamCoordinator {
         workflow,
         config: orchestratedConfig,
         userRequest: text,
-        attachedImages: attachments.length > 0,
+        attachedImages: attachmentSummary.hasImages,
         executor: dispatcher,
       })
       const message: ChatMessage = {

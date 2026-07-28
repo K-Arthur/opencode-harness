@@ -203,27 +203,27 @@ describe("PipelineCoordinator", () => {
 
 describe("selectWorkflow", () => {
   it("selects MULTIMODAL_WORKFLOW when images are attached", () => {
-    const wf = selectWorkflow("Fix this UI", true, 10);
+    const wf = selectWorkflow("Fix this UI", { hasImages: true }, 10);
     assert.equal(wf.id, "multimodal");
   });
 
   it("selects QUICK_WORKFLOW for short requests", () => {
-    const wf = selectWorkflow("Hello", false, 5);
+    const wf = selectWorkflow("Hello", { hasImages: false }, 5);
     assert.equal(wf.id, "quick");
   });
 
   it("selects DEBUG_WORKFLOW for debug requests", () => {
-    const wf = selectWorkflow("This bug causes a crash", false, 30);
+    const wf = selectWorkflow("This bug causes a crash", { hasImages: false }, 30);
     assert.equal(wf.id, "debug");
   });
 
   it("selects REVIEW_WORKFLOW for review requests", () => {
-    const wf = selectWorkflow("Review this code for security issues", false, 50);
+    const wf = selectWorkflow("Review this code for security issues", { hasImages: false }, 50);
     assert.equal(wf.id, "review");
   });
 
   it("selects STANDARD_WORKFLOW for normal requests", () => {
-    const wf = selectWorkflow("Add a new feature to the dashboard component that shows user analytics", false, 80);
+    const wf = selectWorkflow("Add a new feature to the dashboard component that shows user analytics", { hasImages: false }, 80);
     assert.equal(wf.id, "standard");
   });
 });

@@ -813,8 +813,8 @@ export const WORKFLOWS: Record<string, WorkflowDefinition> = {
   multimodal: MULTIMODAL_WORKFLOW,
 };
 
-export function selectWorkflow(userRequest: string, attachedImages: boolean, requestLength: number): WorkflowDefinition {
-  if (attachedImages) return MULTIMODAL_WORKFLOW;
+export function selectWorkflow(userRequest: string, attachmentSummary: { hasImages: boolean }, requestLength: number): WorkflowDefinition {
+  if (attachmentSummary.hasImages) return MULTIMODAL_WORKFLOW;
   if (/debug|bug|failing|error|exception|crash|stack.?trace|timeout/i.test(userRequest)) return DEBUG_WORKFLOW;
   if (/review|audit|security|accessibility|performance/i.test(userRequest) && requestLength < 200) return REVIEW_WORKFLOW;
   if (requestLength < 60) return QUICK_WORKFLOW;

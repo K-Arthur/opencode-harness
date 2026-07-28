@@ -30,7 +30,7 @@ import type { WorkspaceFileIndex } from "./WorkspaceFileIndex"
 import type { ActiveFileTracker } from "./ActiveFileTracker"
 import type { SteerPromptHandler } from "./handlers/SteerPromptHandler"
 import type { HostPromptQueue } from "./HostPromptQueue"
-import type { ChatMessage, Block } from "./types"
+import type { AttachmentSummary, ChatMessage, Block } from "./types"
 import type { ContextMonitor } from "../monitor/ContextMonitor"
 import type { UsageAnalytics } from "../monitor/UsageAnalytics"
 import { groupMessagesIntoTurns } from "./webview/turnGrouper"
@@ -341,6 +341,7 @@ export class WebviewEventRouter {
             this.opts.postMessage({ type: "prompt_rejected", sessionId, reason: "invalid_attachments" })
             return
           }
+          const attachmentSummary = this.normalizeAttachmentSummary(msg.attachmentSummary, validatedAttachments)
           const userMessageId = (msg.messageId as string) || generateUserMessageId()
           const textBlocks: Block[] = text.trim() ? [{ type: "text", text }] : []
           const imageBlocks: Block[] = (validatedAttachments || []).map((a: { data: string; mimeType: string }) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType }))
@@ -359,6 +360,7 @@ export class WebviewEventRouter {
             text,
             sessionId,
             attachments: validatedAttachments,
+            attachmentSummary,
             mode: "queue",
             isSteerPrompt: false,
             userMessageId,
@@ -401,6 +403,7 @@ export class WebviewEventRouter {
             return
           }
           const attachments = validatedAttachments
+          const attachmentSummary = this.normalizeAttachmentSummary(msg.attachmentSummary, attachments)
           const textBlocks: Block[] = text.trim() ? [{ type: "text", text }] : []
           const imageBlocks: Block[] = attachments.map((a) => ({ type: "image", data: a.data, mimeType: a.mimeType }))
           const currentTabForMode = this.opts.tabManager.getTab(sessionId)
@@ -415,6 +418,7 @@ export class WebviewEventRouter {
             },
             variant,
             attachments,
+            attachmentSummary,
             routeRole: this.getRequestedAgentRole(msg),
             identity: { userMessageId, clientRequestId },
           })
@@ -2759,6 +2763,7 @@ export class WebviewEventRouter {
     id: string
     text: string
     attachments: import("./webview/types").Attachment[]
+    attachmentSummary?: AttachmentSummary
     isSteerPrompt?: boolean
     userMessageId?: string
     agentRole?: AgentRole
@@ -2766,6 +2771,7 @@ export class WebviewEventRouter {
     try {
       const userMessageId = item.userMessageId || generateUserMessageId()
       const clientRequestId = `queued-${item.id}`
+      const queuedAttachmentSummary = this.normalizeAttachmentSummary(item.attachmentSummary, item.attachments)
       const textBlocks: Block[] = item.text.trim() ? [{ type: "text", text: item.text }] : []
       const imageBlocks: Block[] = (item.attachments || []).map((a: { data: string; mimeType: string }) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType }))
       const currentTabForMode = this.opts.tabManager.getTab(sessionId)
@@ -2787,6 +2793,7 @@ export class WebviewEventRouter {
           postRequestError: (m) => this.opts.postRequestError(m),
         },
         attachments: item.attachments,
+        attachmentSummary: queuedAttachmentSummary,
         routeRole: item.agentRole,
         identity: { userMessageId, clientRequestId },
       })
@@ -2984,6 +2991,40 @@ export class WebviewEventRouter {
       safe.push({ data, mimeType })
     }
     return safe
+  }
+
+  /** Derive an attachment summary from the optional webview hint and the validated payloads. */
+  private normalizeAttachmentSummary(
+    raw: unknown,
+    attachments: Array<{ data: string; mimeType: string }>,
+  ): AttachmentSummary {
+    const supportedImageMimes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"])
+    const isImage = (m: string) => m.startsWith("image/") && m !== "image/svg+xml"
+    const isSupportedImage = (m: string) => supportedImageMimes.has(m)
+    const imageCount = attachments.filter((a) => isImage(a.mimeType)).length
+    const documentCount = attachments.length - imageCount
+    const fallback = {
+      total: attachments.length,
+      imageCount,
+      documentCount,
+      hasImages: imageCount > 0,
+      hasDocuments: documentCount > 0,
+      hasUnsupportedImages: attachments.some((a) => isImage(a.mimeType) && !isSupportedImage(a.mimeType)),
+      estimatedBytes: attachments.reduce((sum, a) => sum + a.data.length, 0),
+    }
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return fallback
+    const hint = raw as Record<string, unknown>
+    const num = (k: keyof AttachmentSummary, def: number) => (typeof hint[k] === "number" ? (hint[k] as number) : def)
+    const bool = (k: keyof AttachmentSummary, def: boolean) => (typeof hint[k] === "boolean" ? (hint[k] as boolean) : def)
+    return {
+      total: num("total", fallback.total),
+      imageCount: num("imageCount", fallback.imageCount),
+      documentCount: num("documentCount", fallback.documentCount),
+      hasImages: bool("hasImages", fallback.hasImages),
+      hasDocuments: bool("hasDocuments", fallback.hasDocuments),
+      hasUnsupportedImages: bool("hasUnsupportedImages", fallback.hasUnsupportedImages),
+      estimatedBytes: num("estimatedBytes", fallback.estimatedBytes),
+    }
   }
 
   private getPromptText(msg: Record<string, unknown>): string {

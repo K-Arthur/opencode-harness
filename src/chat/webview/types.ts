@@ -205,9 +205,9 @@ export type Block = LegacyBlock
 
 // Re-export the canonical discriminated union from the root types module so
 // consumers in the webview can import it via the local types barrel.
-export type { CanonicalBlock, CanonicalToolState } from "../../types"
+export type { AttachmentSummary, CanonicalBlock, CanonicalToolState } from "../../types"
 export type { TokenBreakdown as CanonicalTokenBreakdown } from "../../types"
-import type { CanonicalBlock as _CanonicalBlock } from "../../types"
+import type { AttachmentSummary, CanonicalBlock as _CanonicalBlock } from "../../types"
 
 // ---------------------------------------------------------------------------
 // CanonicalBlock type guards (Layer 2)
@@ -924,7 +924,7 @@ export type WebviewMessage =
   | { type: "webview_ready" }
   | { type: "init_ack" }
   | { type: "create_tab"; sessionId?: string; name?: string; model?: string; mode?: string; ephemeral?: boolean }
-  | { type: "send_prompt"; sessionId: string; text: string; messageId: string; clientRequestId?: string; model: string; mode?: string; variant?: string; attachments?: Attachment[]; isSteerPrompt?: boolean; contextItems?: AttachedContextItem[]; role?: string; agentRole?: string; ephemeral?: boolean }
+  | { type: "send_prompt"; sessionId: string; text: string; messageId: string; clientRequestId?: string; model: string; mode?: string; variant?: string; attachments?: Attachment[]; attachmentSummary?: AttachmentSummary; isSteerPrompt?: boolean; contextItems?: AttachedContextItem[]; role?: string; agentRole?: string; ephemeral?: boolean }
   | { type: "send_steer_prompt"; id: string; text: string; attachments: Attachment[]; mode: "interrupt" | "queue"; sessionId: string; userMessageId?: string }
   | { type: "change_mode"; mode: string; sessionId: string }
   | { type: "set_model"; model: string; sessionId?: string }

@@ -520,7 +520,7 @@ export class OrchestrationCoordinator {
     }
 
     return workflow.stages.filter((s) => {
-      if (!s.enabledByDefault && !config.customStages?.some((cs) => "id" in cs && cs.id === s.id && cs.enabledByDefault)) return false;
+      if (s.enabledByDefault === false && !config.customStages?.some((cs) => "id" in cs && cs.id === s.id)) return false;
       if (s.skipWhen) {
         if (s.skipWhen.whenNoImages && !classification.hasImages) return false;
         if (s.skipWhen.whenQuickRequest && classification.complexity < 0.3) return false;

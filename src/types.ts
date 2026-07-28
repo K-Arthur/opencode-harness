@@ -145,6 +145,17 @@ export interface Attachment {
   mimeType: string
 }
 
+export interface AttachmentSummary {
+  total: number
+  imageCount: number
+  documentCount: number
+  hasImages: boolean
+  hasDocuments: boolean
+  hasUnsupportedImages: boolean
+  /** Approximate base64 payload size in bytes (0 if not computed). */
+  estimatedBytes: number
+}
+
 export interface SteerPrompt {
   id: string
   text: string

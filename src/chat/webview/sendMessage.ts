@@ -212,8 +212,23 @@ export function sendMessage(deps: SendMessageDeps): void {
   // SVG (image/svg+xml) is treated as a document: the server's raster decoder
   // (Image.normalize) cannot decode SVG, so we inject the XML text instead.
   const isSvg = (a: { mimeType: string }) => a.mimeType === "image/svg+xml"
-  const imageAttachments = attachments.filter((a) => a.mimeType.startsWith("image/") && !isSvg(a))
+  const supportedImageMimes = ["image/png", "image/jpeg", "image/gif", "image/webp"]
+  const isSupportedImage = (a: { mimeType: string }) => supportedImageMimes.includes(a.mimeType)
+  const imageAttachments = attachments.filter((a) => isSupportedImage(a))
   const documentAttachments = attachments.filter((a) => !a.mimeType.startsWith("image/") || isSvg(a))
+  const hasUnsupportedImages = attachments.some(
+    (a) => a.mimeType.startsWith("image/") && !isSupportedImage(a) && !isSvg(a),
+  )
+  const estimatedBytes = attachments.reduce((sum, a) => sum + a.data.length, 0)
+  const attachmentSummary = {
+    total: attachments.length,
+    imageCount: imageAttachments.length,
+    documentCount: documentAttachments.length,
+    hasImages: imageAttachments.length > 0,
+    hasDocuments: documentAttachments.length > 0,
+    hasUnsupportedImages,
+    estimatedBytes,
+  }
 
   // Inject active file @file: mention into the prompt text so the backend
   // knows which file to read. The contextItems array carries metadata but
@@ -283,6 +298,7 @@ export function sendMessage(deps: SendMessageDeps): void {
     clientRequestId,
     model: sendModel,
     mode: active.mode,
+    attachmentSummary,
     ...(selectedRole ? { role: selectedRole } : {}),
     ...(sendVariant ? { variant: sendVariant } : {}),
     ...(imageAttachments.length > 0 ? { attachments: imageAttachments } : {}),
