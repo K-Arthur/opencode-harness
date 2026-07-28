@@ -335,3 +335,18 @@ The corrected approach leverages the existing SADD/TDD infrastructure rather tha
 The key insight: Spec-driven development is a **feature of the existing skill system**, not a separate parallel system. By adding spec context to TDD prompts and spec-aware triggers to the skill engine, we achieve the same goal without duplication.
 
 Remaining work focuses on integrating spec management into SkillManager and connecting TaskDecomposer with spec input, both of which enhance existing components rather than creating new ones.
+
+## Orchestrated Pipeline Status
+
+### Completed
+- `AttachmentSummary` computed in the webview and sent with `send_prompt`.
+- Host `normalizeAttachmentSummary()` validates/hydrates the summary and threads it through queued prompts into `StreamCoordinator`.
+- `selectWorkflow()` now consumes `AttachmentSummary` instead of a boolean `attachedImages`.
+- `WorkflowStateMachine` revision counter and `WorkflowSnapshot.revision` field.
+- `pipeline_progress` messages include `runId` and `revision`; webview persists `SessionState.pipeline` and drops stale broadcasts.
+- `pipeline_get_state` request on `stream_start` for progress UI recovery.
+- `enhancedStageDispatcher` per-stage model/agent overrides and `AbortSignal` cancellation; unit tests added.
+- `ValidationResult<T>` generic typing in `handoffs.ts`.
+
+### Pending / Future
+- Per-stage token-by-token streaming through `StreamCoordinator` (requires SSE message-id routing and a pipeline-stage text renderer).

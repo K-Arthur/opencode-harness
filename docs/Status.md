@@ -3,6 +3,33 @@
 **Last Updated:** 2026-07-27
 **Version:** v0.4.63 (unreleased)
 
+## Highlights (2026-07-27) — Tool-call lifecycle convergence and bundle-size gate
+
+- **Fixed "tool call spins forever after compaction/reconnect"**: root cause
+  was `StreamCoordinator.reconcileAfterReconnect` declaring a tab idle
+  (`waitingForCompletion = false`) without first confirming no tool call or
+  subagent was still tracked pending — once that flag flips, the existing
+  grace-timeout recovery path becomes permanently unreachable for that tab,
+  so an orphaned tool call's spinner never clears even though the server has
+  gone genuinely idle. `AutoCompactor` only gated on `isStreaming`, so a
+  session already in this state could still get compacted, making the bug
+  look compaction-triggered when compaction was really just the next thing
+  to run against already-broken state. See `docs/TechSpec.md` § "Tool Call
+  Spins Forever After Compaction / Reconnect" for the full trace and fix.
+- **New bounded convergence primitives**: `StreamCoordinator.hasPendingToolCalls`
+  / `ensureToolStateConverged` give `AutoCompactor` a second pre-compaction
+  gate and an explicit post-compaction checkpoint. New
+  `sdkMessageConverter.markStaleToolBlocksUnresolved` terminalizes stale tool
+  state in historical/backfilled message renders (new `"unresolved"`
+  `CanonicalToolState`), gated so a genuinely in-progress tool is never
+  mislabeled.
+- **Bundle-size CI gate re-baselined** (791KB → 795KB, extension host): the
+  old limit had ~1KB of headroom, so a routine `@opencode-ai/sdk` patch bump
+  (PR #20) tripped the gate on upstream growth alone.
+- **New tests**: `ToolCallTracker.test.ts` (new — real behavioral tests
+  against the reconciliation primitives), plus regression coverage in
+  `StreamCoordinator.test.ts`, `AutoCompactor.test.ts`, `sdkMessageConverter.test.ts`.
+
 ## Highlights (2026-07-27) — Orchestrated pipeline state and attachment classification
 
 - **Attachment summary wired through `send_prompt`**: the webview classifies

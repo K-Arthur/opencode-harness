@@ -37,6 +37,13 @@ OpenCode Harness is a VS Code extension that deeply integrates the opencode AI c
 - **US-013**: As a developer, I want my session history to be resilient to server-side lag so that I don't lose responses during finalization
 
 ## Requirements
+
+### Orchestrated Mode & Attachments
+
+- **US-014**: As a developer, I want the agent to choose a multi-stage workflow based on my attachments and prompt so that visual/code-review/debug tasks use the right sequence of specialist models.
+- **US-015**: As a developer, I want the extension to classify my uploaded files (image vs. document) and surface unsupported images so that I know what the agent can actually see.
+- **US-016**: As a developer, I want the orchestrated pipeline progress to persist across webview reloads and tab switches so that I don't lose visibility of which stage is running.
+
 ### Functional Requirements
 - **FR-001**: Extension must start/stop opencode server process (`opencode serve`) on VS Code activation/deactivation
 - **FR-002**: Extension must provide a sidebar chat panel with multi-tab support (max 3 concurrent)
@@ -52,6 +59,10 @@ OpenCode Harness is a VS Code extension that deeply integrates the opencode AI c
 - **FR-012**: Extension must gracefully degrade when opencode server is unavailable
 - **FR-013**: Extension must support keyboard shortcuts for tab and mode management
 - **FR-014**: Extension must persist chat history to workspace state
+- **FR-015**: Extension must classify active attachments into `AttachmentSummary` (image count, document count, unsupported-image detection, estimated size) and forward the summary with `send_prompt`.
+- **FR-016**: Extension must select an orchestrated workflow (Standard, Quick, Debug, Review, Multimodal) from the prompt text and `AttachmentSummary`.
+- **FR-017**: Extension must execute the orchestrated pipeline sequentially with role-specific model overrides, typed handoffs, cancellation, retry/fallback, and repair loops.
+- **FR-018**: Extension must emit revisioned `pipeline_progress` state and persist the latest pipeline snapshot in the webview so the progress UI survives reloads and tab switches.
 
 ### Non-Functional Requirements
 [Generated from active tags: UNIVERSAL, LIBRARY]

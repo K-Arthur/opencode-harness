@@ -113,6 +113,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   uses CJS `require()` (which respects `_resolveFilename`) instead of ESM
   `import`. All 5 heartbeat tests now pass.
 
+- **Bundle-size CI gate failing on routine Dependabot bumps**: the host
+  bundle limit (`scripts/check-bundle-size.mjs`) had ~1KB of headroom against
+  the actual build, so a pending `@opencode-ai/sdk` patch bump (1.17.11 →
+  1.18.7, PR #20) tripped the gate on upstream package growth alone, with no
+  application code change. Re-baselined 791KB → 795KB; verified green both
+  at current versions and with the pending SDK bump applied (791.3KB).
+
+- **Tool call spins forever after compaction/reconnect, even though the
+  server is idle**: `StreamCoordinator.reconcileAfterReconnect` (runs after a
+  webview reload, extension-host restart, or SSE reconnect) could flip a
+  tab's `waitingForCompletion` flag to `false` — declaring it idle — without
+  first confirming there was no tool call, or subagent, still tracked
+  pending. Once that flag is `false`, the existing grace-timeout recovery
+  path becomes permanently unreachable for that tab, so an orphaned tool
+  call's spinner never clears: the server has genuinely gone idle, but
+  nothing is left that will ever post the terminal event. `AutoCompactor`
+  only gated on `isStreaming`, so a session in this state could still get
+  compacted, making the bug look compaction-triggered when compaction was
+  really just the next thing to run against already-broken state. Separately,
+  historical/backfilled message rendering (compaction's own `resume_session`,
+  plus plain pagination/refresh) rendered a tool part's raw server status
+  verbatim with no terminalization pass, so even a clean host-side fix could
+  be undone by the next full re-render showing the same stale spinner again.
+  Fix: `reconcileAfterReconnect` now converges tool-call *and* subagent state
+  (bounded — one extra reconciliation fetch at most, no polling) before
+  declaring a tab idle, and restores `waitingForCompletion` on the
+  still-active branch. `AutoCompactor` gates on the new
+  `StreamCoordinator.hasPendingToolCalls` alongside `isStreaming`, and calls
+  the new `ensureToolStateConverged` checkpoint after every successful
+  compaction, before the session-refresh message goes out. New
+  `sdkMessageConverter.markStaleToolBlocksUnresolved` terminalizes stale tool
+  state in historical snapshots (new `"unresolved"` `CanonicalToolState`
+  member), gated on the tab not currently streaming so a genuinely
+  in-progress tool is never mislabeled. See `docs/TechSpec.md` § "Tool Call
+  Spins Forever After Compaction / Reconnect". Tests: `StreamCoordinator.test.ts`,
+  `AutoCompactor.test.ts`, `ToolCallTracker.test.ts` (new), `sdkMessageConverter.test.ts`.
+
 ## [0.4.62] — 2026-07-11
 
 ### Fixed
