@@ -1006,11 +1006,15 @@ function getVsCodeApi() {
   /** Custom dropdown for the route selector — replaces the native <select> with
    *  a styled listbox that matches the mode dropdown pattern. */
   function setupRouteDropdown(): void {
-    const btn = document.getElementById("role-route-btn")
-    const menu = document.getElementById("route-dropdown-menu")
-    const hidden = els.roleRouteSelect
-    const label = document.getElementById("role-route-current-text")
-    if (!btn || !menu || !hidden || !label) return
+    const btnRaw = document.getElementById("role-route-btn")
+    const menuRaw = document.getElementById("route-dropdown-menu")
+    const hiddenRaw = els.roleRouteSelect
+    const labelRaw = document.getElementById("role-route-current-text")
+    if (!btnRaw || !menuRaw || !hiddenRaw || !labelRaw) return
+    const btn = btnRaw as HTMLElement as HTMLButtonElement
+    const menu = menuRaw as HTMLElement
+    const hidden = hiddenRaw as HTMLInputElement
+    const label = labelRaw as HTMLElement
 
     const options = Array.from(menu.querySelectorAll<HTMLElement>(".route-option"))
     const ROUTE_LABELS: Record<string, string> = {
@@ -1022,7 +1026,7 @@ function getVsCodeApi() {
     }
 
     function positionMenu(): void {
-      const r = btn!.getBoundingClientRect()
+      const r = btn.getBoundingClientRect()
       const margin = 6
       const menuW = Math.max(r.width, 160)
       const spaceBelow = window.innerHeight - r.bottom - margin
@@ -1033,23 +1037,23 @@ function getVsCodeApi() {
       const top = openAbove
         ? Math.max(margin, r.top - Math.min(160, maxHeight) - 6)
         : Math.min(window.innerHeight - margin - 160, r.bottom + 6)
-      menu!.style.position = "fixed"
-      menu!.style.left = `${left}px`
-      menu!.style.top = `${Math.max(margin, top)}px`
-      menu!.style.width = `${menuW}px`
-      menu!.style.maxHeight = `${maxHeight}px`
-      menu!.style.zIndex = "var(--z-dropdown)"
+      menu.style.position = "fixed"
+      menu.style.left = `${left}px`
+      menu.style.top = `${Math.max(margin, top)}px`
+      menu.style.width = `${menuW}px`
+      menu.style.maxHeight = `${maxHeight}px`
+      menu.style.zIndex = "var(--z-dropdown)"
     }
 
     function closeMenu(): void {
-      menu!.classList.add("hidden")
-      btn!.setAttribute("aria-expanded", "false")
+      menu.classList.add("hidden")
+      btn.setAttribute("aria-expanded", "false")
     }
 
     function selectOption(value: string): void {
       hidden.value = value
-      label!.textContent = ROUTE_LABELS[value] || value || "Auto"
-      btn!.setAttribute("aria-label", `Route next prompt: ${ROUTE_LABELS[value] || "Auto"}`)
+      label.textContent = ROUTE_LABELS[value] || value || "Auto"
+      btn.setAttribute("aria-label", `Route next prompt: ${ROUTE_LABELS[value] || "Auto"}`)
       for (const opt of options) {
         const isSelected = opt.dataset.value === value
         opt.setAttribute("aria-selected", String(isSelected))

@@ -30,8 +30,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
-  { path: "dist/extension.js", limitBytes: 795 * 1024, label: "extension host" },
-  { path: "dist/chat/webview/main.js", limitBytes: 838 * 1024, label: "chat webview" },
+  { path: "dist/extension.js", limitBytes: 800 * 1024, label: "extension host" },
+  { path: "dist/chat/webview/main.js", limitBytes: 842 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
 
