@@ -515,3 +515,89 @@ describe("StreamCoordinator.ts", () => {
       "cleanupTab must remove session from injectedInstructionsSessions to prevent stale injection state"
     )
   })
+// ---------------------------------------------------------------------------
+// Regression: "tool call spins forever after compaction/reconnect".
+//
+// Root cause: reconcileAfterReconnect's "run already completed" branch (fired
+// on webview reload / extension-host restart / SSE reconnect discovering the
+// server finished mid-outage) flipped isStreaming/waitingForCompletion to
+// false unconditionally. Once waitingForCompletion is false,
+// maybeFinalizeStream's own entry guard (`!tab.waitingForCompletion`) makes
+// the tab permanently unreachable by the normal grace-timeout recovery path
+// — any tool still in activeToolCallIds, or any subagent still active in
+// RunActivityTracker, at that exact moment is orphaned forever: no more
+// events will ever move it to a terminal state, so the webview spinner never
+// clears even though the server is completely idle. This is also the gap a
+// compaction success (which routes through the same "not streaming" state)
+// could fall through if activeToolCallIds ever had a stale entry for any
+// other reason — hence the same convergence checkpoint is also wired into
+// AutoCompactor via ensureToolStateConverged (see AutoCompactor.test.ts).
+//
+// This block must FAIL against the pre-fix source (no reconciliation call
+// before the flags flip) and PASS after it.
+// ---------------------------------------------------------------------------
+describe("StreamCoordinator.ts — reconcileAfterReconnect tool-state convergence (regression)", () => {
+  it("exposes hasPendingToolCalls and ensureToolStateConverged for callers like AutoCompactor", () => {
+    assert.ok(
+      source.includes("hasPendingToolCalls(tabId: string): boolean"),
+      "StreamCoordinator must expose hasPendingToolCalls so callers can gate on pending tool calls, not just isStreaming",
+    )
+    assert.ok(
+      source.includes("async ensureToolStateConverged(tabId: string, callbacks: StreamCallbacks): Promise<void>"),
+      "StreamCoordinator must expose an explicit convergence checkpoint for post-compaction (and future) session-identity boundaries",
+    )
+  })
+
+  it("reconcileAfterReconnect converges tool AND subagent state before declaring the tab idle", () => {
+    const reconIdx = source.indexOf("async reconcileAfterReconnect")
+    assert.ok(reconIdx >= 0, "reconcileAfterReconnect must exist")
+    const nextMethodIdx = source.indexOf("\n  async ", reconIdx + 10)
+    const reconBody = source.slice(reconIdx, nextMethodIdx > 0 ? nextMethodIdx : reconIdx + 4000)
+
+    const completedBranchIdx = reconBody.indexOf("typeof completedAt === \"number\"")
+    assert.ok(completedBranchIdx >= 0, "must branch on the server-reported completedAt")
+
+    const markToolsIdx = reconBody.indexOf("markUnresolvedPendingToolCalls(tabId, callbacks)", completedBranchIdx)
+    const markSubagentsIdx = reconBody.indexOf("markUnresolvedActiveSubagents(tabId, callbacks)", completedBranchIdx)
+    const setStreamingFalseIdx = reconBody.indexOf("setStreaming(tabId, false", completedBranchIdx)
+    const setWaitingFalseIdx = reconBody.indexOf("setWaitingForCompletion(tabId, false)", completedBranchIdx)
+
+    assert.ok(markToolsIdx > completedBranchIdx, "must reconcile/mark-unresolved pending tool calls in the completed-run branch")
+    assert.ok(markSubagentsIdx > completedBranchIdx, "must also converge subagent state — it's tracked in a separate store (RunActivityTracker) with the same orphan risk")
+    assert.ok(setStreamingFalseIdx > completedBranchIdx, "must still flip isStreaming false")
+    assert.ok(setWaitingFalseIdx > completedBranchIdx, "must still flip waitingForCompletion false")
+
+    assert.ok(
+      markToolsIdx < setWaitingFalseIdx,
+      "tool convergence must happen BEFORE waitingForCompletion flips false — after that point maybeFinalizeStream's " +
+      "`!tab.waitingForCompletion` guard makes this tab unreachable by the normal recovery path, orphaning any pending tool forever",
+    )
+    assert.ok(
+      markSubagentsIdx < setWaitingFalseIdx,
+      "subagent convergence must also happen BEFORE waitingForCompletion flips false, for the same reason",
+    )
+  })
+
+  it("the still-active branch restores waitingForCompletion so a later real completion isn't silently dropped", () => {
+    const reconIdx = source.indexOf("async reconcileAfterReconnect")
+    const nextMethodIdx = source.indexOf("\n  async ", reconIdx + 10)
+    const reconBody = source.slice(reconIdx, nextMethodIdx > 0 ? nextMethodIdx : reconIdx + 4000)
+
+    const elseIdx = reconBody.indexOf("} else {")
+    assert.ok(elseIdx >= 0, "must have a still-active (else) branch")
+    const elseBody = reconBody.slice(elseIdx, elseIdx + 700)
+    assert.ok(
+      elseBody.includes("setWaitingForCompletion(tabId, true)"),
+      "still-active branch must restore waitingForCompletion — otherwise a prior server_disconnected handler (or a " +
+      "fresh extension-host restart) leaves it false, and maybeFinalizeStream silently drops the real completion when it later arrives",
+    )
+  })
+
+  it("ensureToolStateConverged (the AutoCompactor checkpoint) also covers subagent state, not just activeToolCallIds", () => {
+    const idx = source.indexOf("async ensureToolStateConverged(tabId: string, callbacks: StreamCallbacks): Promise<void> {")
+    assert.ok(idx >= 0)
+    const body = source.slice(idx, idx + 400)
+    assert.ok(body.includes("markUnresolvedPendingToolCalls(tabId, callbacks)"), "must converge activeToolCallIds")
+    assert.ok(body.includes("markUnresolvedActiveSubagents(tabId, callbacks)"), "must converge the separate subagent/activity-timeline store too")
+  })
+})

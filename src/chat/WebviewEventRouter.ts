@@ -19,7 +19,7 @@ import type { MessageRouter } from "./handlers/MessageRouter"
 import type { AutoCompactor } from "./AutoCompactor"
 import type { CheckpointManager } from "../checkpoint/CheckpointManager"
 import type { McpServerManager } from "../mcp/McpServerManager"
-import { sdkMessagesToChatMessages } from "../session/sdkMessageConverter"
+import { sdkMessagesToChatMessages, markStaleToolBlocksUnresolved } from "../session/sdkMessageConverter"
 import { summarizeOpencodeMessageUsage } from "../session/sdkUsageSummary"
 import { generateUserMessageId } from "../session/messageId"
 import type { ThemeManager } from "../theme/ThemeManager"
@@ -1801,7 +1801,14 @@ export class WebviewEventRouter {
       if (session.cliSessionId && this.opts.sessionManager.isRunning) {
         try {
           const rows = await this.opts.sessionManager.getSessionMessages(session.cliSessionId)
-          const serverMessages = sdkMessagesToChatMessages(rows)
+          let serverMessages = sdkMessagesToChatMessages(rows)
+          // The paginated slice below always excludes the live tail message,
+          // but applyBackfilledMessages overwrites the FULL session.messages
+          // — only terminalize when this tab isn't actively streaming, or a
+          // genuinely in-progress tool would be wrongly relabeled in the store.
+          if (!this.opts.tabManager.getTab(sessionId)?.isStreaming) {
+            serverMessages = markStaleToolBlocksUnresolved(serverMessages)
+          }
           if (serverMessages.length > session.messages.length) {
             this.opts.sessionStore.applyBackfilledMessages(session.id, serverMessages, summarizeOpencodeMessageUsage(rows))
             const refreshed = this.opts.sessionStore.get(sessionId)
@@ -1850,7 +1857,12 @@ export class WebviewEventRouter {
       }
       try {
         const rows = await this.opts.sessionManager.getSessionMessages(session.cliSessionId)
-        const messages = sdkMessagesToChatMessages(rows)
+        let messages = sdkMessagesToChatMessages(rows)
+        // Only terminalize stale tool state when this tab isn't actively
+        // streaming right now — see markStaleToolBlocksUnresolved's doc.
+        if (!this.opts.tabManager.getTab(sessionId)?.isStreaming) {
+          messages = markStaleToolBlocksUnresolved(messages)
+        }
         if (messages.length > 0) {
           this.opts.sessionStore.applyBackfilledMessages(session.id, messages, summarizeOpencodeMessageUsage(rows))
           this.opts.sessionStore.autoTitleFromMessages(session.id)
