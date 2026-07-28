@@ -156,6 +156,7 @@ export function createEnhancedStageDispatcher(deps: EnhancedDispatcherDeps) {
           totalEstimatedCost: snapshot.totalEstimatedCost,
           runId: snapshot.runId,
           workflowState: snapshot.state,
+          revision: snapshot.revision,
         } as Record<string, unknown>,
       });
     },

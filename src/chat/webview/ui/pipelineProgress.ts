@@ -33,6 +33,7 @@ export interface PipelineStateUI {
   totalEstimatedCost: number;
   runId?: string;
   workflowState?: string;
+  revision?: number;
 }
 
 export interface PipelineProgressElements {

@@ -177,6 +177,7 @@ export interface WorkflowSnapshot {
   repairLoopCount: number;
   costProfileId: string;
   error?: string;
+  revision: number;
 }
 
 // ─── State Machine Instance ────────────────────────────────────────────────
@@ -185,6 +186,7 @@ export class WorkflowStateMachine {
   private state: WorkflowState = "created";
   private stageStates = new Map<string, StageState>();
   private stageSnapshots = new Map<string, StageSnapshot>();
+  private revision = 0;
 
   constructor(
     private readonly runId: string,
@@ -211,6 +213,7 @@ export class WorkflowStateMachine {
     const next = transitionWorkflow(this.state, target);
     if (next === this.state) return false;
     this.state = next;
+    this.revision++;
     return true;
   }
 
@@ -256,6 +259,7 @@ export class WorkflowStateMachine {
     }
 
     this.stageSnapshots.set(stageId, snap);
+    this.revision++;
     return true;
   }
 
@@ -284,6 +288,7 @@ export class WorkflowStateMachine {
       retryCount: 0,
       repairLoopCount: 0,
       costProfileId: this.costProfileId,
+      revision: this.revision,
       ...overrides,
     };
   }

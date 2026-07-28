@@ -316,6 +316,7 @@ export interface SessionState {
   pinnedPrompts?: string[]
   orchestrationRoute?: OrchestrationRouteStatus
   maskingStats?: MaskingSummaryStats
+  pipeline?: PipelineStateUI & { runId?: string; revision?: number }
 }
 
 export interface OrchestrationRouteStatus {

@@ -2473,6 +2473,10 @@ function setupTodoSkillAndSubagentPanels(): void {
           const stream = streamHandlers.get(sid)
           stream?.forceRerender(resumed.existingText)
         }
+        const session = stateManager.getSession(sid)
+        if (session && (session.mode === "orchestrated" || session.pipeline)) {
+          vscode.postMessage({ type: "pipeline_get_state", sessionId: sid })
+        }
       }],
       ["stream_chunk", (_msg, sid) => { if (sid) handleStreamChunk(sid, _msg.text as string, _msg.messageId as string | undefined) }],
       ["stream_end", (_msg, sid) => {
@@ -3091,8 +3095,21 @@ function setupTodoSkillAndSubagentPanels(): void {
       }],
       ["pipeline_progress", (msg, sid) => {
         if (!sid) return
-        const state = (msg.state as PipelineStateUI | undefined)
-        if (!state) return
+        const incoming = (msg.state as (PipelineStateUI & { runId?: string; revision?: number }) | undefined)
+        if (!incoming) return
+        const session = stateManager.getSession(sid)
+        if (session) {
+          const stored = session.pipeline
+          const isNewRun = incoming.runId && stored?.runId && incoming.runId !== stored.runId
+          const isNewer = (incoming.revision ?? 0) > (stored?.revision ?? -1)
+          if (isNewRun || isNewer || !stored) {
+            session.pipeline = incoming
+            stateManager.save()
+          } else if (stored) {
+            // Drop stale progress broadcasts that are older than what the webview already has.
+            return
+          }
+        }
         const msgList = getMessageList(sid)
         if (!msgList) return
         let els = pipelineProgressElements.get(sid)
@@ -3100,7 +3117,7 @@ function setupTodoSkillAndSubagentPanels(): void {
           els = createPipelineProgressElements(msgList)
           pipelineProgressElements.set(sid, els)
         }
-        renderPipelineProgress(state, els, (action) => {
+        renderPipelineProgress(incoming, els, (action) => {
           switch (action.type) {
             case "cancel":
               vscode.postMessage({ type: "pipeline_cancel", sessionId: sid })
