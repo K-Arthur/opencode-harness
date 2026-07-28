@@ -1022,7 +1022,7 @@ function getVsCodeApi() {
     }
 
     function positionMenu(): void {
-      const r = btn.getBoundingClientRect()
+      const r = btn!.getBoundingClientRect()
       const margin = 6
       const menuW = Math.max(r.width, 160)
       const spaceBelow = window.innerHeight - r.bottom - margin
@@ -1033,23 +1033,23 @@ function getVsCodeApi() {
       const top = openAbove
         ? Math.max(margin, r.top - Math.min(160, maxHeight) - 6)
         : Math.min(window.innerHeight - margin - 160, r.bottom + 6)
-      menu.style.position = "fixed"
-      menu.style.left = `${left}px`
-      menu.style.top = `${Math.max(margin, top)}px`
-      menu.style.width = `${menuW}px`
-      menu.style.maxHeight = `${maxHeight}px`
-      menu.style.zIndex = "var(--z-dropdown)"
+      menu!.style.position = "fixed"
+      menu!.style.left = `${left}px`
+      menu!.style.top = `${Math.max(margin, top)}px`
+      menu!.style.width = `${menuW}px`
+      menu!.style.maxHeight = `${maxHeight}px`
+      menu!.style.zIndex = "var(--z-dropdown)"
     }
 
     function closeMenu(): void {
-      menu.classList.add("hidden")
-      btn.setAttribute("aria-expanded", "false")
+      menu!.classList.add("hidden")
+      btn!.setAttribute("aria-expanded", "false")
     }
 
     function selectOption(value: string): void {
       hidden.value = value
-      label.textContent = ROUTE_LABELS[value] || value || "Auto"
-      btn.setAttribute("aria-label", `Route next prompt: ${ROUTE_LABELS[value] || "Auto"}`)
+      label!.textContent = ROUTE_LABELS[value] || value || "Auto"
+      btn!.setAttribute("aria-label", `Route next prompt: ${ROUTE_LABELS[value] || "Auto"}`)
       for (const opt of options) {
         const isSelected = opt.dataset.value === value
         opt.setAttribute("aria-selected", String(isSelected))
