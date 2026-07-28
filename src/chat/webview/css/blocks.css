@@ -3720,3 +3720,149 @@
   font-family: var(--font-mono);
   flex-shrink: 0;
 }
+
+/* ═════════════════════════════════════════════════════════════════╛
+   PIPELINE PROGRESS (Orchestrated mode)
+   ═════════════════════════════════════════════════════════════════╛ */
+
+.pipeline-progress {
+  border: 1px solid var(--color-border, rgba(128, 128, 128, 0.2));
+  border-radius: var(--radius-md, 6px);
+  background: var(--oc-editor-bg, var(--vscode-editor-background));
+  margin: var(--space-3, 12px) var(--space-3, 12px) 0;
+  overflow: hidden;
+  font-size: var(--text-xs, 12px);
+}
+
+.pipeline-progress-header {
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  font-weight: 600;
+  font-size: var(--text-xs, 12px);
+  color: var(--oc-panel-fg, var(--vscode-editor-foreground));
+  border-bottom: 1px solid var(--color-border, rgba(128, 128, 128, 0.15));
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pipeline-stage-list {
+  padding: var(--space-1, 4px) 0;
+}
+
+.pipeline-stage {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  padding: var(--space-1, 4px) var(--space-3, 12px);
+  min-height: 28px;
+  transition: background 0.15s ease;
+}
+
+.pipeline-stage--current {
+  background: color-mix(in srgb, var(--vscode-charts-purple, #b388ff) 10%, transparent);
+}
+
+.pipeline-stage--failed {
+  background: color-mix(in srgb, var(--vscode-errorForeground, #f48771) 8%, transparent);
+}
+
+.pipeline-stage--completed {
+  opacity: 0.85;
+}
+
+.pipeline-stage-indicator {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xs, 12px);
+  border-radius: 50%;
+}
+
+.pipeline-stage--running .pipeline-stage-indicator {
+  color: var(--vscode-charts-purple, #b388ff);
+  animation: pipeline-spin 1s linear infinite;
+}
+
+.pipeline-stage--completed .pipeline-stage-indicator {
+  color: var(--vscode-testing-iconPassed, #4ec9b0);
+}
+
+.pipeline-stage--failed .pipeline-stage-indicator {
+  color: var(--vscode-errorForeground, #f48771);
+}
+
+.pipeline-stage--cancelled .pipeline-stage-indicator {
+  color: var(--vscode-disabledForeground, #808080);
+}
+
+@keyframes pipeline-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.pipeline-stage-info {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  min-width: 0;
+}
+
+.pipeline-stage-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--oc-panel-fg, var(--vscode-editor-foreground));
+}
+
+.pipeline-stage-model {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-2xs, 10px);
+  color: var(--color-muted, var(--vscode-descriptionForeground));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--vscode-editor-foreground) 8%, transparent);
+}
+
+.pipeline-stage-duration {
+  flex-shrink: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-2xs, 10px);
+  color: var(--color-muted, var(--vscode-descriptionForeground));
+}
+
+.pipeline-stage--has-error {
+  cursor: help;
+}
+
+.pipeline-progress-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1, 4px);
+  padding: var(--space-1, 4px) var(--space-3, 12px);
+  border-top: 1px solid var(--color-border, rgba(128, 128, 128, 0.15));
+  font-size: var(--text-2xs, 10px);
+  color: var(--color-muted, var(--vscode-descriptionForeground));
+}
+
+.pipeline-summary-status--running {
+  color: var(--vscode-charts-purple, #b388ff);
+}
+
+.pipeline-summary-status--completed {
+  color: var(--vscode-testing-iconPassed, #4ec9b0);
+}
+
+.pipeline-summary-status--failed {
+  color: var(--vscode-errorForeground, #f48771);
+}
+
+.pipeline-summary-status--cancelled {
+  color: var(--vscode-disabledForeground, #808080);
+}
