@@ -247,8 +247,8 @@ export class HandoffStore {
 
 // ─── Validation & Repair ───────────────────────────────────────────────────
 
-export type ValidationResult =
-  | { valid: true; handoff: StageHandoff }
+export type ValidationResult<T extends StageHandoff = StageHandoff> =
+  | { valid: true; handoff: T }
   | { valid: false; errors: string[]; repaired?: StageHandoff };
 
 function safeParseJSON(text: string): Record<string, unknown> | null {
@@ -312,7 +312,7 @@ function stringVal(val: unknown, def = ""): string {
   return typeof val === "string" ? val : def;
 }
 
-export function validateClassificationOutput(text: string): ValidationResult {
+export function validateClassificationOutput(text: string): ValidationResult<Extract<StageHandoff, { stage: "classify" }>> {
   const obj = extractJSONBlocks(text);
   if (!obj) {
     return {
@@ -335,7 +335,7 @@ export function validateClassificationOutput(text: string): ValidationResult {
   };
 }
 
-export function validateExplorationOutput(text: string): ValidationResult {
+export function validateExplorationOutput(text: string): ValidationResult<Extract<StageHandoff, { stage: "explore" }>> {
   const obj = extractJSONBlocks(text) ?? {};
   return {
     valid: true,
@@ -355,7 +355,7 @@ export function validateExplorationOutput(text: string): ValidationResult {
   };
 }
 
-export function validatePlanOutput(text: string): ValidationResult {
+export function validatePlanOutput(text: string): ValidationResult<Extract<StageHandoff, { stage: "plan" }>> {
   const obj = extractJSONBlocks(text) ?? {};
   const changes = Array.isArray(obj.proposedChanges)
     ? obj.proposedChanges.map((c: Record<string, unknown>) => ({
@@ -385,7 +385,7 @@ export function validatePlanOutput(text: string): ValidationResult {
   };
 }
 
-export function validateImplementationOutput(text: string): ValidationResult {
+export function validateImplementationOutput(text: string): ValidationResult<Extract<StageHandoff, { stage: "implement" }>> {
   const obj = extractJSONBlocks(text) ?? {};
   return {
     valid: true,
@@ -406,7 +406,7 @@ export function validateImplementationOutput(text: string): ValidationResult {
   };
 }
 
-export function validateReviewOutput(text: string): ValidationResult {
+export function validateReviewOutput(text: string): ValidationResult<Extract<StageHandoff, { stage: "review_code" }>> {
   const arr = extractArrayBlocks(text);
   if (arr && arr.length > 0) {
     const findings = arr.map((f: unknown) => {
@@ -454,7 +454,7 @@ export function validateReviewOutput(text: string): ValidationResult {
   };
 }
 
-export function validateVisualAnalysisOutput(text: string): ValidationResult {
+export function validateVisualAnalysisOutput(text: string): ValidationResult<Extract<StageHandoff, { stage: "visual_analyse" }>> {
   const obj = extractJSONBlocks(text) ?? {};
   const findings = Array.isArray(obj.findings)
     ? obj.findings.map((f: Record<string, unknown>) => ({
@@ -480,7 +480,7 @@ export function validateVisualAnalysisOutput(text: string): ValidationResult {
   };
 }
 
-export function validateVerificationOutput(text: string): ValidationResult {
+export function validateVerificationOutput(text: string): ValidationResult<Extract<StageHandoff, { stage: "test_execute" }>> {
   const obj = extractJSONBlocks(text) ?? {};
   return {
     valid: true,
@@ -500,7 +500,7 @@ export function validateVerificationOutput(text: string): ValidationResult {
   };
 }
 
-export function validateSynthesisOutput(text: string): ValidationResult {
+export function validateSynthesisOutput(text: string): ValidationResult<Extract<StageHandoff, { stage: "synthesise" }>> {
   return {
     valid: true,
     handoff: {
