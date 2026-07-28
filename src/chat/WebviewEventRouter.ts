@@ -248,6 +248,9 @@ export class WebviewEventRouter {
     "open_subagent_detail",
     "webview_error",
     "chat_dir_change",
+    // Pipeline control messages
+    "pipeline_cancel", "pipeline_cancel_stage", "pipeline_pause", "pipeline_resume",
+    "pipeline_approve_stage", "pipeline_retry_stage", "pipeline_skip_stage", "pipeline_get_state",
   ])
 
   /**
@@ -2627,6 +2630,60 @@ export class WebviewEventRouter {
       } catch (error) {
         log.error(`[WebviewEventRouter] Error handling send_steer_prompt: ${error}`)
         this.opts.postRequestError(`Failed to send steer prompt: ${error instanceof Error ? error.message : String(error)}`, sessionId)
+      }
+    }],
+    // ── Pipeline control handlers ──────────────────────────────────────
+    ["pipeline_cancel", (_msg, sessionId) => {
+      if (!sessionId) return
+      log.info(`pipeline_cancel: sessionId=${sessionId}`)
+      this.opts.streamCoordinator.orchestrationCoordinator.cancelPipeline(sessionId)
+    }],
+    ["pipeline_cancel_stage", (msg, sessionId) => {
+      if (!sessionId) return
+      const stageId = typeof msg.stageId === "string" ? msg.stageId : undefined
+      if (stageId) {
+        this.opts.streamCoordinator.orchestrationCoordinator.cancelStage(sessionId, stageId)
+      }
+    }],
+    ["pipeline_pause", (_msg, sessionId) => {
+      if (!sessionId) return
+      this.opts.streamCoordinator.orchestrationCoordinator.pauseWorkflow(sessionId)
+    }],
+    ["pipeline_resume", (_msg, sessionId) => {
+      if (!sessionId) return
+      this.opts.streamCoordinator.orchestrationCoordinator.resumeWorkflow(sessionId)
+    }],
+    ["pipeline_approve_stage", (msg, sessionId) => {
+      if (!sessionId) return
+      const stageId = typeof msg.stageId === "string" ? msg.stageId : undefined
+      const approved = msg.approved === true
+      if (stageId) {
+        this.opts.streamCoordinator.orchestrationCoordinator.approveStage(sessionId, stageId, approved)
+      }
+    }],
+    ["pipeline_retry_stage", (msg, sessionId) => {
+      if (!sessionId) return
+      const stageId = typeof msg.stageId === "string" ? msg.stageId : undefined
+      if (stageId) {
+        this.opts.streamCoordinator.orchestrationCoordinator.retryStage(sessionId, stageId)
+      }
+    }],
+    ["pipeline_skip_stage", (msg, sessionId) => {
+      if (!sessionId) return
+      const stageId = typeof msg.stageId === "string" ? msg.stageId : undefined
+      if (stageId) {
+        this.opts.streamCoordinator.orchestrationCoordinator.skipStage(sessionId, stageId)
+      }
+    }],
+    ["pipeline_get_state", (_msg, sessionId) => {
+      if (!sessionId) return
+      const state = this.opts.streamCoordinator.orchestrationCoordinator.getPipelineState(sessionId)
+      if (state) {
+        this.opts.postMessage({
+          type: "pipeline_progress",
+          sessionId,
+          state,
+        } as Record<string, unknown>)
       }
     }],
   ])

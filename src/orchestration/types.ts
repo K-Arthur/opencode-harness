@@ -123,6 +123,8 @@ export interface StageDefinition {
   fallbackChain?: string[];
   /** Maximum iterations (review loops) */
   maxIterations?: number;
+  /** Maximum attempts (including retries) before marking failed */
+  maxAttempts?: number;
   /** Token budget for this stage */
   tokenBudget?: number;
   /** Timeout in ms */
@@ -131,12 +133,24 @@ export interface StageDefinition {
   dependsOn?: PipelineStageId[];
   /** Whether this stage may run in parallel with siblings */
   parallel?: boolean;
+  /** Whether this stage is required (pipeline fails if it fails) */
+  required?: boolean;
+  /** Whether this stage is enabled by default */
+  enabledByDefault?: boolean;
+  /** Whether user approval is required before starting this stage */
+  requiresApprovalBeforeStart?: boolean;
   /** Conditions to skip this stage */
   skipWhen?: StageSkipCondition;
   /** Reasoning effort level */
   reasoningEffort?: "low" | "medium" | "high" | "auto";
   /** Tool permissions for this stage */
   toolPermissions?: string[];
+  /** Maximum estimated cost in USD for this stage */
+  maximumEstimatedCost?: number;
+  /** Maximum input tokens for this stage */
+  maxInputTokens?: number;
+  /** Maximum output tokens for this stage */
+  maxOutputTokens?: number;
 }
 
 export interface StageSkipCondition {
@@ -152,8 +166,9 @@ export interface StageSkipCondition {
 
 export interface WorkflowDefinition {
   id: string;
+  version?: number;
   name: string;
-  description: string;
+  description?: string;
   /** Ordered stages */
   stages: StageDefinition[];
   /** Cost profile to use */
@@ -172,6 +187,35 @@ export interface WorkflowDefinition {
   maxTotalTokens: number;
   /** Max total estimated cost */
   maxTotalCost: number;
+  /** Trigger policy: how this workflow is selected */
+  triggerPolicy?: WorkflowTriggerPolicy;
+  /** Failure policy: what happens on stage failure */
+  failurePolicy?: WorkflowFailurePolicy;
+  /** Privacy policy: provider restrictions */
+  privacyPolicy?: WorkflowPrivacyPolicy;
+}
+
+export interface WorkflowTriggerPolicy {
+  /** Minimum complexity to trigger this workflow */
+  minComplexity?: number;
+  /** Intent types the workflow handles */
+  intentTypes?: string[];
+  /** Whether images trigger this workflow */
+  requiresImages?: boolean;
+}
+
+export interface WorkflowFailurePolicy {
+  /** Action on failure: fail, retry, skip, pause, continue */
+  onFailure: "fail" | "retry" | "skip" | "pause" | "continue";
+  /** Maximum number of retries before giving up */
+  maxRetries?: number;
+}
+
+export interface WorkflowPrivacyPolicy {
+  /** Providers allowed for this workflow */
+  allowedProviders?: string[];
+  /** Providers blocked for this workflow */
+  blockedProviders?: string[];
 }
 
 export interface ContextPolicy {

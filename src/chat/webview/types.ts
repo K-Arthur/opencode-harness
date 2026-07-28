@@ -710,7 +710,11 @@ export type HostMessage =
   | { type: "prompt_accepted"; sessionId: string; messageId: string; clientRequestId?: string }
   | { type: "prompt_send_failed"; sessionId: string; messageId?: string; clientRequestId?: string; text: string; reason: string; attachments?: Attachment[] }
   | { type: "orchestration_route"; sessionId: string; role: "planning" | "implementation" | "review" | "debugging"; mode: string; model: string; agent: string }
-  | { type: "pipeline_progress"; sessionId: string; state: PipelineStateUI }
+   | { type: "pipeline_progress"; sessionId: string; state: PipelineStateUI & { runId?: string; workflowState?: string } }
+  /** Request user approval for a pipeline stage (e.g., before implementation) */
+  | { type: "pipeline_approval_request"; sessionId: string; stageId: string }
+  /** Orchestration diagnostic event */
+  | { type: "orchestration_diagnostic"; sessionId: string; event: string; data?: Record<string, unknown> }
   | { type: "role_models_config"; roleModels: Record<string, string>; modeModels: Record<string, string>; enabled: boolean }
   | { type: "masking_summary"; sessionId: string; stats: { redactedSecrets: number; maskedFileMentions: number; maskedDocumentBlocks: number; removedContextItems: number; truncatedTokens: number; inputTokens: number; outputTokens: number } }
   | { type: "temp_session_created"; activeSessionId: string; session: SessionState }
@@ -1080,6 +1084,23 @@ export type WebviewMessage =
   /** User response to a suggest_mode_switch prompt. persist=true means "always
    *  switch for this session without asking." */
   | { type: "plan_complete_preference"; sessionId: string; targetMode: "build" | "auto"; persist: boolean }
+  // ── Pipeline control messages ────────────────────────────────────────────
+  /** Cancel the entire pipeline */
+  | { type: "pipeline_cancel"; sessionId: string }
+  /** Cancel a specific stage */
+  | { type: "pipeline_cancel_stage"; sessionId: string; stageId: string }
+  /** Pause the pipeline */
+  | { type: "pipeline_pause"; sessionId: string }
+  /** Resume the pipeline */
+  | { type: "pipeline_resume"; sessionId: string }
+  /** Approve a stage (e.g., plan approval before implementation) */
+  | { type: "pipeline_approve_stage"; sessionId: string; stageId: string; approved: boolean }
+  /** Retry a failed stage */
+  | { type: "pipeline_retry_stage"; sessionId: string; stageId: string; model?: string }
+  /** Skip an optional stage */
+  | { type: "pipeline_skip_stage"; sessionId: string; stageId: string }
+  /** Get current pipeline state */
+  | { type: "pipeline_get_state"; sessionId: string }
 
 // Backward-compatible alias
 export type LegacyWebviewMessage = WebviewMessage & Record<string, unknown>

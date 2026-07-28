@@ -3100,7 +3100,31 @@ function setupTodoSkillAndSubagentPanels(): void {
           els = createPipelineProgressElements(msgList)
           pipelineProgressElements.set(sid, els)
         }
-        renderPipelineProgress(state, els)
+        renderPipelineProgress(state, els, (action) => {
+          switch (action.type) {
+            case "cancel":
+              vscode.postMessage({ type: "pipeline_cancel", sessionId: sid })
+              break
+            case "cancel_stage":
+              vscode.postMessage({ type: "pipeline_cancel_stage", sessionId: sid, stageId: action.stageId })
+              break
+            case "pause":
+              vscode.postMessage({ type: "pipeline_pause", sessionId: sid })
+              break
+            case "resume":
+              vscode.postMessage({ type: "pipeline_resume", sessionId: sid })
+              break
+            case "retry_stage":
+              vscode.postMessage({ type: "pipeline_retry_stage", sessionId: sid, stageId: action.stageId })
+              break
+            case "skip_stage":
+              vscode.postMessage({ type: "pipeline_skip_stage", sessionId: sid, stageId: action.stageId })
+              break
+            case "approve_stage":
+              vscode.postMessage({ type: "pipeline_approve_stage", sessionId: sid, stageId: action.stageId, approved: action.approved })
+              break
+          }
+        })
       }],
       ["masking_summary", (msg, sid) => {
         if (!sid) return

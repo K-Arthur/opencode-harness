@@ -29,6 +29,8 @@ import { mapRunError, type RunErrorContext } from "./runErrorMapper"
 import { logStreamTrace } from "../../session/streamTrace"
 import { modeToAgent } from "../modePolicy"
 import { PipelineCoordinator, selectWorkflow } from "../../orchestration/pipelineCoordinator"
+import { OrchestrationCoordinator } from "../../orchestration/pipelineCoordinator2"
+import { createEnhancedStageDispatcher } from "../../orchestration/enhancedStageDispatcher"
 import { createServerStageDispatcher } from "../../orchestration/serverStageDispatcher"
 import { DEFAULT_ORCHESTRATED_CONFIG } from "../../orchestration/types"
 import { createStreamingLog, type StreamingLogSink } from "./StreamingLog"
@@ -283,6 +285,8 @@ export class StreamCoordinator {
   private tabCloseDisposable: vscode.Disposable | null = null
   /** Core dependencies injected via StreamDeps */
   private readonly sessionManager: SessionManager
+  /** Orchestration coordinator for orchestrated mode pipeline control */
+  readonly orchestrationCoordinator = new OrchestrationCoordinator()
   private readonly sessionStore: SessionStore
   private readonly contextEngine: ContextEngine
   private readonly contextMonitor: ContextMonitor
@@ -1028,25 +1032,24 @@ export class StreamCoordinator {
     }
     const orchestratedConfig = { ...DEFAULT_ORCHESTRATED_CONFIG, roleModels }
     const abortController = new AbortController()
-    const dispatcher = createServerStageDispatcher({
+    const dispatcher = createEnhancedStageDispatcher({
       sessionManager: this.getSm(tabId),
       callbacks,
       cliSessionId,
       tabId,
       abortController,
     })
-    const pipeline = new PipelineCoordinator()
     const assistantId = `orchestrated-${tabId}-${Date.now()}`
 
     try {
       callbacks.postMessage({ type: "stream_start", sessionId: tabId, messageId: assistantId, isSteerPrompt: false })
-      const result = await pipeline.runPipeline({
+      const result = await this.orchestrationCoordinator.runPipeline({
         sessionId: tabId,
         workflow,
         config: orchestratedConfig,
         userRequest: text,
         attachedImages: attachments.length > 0,
-        dispatcher,
+        executor: dispatcher,
       })
       const message: ChatMessage = {
         role: "assistant",
@@ -1077,7 +1080,7 @@ export class StreamCoordinator {
     } finally {
       this.activeRuns.delete(tabId)
       this.tabManager.setStreaming(tabId, false)
-      pipeline.removePipeline(tabId)
+      this.orchestrationCoordinator.removePipeline(tabId)
       abortController.abort()
     }
   }
