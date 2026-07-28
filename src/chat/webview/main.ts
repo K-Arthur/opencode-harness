@@ -1011,10 +1011,10 @@ function getVsCodeApi() {
     const hiddenRaw = els.roleRouteSelect
     const labelRaw = document.getElementById("role-route-current-text")
     if (!btnRaw || !menuRaw || !hiddenRaw || !labelRaw) return
-    const btn = btnRaw as HTMLElement as HTMLButtonElement
-    const menu = menuRaw as HTMLElement
-    const hidden = hiddenRaw as HTMLInputElement
-    const label = labelRaw as HTMLElement
+    const btn = btnRaw as HTMLButtonElement
+    const menu = menuRaw
+    const hidden = hiddenRaw
+    const label = labelRaw
 
     const options = Array.from(menu.querySelectorAll<HTMLElement>(".route-option"))
     const ROUTE_LABELS: Record<string, string> = {
