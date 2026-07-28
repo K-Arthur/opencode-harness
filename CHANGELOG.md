@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > move items from `[Unreleased]` to the new version section and update the date.
 > Never leave features marked as "unreleased" after they are shipped.
 
-## [Unreleased]
+## [0.4.64] — 2026-07-27
 
 ### Changed
 
