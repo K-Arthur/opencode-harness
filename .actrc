@@ -1,5 +1,20 @@
---bind
---container-architecture linux/amd64
---env NODE_VERSION=22
---platform ubuntu-latest=catthehacker/ubuntu:act-latest
---artifact-server-path /tmp/act-artifacts
+# act configuration file for local GitHub Actions testing
+# This file configures act to run GitHub Actions workflows locally
+
+# Use self-hosted runner for better local performance (no Docker required)
+-P ubuntu-latest=-self-hosted
+
+# Don't pull images if they already exist
+--pull-if-needed
+
+# Use the default branch
+--branch master
+
+# Show the workflow execution plan
+--dry-run=false
+
+# Use the .github/workflows directory
+--workflows .github/workflows
+
+# Don't use the secret file by default (create .secrets file for local secrets)
+# --secret-file .secrets
