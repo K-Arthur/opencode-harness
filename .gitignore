@@ -28,3 +28,24 @@ audit-report.md
 .opencode/skills/
 *.pkg.tar.zst
 *.bak
+
+# AI agent working memory and session state (should never be tracked)
+*_WORKING_MEMORY.md
+*_MEMORY.md
+*_PIPELINE_MEMORY.md
+HARNESS_MEMORY.md
+AGENTS_WORKING_MEMORY.md
+
+# Generated build attribution analysis
+.bundle-meta/
+
+# Local developer AI-tool config (machine-specific paths, permissions)
+.claude/settings.json
+
+# Generated one-off audit reports at repo root
+*audit-report.md
+queue-steer-*.md
+welcome-screen-research-notes.md
+*-research-notes.md
+*-implementation-map.md
+*-audit.md

@@ -116,6 +116,101 @@ afterthought.
 7. **Because the workspace is ephemeral, uncommitted test fixes are lost.**
    Commit them immediately after they pass (see the top-level rule).
 
+## CI/CD Discipline — Automated Validation & Failure Prevention
+
+The project includes comprehensive CI/CD automation to prevent pipeline failures
+and provide automated debugging. All CI/CD changes must follow validation
+procedures before being committed.
+
+### Pre-commit Validation
+
+1. **Run the CI validation cascade before pushing workflow changes:**
+   ```bash
+   node scripts/ci-validation-cascade.mjs
+   ```
+   This validates:
+   - YAML syntactic integrity
+   - Local act runner compatibility
+   - Secret/environment variable security
+   - Log extraction tooling functionality
+
+2. **Install and use pre-commit hooks for automatic validation:**
+   ```bash
+   pip install pre-commit
+   pre-commit install
+   ```
+   Pre-commit hooks include:
+   - YAML/JSON/TOML syntax validation
+   - ESLint for TypeScript/JavaScript
+   - GitHub Actions workflow validation
+   - Project-specific checks (typecheck, unit tests, bundle size, architecture)
+
+### Local CI Testing
+
+1. **Use act for local GitHub Actions testing:**
+   ```bash
+   # Install act (CachyOS/Arch)
+   sudo pacman -S act
+   # Or use the setup script
+   ./scripts/setup-act.sh
+
+   # Test workflows locally
+   act push                    # Run all jobs
+   act -j typecheck            # Run specific job
+   act --dry-run               # Validate without executing
+   ```
+
+2. **Test specific CI jobs before pushing:**
+   - `act -j typecheck` - Validate TypeScript compilation
+   - `act -j build` - Test build process
+   - `act -j unit` - Run unit tests
+   - `act -j lint` - Check code quality
+
+### Failure Analysis & Debugging
+
+1. **Automated failure analysis is enabled on CI failures:**
+   - AI-powered failure analysis using `actions-ai-advisor`
+   - Custom log extraction for structured failure summaries
+   - Automatic PR comments with failure details
+
+2. **Manual log extraction for local debugging:**
+   ```bash
+   node scripts/extract-ci-failures.mjs <log-file> --format markdown
+   node scripts/extract-ci-failures.mjs <log-file> --format json
+   ```
+
+### Workflow Change Guidelines
+
+1. **Always validate workflow YAML syntax:**
+   ```bash
+   node scripts/validate-workflows.mjs .github/workflows/ci.yml
+   ```
+
+2. **Test workflow changes locally with act before pushing:**
+   ```bash
+   act --dry-run  # Validate structure
+   act -j <job-name>  # Test specific job
+   ```
+
+3. **Follow caching best practices:**
+   - Use OS-specific cache keys with `${{ runner.os }}`
+   - Implement restore-keys for fallback caching
+   - Cache dependencies and build artifacts separately
+   - Use `hashFiles()` for lockfile-based cache invalidation
+
+4. **Never mask test failures:**
+   - Avoid `continue-on-error: true` unless absolutely necessary
+   - Ensure failing tests fail the pipeline
+   - Fix root causes rather than hiding failures
+
+### CI/CD Documentation
+
+- **Local Testing Guide**: `docs/development/local-ci-testing.md`
+- **CI Validation**: `scripts/ci-validation-cascade.mjs`
+- **Log Extraction**: `scripts/extract-ci-failures.mjs`
+- **Workflow Validation**: `scripts/validate-workflows.mjs`
+- **Pipeline Memory**: tracked locally via `GITHUB_PIPELINE_MEMORY.md` (not committed; tracks CI/CD changes and issues per session)
+
 ## What This Is
 
 VS Code extension that integrates the opencode AI agent into VS Code. TypeScript/Node.js, built with esbuild. Client-server architecture: extension connects to an opencode HTTP server (localhost:4096) via `@opencode-ai/sdk/v2` (v2 client). Does not embed or spawn the CLI directly for chat.
