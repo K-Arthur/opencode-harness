@@ -159,6 +159,7 @@ export interface StageAttempt {
   completedAt?: number;
   state: StageState;
   tokensUsed?: number;
+  estimatedCost?: number;
   error?: string;
 }
 

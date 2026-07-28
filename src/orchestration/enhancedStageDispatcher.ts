@@ -1,12 +1,4 @@
-/**
- * Enhanced stage dispatcher using SubtaskPartInput for real server-side
- * agent delegation with per-stage model overrides.
- *
- * Each pipeline stage is dispatched as a subtask to a named agent with
- * an explicit model override, controlled context, and abort signal.
- */
-
-import type { SubtaskPartInput, TextPartInput, Message, Part } from "@opencode-ai/sdk/v2";
+import type { SubtaskPartInput, TextPartInput, FilePartInput, Message, Part } from "@opencode-ai/sdk/v2";
 import { parseModelRef } from "../utils/tokenCounter";
 import { sdkMessageToChatMessage } from "../session/sdkMessageConverter";
 import type { SessionManager } from "../session/SessionManager";
@@ -14,6 +6,8 @@ import type { ModelRef, PromptOptions } from "../session/SessionManager";
 import type { StreamCallbacks } from "../chat/handlers/StreamCoordinatorTypes";
 import type { WorkflowSnapshot } from "./stateMachine";
 import type { PipelineStateUI } from "../chat/webview/ui/pipelineProgress";
+import type { AttachmentDescriptor } from "./multimodalDispatcher";
+import type { StageExecutor } from "./pipelineCoordinator2";
 import { log } from "../utils/outputChannel";
 
 interface EnhancedDispatcherDeps {
@@ -41,37 +35,42 @@ function responseTextFromParts(result: { info: unknown; parts: Part[] }): string
     .join("\n");
 }
 
-export function createEnhancedStageDispatcher(deps: EnhancedDispatcherDeps) {
+export function createEnhancedStageDispatcher(deps: EnhancedDispatcherDeps): StageExecutor {
   const { sessionManager, callbacks, cliSessionId, tabId, abortController } = deps;
 
   return {
-    async executePrompt(params: {
-      sessionId: string;
-      model: string;
-      role: string;
-      agent: string;
-      systemPrompt: string;
-      userPrompt: string;
-      stageId: string;
-      stageRole: string;
-      maxTokens?: number;
-      timeoutMs?: number;
-      signal?: AbortSignal;
-      attachedImages?: boolean;
-    }) {
+    async executePrompt(params) {
       const effectiveSignal = params.signal ?? abortController.signal;
       if (effectiveSignal.aborted) throw new Error("Aborted");
 
       const modelRef = buildModelRef(params.model);
       const startedAt = Date.now();
 
-      // Build parts: system prompt + user prompt as text parts
-      const parts: (TextPartInput | SubtaskPartInput)[] = [];
+      const parts: (TextPartInput | SubtaskPartInput | FilePartInput)[] = [];
+
+      // System prompt
       if (params.systemPrompt) {
         parts.push({ type: "text", text: params.systemPrompt });
       }
+
+      // User prompt
       if (params.userPrompt) {
         parts.push({ type: "text", text: params.userPrompt });
+      }
+
+      // Attach image parts if present (multimodal support)
+      // Uses FilePartInput with file:// URIs which the server handles natively
+      if (params.attachmentDescriptors && params.attachmentDescriptors.length > 0) {
+        for (const attachment of params.attachmentDescriptors) {
+          if (attachment.uri.startsWith("file://") || attachment.uri.startsWith("vscode-file://")) {
+            parts.push({
+              type: "file",
+              mime: attachment.mimeType,
+              filename: attachment.originalName,
+              url: attachment.uri,
+            } as FilePartInput);
+          }
+        }
       }
 
       const options: PromptOptions = {
@@ -79,8 +78,6 @@ export function createEnhancedStageDispatcher(deps: EnhancedDispatcherDeps) {
         agent: params.agent,
       };
 
-      // Use sendPrompt (blocking) for now since we need the response
-      // SubtaskPartInput would be used for truly async agent delegation
       const sendPromise = sessionManager.sendPrompt(cliSessionId, parts, options);
       const timeoutMs = params.timeoutMs ?? 120_000;
 
@@ -176,13 +173,11 @@ export function createEnhancedStageDispatcher(deps: EnhancedDispatcherDeps) {
     },
 
     async requestApproval(stageId: string): Promise<boolean> {
-      // Send approval request to webview
       callbacks.postMessage({
         type: "pipeline_approval_request",
         sessionId: tabId,
         stageId,
       });
-      // Return false immediately — approval comes via the control API
       return false;
     },
   };

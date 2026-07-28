@@ -1,15 +1,3 @@
-/**
- * Pipeline Progress UI — displays the current state of the orchestrated pipeline.
- *
- * Renders a compact progress indicator showing:
- * - Current stage (animate-visible)
- * - Completed stages (checkmark)
- * - Failed stages (error indicator)
- * - Stage label and model name
- * - Token usage and estimated cost
- * - Control buttons for retry, cancel, pause, resume, skip, approve
- */
-
 import { PIPELINE_STAGE_LABELS, type PipelineStageId } from "../../../orchestration/types";
 
 export interface PipelineStageSnapshotUI {
@@ -21,6 +9,7 @@ export interface PipelineStageSnapshotUI {
   tokensUsed?: number;
   estimatedCost?: number;
   error?: string;
+  retryCount?: number;
 }
 
 export interface PipelineStateUI {
@@ -34,6 +23,11 @@ export interface PipelineStateUI {
   runId?: string;
   workflowState?: string;
   revision?: number;
+  /** Recovery state after reload */
+  recoveryState?: string;
+  /** Repair loop info */
+  repairPass?: number;
+  repairMaxPasses?: number;
 }
 
 export interface PipelineProgressElements {
@@ -48,13 +42,16 @@ export type PipelineControlAction =
   | { type: "cancel_stage"; stageId: string }
   | { type: "pause" }
   | { type: "resume" }
-  | { type: "retry_stage"; stageId: string }
+  | { type: "retry_stage"; stageId: string; model?: string }
   | { type: "skip_stage"; stageId: string }
-  | { type: "approve_stage"; stageId: string; approved: boolean };
+  | { type: "approve_stage"; stageId: string; approved: boolean }
+  | { type: "override_model"; stageId: string; model: string }
+  | { type: "pause_after_stage"; stageId: string }
+  | { type: "approve_plan"; approvalId: string; decision: "approve" | "reject" }
+  | { type: "confirm_recovery"; action: "continue" | "cancel" | "review" }
+  | { type: "stop_with_results" };
 
 export type PipelineControlHandler = (action: PipelineControlAction) => void;
-
-// ─── Render ────────────────────────────────────────────────────────────────
 
 export function renderPipelineProgress(
   state: PipelineStateUI,
@@ -67,11 +64,16 @@ export function renderPipelineProgress(
   container.setAttribute("role", "region");
   container.setAttribute("aria-label", `Orchestration pipeline — ${state.status}`);
 
+  // Render recovery banner if applicable
+  if (state.recoveryState) {
+    renderRecoveryBanner(container, state, onControl);
+  }
+
   // Render stage list
   stageList.innerHTML = "";
   for (let i = 0; i < state.stages.length; i++) {
     const stage = state.stages[i]!;
-    const row = createStageRow(stage, i === state.currentStageIndex, state.status, onControl);
+    const row = createStageRow(stage, i === state.currentStageIndex, state.status, state.workflowState, onControl);
     stageList.appendChild(row);
   }
 
@@ -87,7 +89,7 @@ export function renderPipelineProgress(
 
   const statusEl = document.createElement("span");
   statusEl.className = `pipeline-summary-status pipeline-summary-status--${state.status}`;
-  statusEl.textContent = state.status === "running" ? "Running" : state.status === "completed" ? "Completed" : state.status === "failed" ? "Failed" : "Cancelled";
+  statusEl.textContent = getStatusLabel(state);
 
   summaryRow.appendChild(tokensEl);
   if (costEl.textContent) {
@@ -96,6 +98,14 @@ export function renderPipelineProgress(
   }
   summaryRow.appendChild(document.createTextNode(" · "));
   summaryRow.appendChild(statusEl);
+
+  // Repair pass info
+  if (state.repairPass && state.repairMaxPasses) {
+    const repairEl = document.createElement("span");
+    repairEl.className = "pipeline-summary-repair";
+    repairEl.textContent = ` · Repair ${state.repairPass}/${state.repairMaxPasses}`;
+    summaryRow.appendChild(repairEl);
+  }
 
   // Render controls
   controlsRow.innerHTML = "";
@@ -107,13 +117,49 @@ export function renderPipelineProgress(
       cancelBtn.className = "pipeline-ctrl-btn pipeline-ctrl-cancel";
       controlsRow.appendChild(cancelBtn);
     }
+
+    // Recovery controls
+    if (state.recoveryState === "pending_user_review" || state.recoveryState === "pending_user_confirmation") {
+      const continueBtn = createControlButton("Continue", "pipeline-ctrl-recover", () => onControl({ type: "confirm_recovery", action: "continue" }));
+      controlsRow.appendChild(continueBtn);
+      const reviewBtn = createControlButton("Review", "pipeline-ctrl-review", () => onControl({ type: "confirm_recovery", action: "review" }));
+      controlsRow.appendChild(reviewBtn);
+      const cancelBtn = createControlButton("Cancel", "pipeline-ctrl-cancel", () => onControl({ type: "confirm_recovery", action: "cancel" }));
+      cancelBtn.className = "pipeline-ctrl-btn pipeline-ctrl-cancel";
+      controlsRow.appendChild(cancelBtn);
+    }
   }
+}
+
+function renderRecoveryBanner(
+  container: HTMLElement,
+  state: PipelineStateUI,
+  onControl?: PipelineControlHandler,
+): void {
+  const existing = container.querySelector(".pipeline-recovery-banner");
+  if (existing) return;
+
+  const banner = document.createElement("div");
+  banner.className = "pipeline-recovery-banner";
+  banner.setAttribute("role", "alert");
+
+  const message = document.createElement("span");
+  message.className = "pipeline-recovery-message";
+  message.textContent = state.recoveryState === "pending_user_review"
+    ? "Pipeline recovered from reload — review before continuing"
+    : state.recoveryState === "pending_user_confirmation"
+      ? "Pipeline recovered — confirm to continue"
+      : "Pipeline recovered";
+  banner.appendChild(message);
+
+  container.prepend(banner);
 }
 
 function createStageRow(
   stage: PipelineStageSnapshotUI,
   isCurrent: boolean,
   pipelineStatus: string,
+  workflowState?: string,
   onControl?: PipelineControlHandler,
 ): HTMLElement {
   const row = document.createElement("div");
@@ -153,6 +199,14 @@ function createStageRow(
     info.appendChild(modelBadge);
   }
 
+  // Retry count badge
+  if (stage.retryCount && stage.retryCount > 1) {
+    const retryBadge = document.createElement("span");
+    retryBadge.className = "pipeline-stage-retry";
+    retryBadge.textContent = `×${stage.retryCount}`;
+    info.appendChild(retryBadge);
+  }
+
   row.appendChild(info);
 
   // Duration
@@ -161,6 +215,17 @@ function createStageRow(
     duration.className = "pipeline-stage-duration";
     duration.textContent = formatDuration(stage.completedAt - stage.startedAt);
     row.appendChild(duration);
+  }
+
+  // Token/cost info for completed stages
+  if (stage.tokensUsed && stage.tokensUsed > 0) {
+    const meta = document.createElement("span");
+    meta.className = "pipeline-stage-meta";
+    meta.textContent = `${(stage.tokensUsed / 1000).toFixed(1)}K`;
+    if (stage.estimatedCost && stage.estimatedCost > 0) {
+      meta.textContent += ` · $${stage.estimatedCost.toFixed(4)}`;
+    }
+    row.appendChild(meta);
   }
 
   // Error tooltip
@@ -181,6 +246,20 @@ function createStageRow(
     retryBtn.title = "Retry this stage";
     retryBtn.setAttribute("aria-label", `Retry ${PIPELINE_STAGE_LABELS[stage.stageId] ?? stage.stageId}`);
     actions.appendChild(retryBtn);
+
+    // Model override button
+    if (stage.status === "failed") {
+      const modelBtn = createControlButton("Model", "pipeline-ctrl-model", (e) => {
+        e.stopPropagation();
+        const newModel = prompt(`Enter model ID to retry ${stage.stageId}:`, stage.model);
+        if (newModel && newModel.trim()) {
+          onControl({ type: "override_model", stageId: stage.stageId, model: newModel.trim() });
+        }
+      });
+      modelBtn.title = "Retry with a different model";
+      modelBtn.setAttribute("aria-label", `Retry with model for ${PIPELINE_STAGE_LABELS[stage.stageId] ?? stage.stageId}`);
+      actions.appendChild(modelBtn);
+    }
 
     const skipBtn = createControlButton("Skip", "pipeline-ctrl-skip", (e) => {
       e.stopPropagation();
@@ -206,13 +285,16 @@ function createStageRow(
     cancelBtn.setAttribute("aria-label", `Cancel ${PIPELINE_STAGE_LABELS[stage.stageId] ?? stage.stageId}`);
     actions.appendChild(cancelBtn);
 
-    row.appendChild(actions);
-  }
+    // Pause after this stage
+    const pauseAfterBtn = createControlButton("Pause →", "pipeline-ctrl-pause-after", (e) => {
+      e.stopPropagation();
+      onControl({ type: "pause_after_stage", stageId: stage.stageId });
+    });
+    pauseAfterBtn.title = "Pause after this stage completes";
+    pauseAfterBtn.setAttribute("aria-label", `Pause after ${PIPELINE_STAGE_LABELS[stage.stageId] ?? stage.stageId}`);
+    actions.appendChild(pauseAfterBtn);
 
-  // Approve button for approval requests
-  if (onControl && isCurrent && stage.status === "running" && pipelineStatus === "running") {
-    // Only show approve if the workflow state suggests waiting for approval
-    // This is wired separately via pipeline_approval_request
+    row.appendChild(actions);
   }
 
   return row;
@@ -227,6 +309,15 @@ function createControlButton(text: string, className: string, onClick: (e: Mouse
   return btn;
 }
 
+function getStatusLabel(state: PipelineStateUI): string {
+  if (state.recoveryState) return "Recovering";
+  if (state.workflowState === "waiting_for_approval") return "Awaiting approval";
+  return state.status === "running" ? "Running"
+    : state.status === "completed" ? "Completed"
+      : state.status === "failed" ? "Failed"
+        : "Cancelled";
+}
+
 // ─── Approval Banner ───────────────────────────────────────────────────────
 
 export function showApprovalBanner(
@@ -235,6 +326,7 @@ export function showApprovalBanner(
   onApprove: () => void,
   onReject: () => void,
   onEdit?: () => void,
+  onModelOverride?: (model: string) => void,
 ): HTMLElement {
   const banner = document.createElement("div");
   banner.className = "pipeline-approval-banner";
@@ -270,6 +362,65 @@ export function showApprovalBanner(
     actions.appendChild(editBtn);
   }
 
+  if (onModelOverride) {
+    const modelBtn = createControlButton("Change Model", "pipeline-ctrl-model", () => {
+      const newModel = prompt("Enter model ID to use for implementation:");
+      if (newModel && newModel.trim()) {
+        banner.remove();
+        onModelOverride(newModel.trim());
+      }
+    });
+    actions.appendChild(modelBtn);
+  }
+
+  banner.appendChild(actions);
+  container.prepend(banner);
+  return banner;
+}
+
+// ─── Recovery Banner ───────────────────────────────────────────────────────
+
+export function showRecoveryBanner(
+  container: HTMLElement,
+  state: PipelineStateUI,
+  onContinue: () => void,
+  onCancel: () => void,
+  onReview?: () => void,
+): HTMLElement {
+  const banner = document.createElement("div");
+  banner.className = "pipeline-recovery-banner";
+  banner.setAttribute("role", "alertdialog");
+  banner.setAttribute("aria-label", "Pipeline recovery");
+
+  const message = document.createElement("span");
+  message.className = "pipeline-recovery-message";
+  message.textContent = "Pipeline was interrupted. Review the state and choose an action.";
+  banner.appendChild(message);
+
+  const actions = document.createElement("span");
+  actions.className = "pipeline-recovery-actions";
+
+  const continueBtn = createControlButton("Continue", "pipeline-ctrl-recover", () => {
+    banner.remove();
+    onContinue();
+  });
+  actions.appendChild(continueBtn);
+
+  if (onReview) {
+    const reviewBtn = createControlButton("Review", "pipeline-ctrl-review", () => {
+      banner.remove();
+      onReview();
+    });
+    actions.appendChild(reviewBtn);
+  }
+
+  const cancelBtn = createControlButton("Cancel", "pipeline-ctrl-cancel", () => {
+    banner.remove();
+    onCancel();
+  });
+  cancelBtn.className = "pipeline-ctrl-btn pipeline-ctrl-cancel";
+  actions.appendChild(cancelBtn);
+
   banner.appendChild(actions);
   container.prepend(banner);
   return banner;
@@ -300,14 +451,12 @@ export function hidePipelineProgress(els: PipelineProgressElements): void {
 }
 
 export function createPipelineProgressElements(container: HTMLElement): PipelineProgressElements {
-  // Pipeline container
   const pipelineContainer = document.createElement("div");
   pipelineContainer.id = "pipeline-progress";
   pipelineContainer.className = "pipeline-progress hidden";
   pipelineContainer.setAttribute("role", "region");
   pipelineContainer.setAttribute("aria-label", "Orchestration pipeline progress");
 
-  // Header
   const header = document.createElement("div");
   header.className = "pipeline-progress-header";
 
@@ -318,19 +467,16 @@ export function createPipelineProgressElements(container: HTMLElement): Pipeline
 
   pipelineContainer.appendChild(header);
 
-  // Stage list
   const stageList = document.createElement("div");
   stageList.className = "pipeline-stage-list";
   stageList.setAttribute("role", "list");
   stageList.setAttribute("aria-label", "Pipeline stages");
   pipelineContainer.appendChild(stageList);
 
-  // Summary
   const summaryRow = document.createElement("div");
   summaryRow.className = "pipeline-progress-summary";
   pipelineContainer.appendChild(summaryRow);
 
-  // Controls row
   const controlsRow = document.createElement("div");
   controlsRow.className = "pipeline-progress-controls";
   pipelineContainer.appendChild(controlsRow);

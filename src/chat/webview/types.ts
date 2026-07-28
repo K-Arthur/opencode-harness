@@ -716,6 +716,22 @@ export type HostMessage =
   | { type: "pipeline_approval_request"; sessionId: string; stageId: string }
   /** Orchestration diagnostic event */
   | { type: "orchestration_diagnostic"; sessionId: string; event: string; data?: Record<string, unknown> }
+  /** Pipeline snapshot restored after reload (recovery state) */
+  | { type: "pipeline_snapshot_restored"; sessionId: string; runId: string; workflowId: string; state: PipelineStateUI & { runId?: string; workflowState?: string; revision?: number; recoveryState?: string }; interruptedStageIds: string[]; uncertainStageIds: string[] }
+  /** Pipeline recovery requires user input after reload */
+  | { type: "pipeline_recovery_needed"; sessionId: string; runId: string; recoveryState: string; message: string; options: Array<{ action: string; label: string }> }
+  /** Git conflict detected during pipeline execution */
+  | { type: "pipeline_git_conflict"; sessionId: string; stageId: string; risks: Array<{ severity: string; category: string; file?: string; message: string }>; action: string }
+  /** File conflict detected during write stage */
+  | { type: "pipeline_file_conflict"; sessionId: string; stageId: string; file: string; category: string; severity: string }
+  /** Budget warning — approaching limits */
+  | { type: "pipeline_budget_warning"; sessionId: string; used: number; limit: number; unit: "tokens" | "cost" }
+  /** Budget exceeded — pipeline paused/skipping */
+  | { type: "pipeline_budget_exceeded"; sessionId: string; used: number; limit: number; unit: "tokens" | "cost"; action: "pause" | "skip_optional" | "terminate" }
+  /** Repair loop progress update */
+  | { type: "pipeline_repair_progress"; sessionId: string; pass: number; maxPasses: number; findingsBefore: number; findingsAfter: number; resolved: number }
+  /** Pipeline recovery state after reload */
+  | { type: "pipeline_recovery_update"; sessionId: string; recoveryState: string; message: string }
   | { type: "role_models_config"; roleModels: Record<string, string>; modeModels: Record<string, string>; enabled: boolean }
   | { type: "masking_summary"; sessionId: string; stats: { redactedSecrets: number; maskedFileMentions: number; maskedDocumentBlocks: number; removedContextItems: number; truncatedTokens: number; inputTokens: number; outputTokens: number } }
   | { type: "temp_session_created"; activeSessionId: string; session: SessionState }
@@ -1102,6 +1118,18 @@ export type WebviewMessage =
   | { type: "pipeline_skip_stage"; sessionId: string; stageId: string }
   /** Get current pipeline state */
   | { type: "pipeline_get_state"; sessionId: string }
+  /** Override model for a specific stage */
+  | { type: "pipeline_override_model"; sessionId: string; stageId: string; model: string }
+  /** Pause after the current stage */
+  | { type: "pipeline_pause_after_stage"; sessionId: string; stageId: string }
+  /** Approve/deny plan (extended, with edits) */
+  | { type: "pipeline_plan_decision"; sessionId: string; approvalId: string; decision: "approve" | "approve_with_edits" | "reject" | "cancel"; editedPlan?: string; modelOverride?: string }
+  /** Stop the pipeline but keep partial results */
+  | { type: "pipeline_stop_with_results"; sessionId: string }
+  /** Resume a recovered pipeline after reload */
+  | { type: "pipeline_confirm_recovery"; sessionId: string; action: "continue" | "cancel" | "review" }
+  /** Request the full pipeline log */
+  | { type: "pipeline_request_log"; sessionId: string }
 
 // Backward-compatible alias
 export type LegacyWebviewMessage = WebviewMessage & Record<string, unknown>
