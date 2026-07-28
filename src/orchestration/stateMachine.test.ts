@@ -136,6 +136,16 @@ describe("WorkflowStateMachine", () => {
     assert.ok(snap.attemptHistory.length >= 1);
   });
 
+  it("bumps revision on workflow and stage transitions", () => {
+    const m = new WorkflowStateMachine("run-1", "standard");
+    const before = m.snapshot().revision;
+    m.transition("classifying");
+    m.transition("running");
+    m.transitionStage("explore", "ready", { role: "planning", model: "fast/model" });
+    m.transitionStage("explore", "succeeded");
+    assert.ok(m.snapshot().revision > before);
+  });
+
   it("snapshot captures full state", () => {
     const m = new WorkflowStateMachine("run-1", "standard", 1, "economy");
     m.transition("classifying");
