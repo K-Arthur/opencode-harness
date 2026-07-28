@@ -1295,7 +1295,7 @@
     "@types/diff-match-patch": "^1.0.36",
     "@types/jsdom": "^28.0.3",
     "@types/markdown-it": "^14.1.2",
-    "@types/node": "^22.19.17",
+    "@types/node": "^26.1.1",
     "@types/vscode": "~1.98.0",
     "@typescript-eslint/eslint-plugin": "^8.61.1",
     "@typescript-eslint/parser": "^8.61.1",
