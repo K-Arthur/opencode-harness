@@ -162,6 +162,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Spins Forever After Compaction / Reconnect". Tests: `StreamCoordinator.test.ts`,
   `AutoCompactor.test.ts`, `ToolCallTracker.test.ts` (new), `sdkMessageConverter.test.ts`.
 
+## [0.4.65] — 2026-07-27
+
+### Changed
+
+- **SDK bumped from `@opencode-ai/sdk` 1.17.11→1.18.7**: Lockfile updated to
+  resolve the previously-anticipated SDK patch bump. No breaking type changes.
+  All existing integration tests pass at the new version. (#§sdk)
+
+### Added
+
+- **Server identity and capability model**: `ServerIdentity`, `ServerCapabilities`,
+  `ProtocolGeneration` types and `buildDefaultCapabilities()` in
+  `src/session/serverIdentity.ts`. Capabilities are derived from server version
+  (v2 for ≥1.17.0, v1 for older). Used by the compatibility probe to classify
+  servers as legacy or current and gate features accordingly. (#§server)
+
+- **Compatibility handshake probe**: `probeServerCompatibility()` in
+  `src/session/compatibilityProbe.ts` contacts the server health endpoint,
+  reads version information, probes optional V2 capabilities, and returns a
+  structured `CompatibilityProbeResult` with identity, capabilities, legacy
+  classification, and error information. Results are keyed by
+  `serverIdentityCacheKey()` for stable caching. (#§server)
+
+- **Runtime response validation**: `responseValidator.ts` with typed validators
+  (`expectString`, `expectNumber`, `expectBoolean`, `expectObject`,
+  `expectArray`, `expectEnum`) and structured validators (`validateSession`,
+  `validateAgent`, `validateHealthResponse`) that produce safe defaults on
+  missing/unexpected fields instead of crashing. Applied to `v2ResponseMappers.ts`
+  to replace blind `as` casts with boundary validation that logs warnings on
+  contract drift. (#§sdk, #§tests)
+
+- **Contract drift protection tests**: `tests/unit/sdk-contract-validation.test.ts`
+  is a TypeScript compilation guard that creates SDK-typed instances and
+  asserts field shapes — fails at compile time if SDK field names or types
+  change. `tests/unit/contract-drift.test.mjs` loads the SDK at runtime and
+  checks version expectations. Together they make server/SDK contract drift
+  visible on upgrade. (#§tests)
+
+### Fixed
+
+- **`v2ResponseMappers.ts` unsafe casts**: Replaced `as` casts with validated
+  field access that returns safe defaults (empty strings, 0, empty arrays)
+  instead of propagating `undefined`/`null` into UI consumers. Falls back to
+  legacy `as`-style access when the validator's result is empty, ensuring
+  backward compatibility with servers that return unexpected shapes. (#§sdk)
+
 ## [0.4.62] — 2026-07-11
 
 ### Fixed

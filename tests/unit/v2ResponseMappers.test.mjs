@@ -149,7 +149,7 @@ test("mapV2Session handles summary with no diffs", () => {
     summary: { additions: 0, deletions: 0, files: 0 },
   }
   const result = mapV2Session(raw)
-  assert.equal(result.summary.diffs, undefined)
+  assert.deepEqual(result.summary.diffs, [])
 })
 
 test("mapV2Session maps share.url", () => {
