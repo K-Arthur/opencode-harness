@@ -2,6 +2,7 @@ import { SessionManager } from "../session/SessionManager"
 import { SessionStore } from "../session/SessionStore"
 import { ContextMonitor } from "../monitor/ContextMonitor"
 import { TabManager } from "./TabManager"
+import type { StreamCoordinator } from "./handlers/StreamCoordinator"
 import { log } from "../utils/outputChannel"
 
 export interface CompactorCallbacks {
@@ -51,6 +52,7 @@ export class AutoCompactor {
     private readonly sessionStore: SessionStore,
     private readonly contextMonitor: ContextMonitor,
     private readonly tabManager: TabManager,
+    private readonly streamCoordinator: StreamCoordinator,
   ) {}
 
   tryCompactIfNeeded(callbacks: CompactorCallbacks, ctx?: CompactTriggerContext): void {
@@ -58,6 +60,12 @@ export class AutoCompactor {
     const activeTab = this.tabManager.getActiveTab()
     if (!activeTab || activeTab.isStreaming) return
     if (!activeTab.cliSessionId) return
+    // Second layer of defense alongside isStreaming: a tab can have
+    // isStreaming===false while a tool call is still tracked as pending (a
+    // reconnect/idle race — see StreamCoordinator.reconcileAfterReconnect).
+    // Compacting a session with an unresolved tool call in flight is exactly
+    // how a stuck spinner survives a compaction that otherwise "succeeds".
+    if (this.streamCoordinator.hasPendingToolCalls(activeTab.id)) return
 
     // Cross-tab safety: when invoked from a context_usage event, only act if
     // the firing tab is the active one. Otherwise we'd target a tab that
@@ -124,9 +132,16 @@ export class AutoCompactor {
       this.inFlight.add(tabId)
       log.info(`Auto-compacting session ${tabId} (context >= ${threshold}%, ${session.messages.length} messages, model=${activeTab.model || "default"})`)
       callbacks.postMessage({ type: "compaction_started", sessionId: tabId })
-      void this.sessionManager.compactSession(cliSessionId, modelRef ?? undefined).then(() => {
+      void this.sessionManager.compactSession(cliSessionId, modelRef ?? undefined).then(async () => {
         log.info(`Auto-compaction completed for session ${tabId}`)
         this.lastAutoCompact.set(tabId, { at: Date.now(), tokens: currentTokens, messageCount: session.messages.length })
+        // Compaction replaces the session transcript out from under any tool
+        // call the host was still tracking. The isStreaming/hasPendingToolCalls
+        // gate above should mean there's nothing pending here in the common
+        // case, but this checkpoint is what guarantees it — bounded (no
+        // polling) and a no-op when nothing is pending — rather than relying
+        // solely on upstream gates never having a gap.
+        await this.streamCoordinator.ensureToolStateConverged(tabId, callbacks)
         callbacks.postMessage({
           type: "message",
           sessionId: tabId,
@@ -195,6 +210,10 @@ export class AutoCompactor {
       callbacks.postRequestError("Cannot compact while a response is streaming. Wait for it to finish or cancel the stream.")
       return
     }
+    if (this.streamCoordinator.hasPendingToolCalls(sessionId)) {
+      callbacks.postRequestError("Cannot compact: a tool call is still awaiting its result for this session.")
+      return
+    }
     if (this.inFlight.has(sessionId)) {
       callbacks.postRequestError("Compaction is already running for this session.")
       return
@@ -208,6 +227,9 @@ export class AutoCompactor {
       const modelRef = toModelRef(tab.model)
       await this.sessionManager.compactSession(tab.cliSessionId, modelRef ?? undefined)
       log.info(`Session compacted: ${sessionId} (cli: ${tab.cliSessionId}, model=${tab.model || "default"})`)
+      // See the matching comment in doCompact() — bounded checkpoint so
+      // compaction can never leave a stale/orphaned pending tool call behind.
+      await this.streamCoordinator.ensureToolStateConverged(sessionId, callbacks)
       callbacks.postMessage({ type: "session_compacted", sessionId })
     } catch (err) {
       const message = err instanceof Error ? err.message : "Compaction failed"

@@ -276,7 +276,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     this.promptManager.onChanged(() => this.pushCommandListToWebview())
     this.messageRouter = new MessageRouter(sessionManager, modelManager, this.workspaceFileIndex)
     this.chatCommands = new ChatCommands(sessionStore, sessionManager, this.tabManager, this.streamCoordinator)
-    this.autoCompactor = new AutoCompactor(sessionManager, sessionStore, contextMonitor, this.tabManager)
+    this.autoCompactor = new AutoCompactor(sessionManager, sessionStore, contextMonitor, this.tabManager, this.streamCoordinator)
     this.backfillService = new BackfillService({
       sessionStore: this.sessionStore,
       tabManager: this.tabManager,

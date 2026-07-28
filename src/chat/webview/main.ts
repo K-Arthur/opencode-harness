@@ -64,6 +64,7 @@ import { setupSessionModal as setupSessionModalModule, openSessionModal as openS
 import { setupKeyboardShortcutsModal, openKeyboardShortcutsModal, closeKeyboardShortcutsModal } from "./ui/keyboardShortcutsModal"
 import { setupGlobalKeyboardShortcutsImpl } from "./ui/keyboardShortcuts"
 import { setupMarkdownFileLinksImpl } from "./ui/markdownFileLinks"
+import { createPipelineProgressElements, renderPipelineProgress, type PipelineStateUI } from "./ui/pipelineProgress"
 import { setupTodoSubagentPanelsImpl } from "./todoSubagentSetup"
 import { switchTabImpl } from "./tabSwitcher"
 import { setupProviderPanel, openProviderPanel, closeProviderPanel, renderProviderDiscoveryList, renderProviderCredentialList, handleOAuthStarted, handleOAuthCompleted, onProviderKeyResult } from "./ui/providerPanel"
@@ -410,6 +411,9 @@ function getVsCodeApi() {
 
   // Streaming state per session
   const streamHandlers = new Map<string, ReturnType<typeof createStreamHandlers>>()
+
+  // Pipeline progress UI per session (Orchestrated mode)
+  const pipelineProgressElements = new Map<string, ReturnType<typeof createPipelineProgressElements>>()
 
   // Scroll anchors per tab — disposed on tab close
   const scrollAnchors = new Map<string, ScrollAnchor>()
@@ -3084,6 +3088,19 @@ function setupTodoSkillAndSubagentPanels(): void {
           stateManager.save()
         }
         if (stateManager.getState().activeSessionId === sid) renderRouteChip(sid)
+      }],
+      ["pipeline_progress", (msg, sid) => {
+        if (!sid) return
+        const state = (msg.state as PipelineStateUI | undefined)
+        if (!state) return
+        const msgList = getMessageList(sid)
+        if (!msgList) return
+        let els = pipelineProgressElements.get(sid)
+        if (!els) {
+          els = createPipelineProgressElements(msgList)
+          pipelineProgressElements.set(sid, els)
+        }
+        renderPipelineProgress(state, els)
       }],
       ["masking_summary", (msg, sid) => {
         if (!sid) return

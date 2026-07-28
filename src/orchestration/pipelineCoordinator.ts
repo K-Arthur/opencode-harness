@@ -36,6 +36,7 @@ export interface StageDispatcher {
     stageId: string;
     maxTokens?: number;
     timeoutMs?: number;
+    signal?: AbortSignal;
   }): Promise<{
     response: string;
     tokensUsed: number;
@@ -290,6 +291,7 @@ export class PipelineCoordinator {
         stageId: stage.id,
         maxTokens: stage.tokenBudget,
         timeoutMs: stage.timeoutMs,
+        signal: abortController.signal,
       });
 
       // Track usage
@@ -350,6 +352,7 @@ export class PipelineCoordinator {
               stageId: stage.id,
               maxTokens: stage.tokenBudget,
               timeoutMs: stage.timeoutMs,
+              signal: abortController.signal,
             });
             pipeline.totalTokensUsed += result.tokensUsed;
             pipeline.totalEstimatedCost += result.estimatedCost;

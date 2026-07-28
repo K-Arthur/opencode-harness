@@ -41,7 +41,7 @@ export type TokenBreakdown = {
   cacheWrite: number
 }
 
-export type CanonicalToolState = "pending" | "running" | "completed" | "error" | "cancelled"
+export type CanonicalToolState = "pending" | "running" | "completed" | "error" | "cancelled" | "unresolved"
 
 export type CanonicalBlock =
   | {

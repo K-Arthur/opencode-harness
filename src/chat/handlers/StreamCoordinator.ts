@@ -28,6 +28,9 @@ import { SubagentHeartbeat } from "./SubagentHeartbeat"
 import { mapRunError, type RunErrorContext } from "./runErrorMapper"
 import { logStreamTrace } from "../../session/streamTrace"
 import { modeToAgent } from "../modePolicy"
+import { PipelineCoordinator, selectWorkflow } from "../../orchestration/pipelineCoordinator"
+import { createServerStageDispatcher } from "../../orchestration/serverStageDispatcher"
+import { DEFAULT_ORCHESTRATED_CONFIG } from "../../orchestration/types"
 import { createStreamingLog, type StreamingLogSink } from "./StreamingLog"
 import { inferAgentRole, type AgentRole } from "../../orchestration/modelRouting"
 
@@ -986,6 +989,99 @@ export class StreamCoordinator {
     this.toolCallTracker.markUnresolvedActiveSubagents(tabId, callbacks)
   }
 
+  /** True when this tab has one or more tool calls the host is still
+   *  tracking as pending. Used by callers (e.g. AutoCompactor) that must not
+   *  act on a tab as if it were idle while a tool result is still owed. */
+  hasPendingToolCalls(tabId: string): boolean {
+    return (this.activeToolCallIds.get(tabId)?.size ?? 0) > 0
+  }
+
+  /**
+   * Bring this tab's tool-call state to a terminal, converged state:
+   * reconcile against the server once more, then explicitly mark anything
+   * still pending as "unresolved" (never silently "completed"). Bounded —
+   * at most one extra reconciliation fetch, no polling — and idempotent, a
+   * no-op when nothing is pending.
+   *
+   * Intended as an explicit checkpoint after any operation that can change
+   * the session's identity or transcript out from under in-flight tool
+   * tracking (compaction today; the same call is safe to add at any future
+   * session-identity boundary).
+   */
+  async ensureToolStateConverged(tabId: string, callbacks: StreamCallbacks): Promise<void> {
+    await this.markUnresolvedPendingToolCalls(tabId, callbacks)
+    // See the matching comment in reconcileAfterReconnect — subagents live in
+    // a separate store and need the same explicit convergence step.
+    this.markUnresolvedActiveSubagents(tabId, callbacks)
+  }
+
+  async runOrchestratedPipeline(config: StartPromptConfig, cliSessionId: string): Promise<void> {
+    const { tabId, text, callbacks, attachments = [] } = config
+    const tab = this.tabManager.getTab(tabId)
+    if (!tab) return
+
+    const workflow = selectWorkflow(text, attachments.length > 0, text.length)
+    const roleModels: Partial<Record<AgentRole, string>> = {}
+    const roles: AgentRole[] = ["planning", "implementation", "review", "debugging", "visualReview"]
+    for (const role of roles) {
+      roleModels[role] = this.modelManager.getRoutedModel(role, "orchestrated", tab.model)
+    }
+    const orchestratedConfig = { ...DEFAULT_ORCHESTRATED_CONFIG, roleModels }
+    const abortController = new AbortController()
+    const dispatcher = createServerStageDispatcher({
+      sessionManager: this.getSm(tabId),
+      callbacks,
+      cliSessionId,
+      tabId,
+      abortController,
+    })
+    const pipeline = new PipelineCoordinator()
+    const assistantId = `orchestrated-${tabId}-${Date.now()}`
+
+    try {
+      callbacks.postMessage({ type: "stream_start", sessionId: tabId, messageId: assistantId, isSteerPrompt: false })
+      const result = await pipeline.runPipeline({
+        sessionId: tabId,
+        workflow,
+        config: orchestratedConfig,
+        userRequest: text,
+        attachedImages: attachments.length > 0,
+        dispatcher,
+      })
+      const message: ChatMessage = {
+        role: "assistant",
+        id: assistantId,
+        blocks: [{ type: "text", text: result.response }],
+        timestamp: Date.now(),
+        sessionId: tabId,
+        mode: "orchestrated",
+      }
+      this.sessionStore.appendMessage(tabId, message)
+      callbacks.postMessage({ type: "message", sessionId: tabId, message })
+      callbacks.postMessage({ type: "stream_end", sessionId: tabId, messageId: assistantId, reason: "completed" })
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err)
+      log.error("Orchestrated pipeline failed", err)
+      callbacks.postMessage({
+        type: "message",
+        sessionId: tabId,
+        message: {
+          role: "assistant",
+          id: assistantId,
+          blocks: [{ type: "text", text: `Pipeline failed: ${errorMsg}` }],
+          timestamp: Date.now(),
+          sessionId: tabId,
+        } as ChatMessage,
+      })
+      callbacks.postMessage({ type: "stream_end", sessionId: tabId, messageId: assistantId, reason: "error" })
+    } finally {
+      this.activeRuns.delete(tabId)
+      this.tabManager.setStreaming(tabId, false)
+      pipeline.removePipeline(tabId)
+      abortController.abort()
+    }
+  }
+
   async startPrompt(config: StartPromptConfig): Promise<void> {
     const { tabId, text, callbacks, variant, attachments = [], identity = {}, routeRole } = config
     const tab = this.tabManager.getTab(tabId)
@@ -1039,6 +1135,12 @@ export class StreamCoordinator {
         this.tabManager.setCliSessionId(tabId, cliSessionId)
         this.sessionStore.updateCliSessionId(tabId, cliSessionId)
       }
+
+      if (tab.mode === "orchestrated") {
+        await this.runOrchestratedPipeline(config, cliSessionId)
+        return
+      }
+
       // B10-recovery: clear stale state so the recovery gets a fresh bubble.
       if (callbacks.recoveryFromExpiredQuestion) {
         log.info(`startPrompt recovery mode for tab ${tabId}: fresh stream state`)
@@ -2130,6 +2232,28 @@ export class StreamCoordinator {
         const completedAt = (lastAssistant.info as { time?: { completed?: number } }).time?.completed
         if (typeof completedAt === "number" && completedAt > 0) {
           log.info(`reconcileAfterReconnect: tab ${tabId} last assistant completed at ${completedAt} — emitting dropped stream_end`)
+          // Bug (tool-call spins after idle/compaction): the server-reported
+          // completion above proves the RUN is done, but says nothing about
+          // whether every tool call this tab was tracking actually resolved —
+          // the completion event for one of them may have been lost on the
+          // same dead SSE connection that caused this reconnect. Once
+          // waitingForCompletion flips false below, maybeFinalizeStream's
+          // entry guard (`!tab.waitingForCompletion`) makes this tab
+          // permanently unreachable by the normal grace-timeout recovery
+          // path — any tool still in activeToolCallIds at that point would
+          // be orphaned forever (spinner stuck, nothing left to un-stick it).
+          // Converge tool state to a terminal one FIRST — bounded: at most
+          // one more reconciliation fetch, then explicit "unresolved" for
+          // anything still pending — so the flags and activeToolCallIds
+          // never fall out of sync.
+          await this.markUnresolvedPendingToolCalls(tabId, callbacks)
+          // Subagents (spawned via the `task` tool) are tracked in a SEPARATE
+          // store (RunActivityTracker, the activity timeline) from
+          // activeToolCallIds — the same "run reported done, but this store
+          // was never told" gap applies to it independently. Without this,
+          // a subagent card can be left spinning forever by the exact same
+          // reconnect race, even once the tool-call side above is fixed.
+          this.markUnresolvedActiveSubagents(tabId, callbacks)
           // Mark the run as already-finished: skip the normal finalize path
           // (which would re-fetch), and emit a terminal stream_end directly.
           this.abortedTabs.add(tabId) // reuse the dedup gate so finalizeStream is a no-op
@@ -2153,8 +2277,15 @@ export class StreamCoordinator {
             status: "idle",
           })
         } else {
-          // Run is still active — push a busy status so the webview shows
-          // "thinking" instead of a stale idle/ready badge from before the outage.
+          // Run is still active. A prior server_disconnected handler (or a
+          // fresh extension-host restart) may have left waitingForCompletion
+          // false even though the server is still working — restore it so
+          // the real completion, when it arrives over the reconnected SSE
+          // stream, isn't silently dropped by maybeFinalizeStream's
+          // `!tab.waitingForCompletion` entry guard.
+          this.tabManager.setWaitingForCompletion(tabId, true)
+          // Push a busy status so the webview shows "thinking" instead of a
+          // stale idle/ready badge from before the outage.
           callbacks.postMessage({
             type: "server_status",
             sessionId: tabId,

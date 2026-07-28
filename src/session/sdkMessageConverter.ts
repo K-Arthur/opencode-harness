@@ -313,3 +313,49 @@ export function sdkMessagesToChatMessages(
   }
   return out
 }
+
+const TERMINAL_TOOL_STATES = new Set<string>(["completed", "error", "cancelled", "unresolved"])
+
+/**
+ * Convert any tool block still showing a non-terminal status ("pending" /
+ * "running") into an honest "unresolved" terminal state.
+ *
+ * `sdkMessagesToChatMessages` faithfully mirrors whatever status the server
+ * last persisted for a tool part. That's correct for a message that's still
+ * actively streaming — but every OTHER caller of this converter
+ * (SessionLifecycleService.handleResumeSession, BackfillService.hydrate, and
+ * the WebviewEventRouter refresh/pagination handlers) is reading a snapshot
+ * for a tab that is NOT currently streaming. For those callers, a
+ * "pending"/"running" tool part can only mean its completion event never
+ * made it into the transcript this snapshot was built from — the same
+ * "stuck forever" shape as a lost SSE event or a lost compaction-boundary
+ * event, just discovered via a fetch instead of a live stream. Left as-is,
+ * `renderToolCallBlock` renders it exactly like a live in-progress call
+ * (spinner, "Running") with nothing left in the system that will ever move
+ * it out of that state.
+ *
+ * Callers are responsible for only invoking this once they know the tab
+ * isn't actively streaming — this function has no way to check that itself,
+ * and calling it against a genuinely in-progress message would wrongly
+ * relabel a healthy running tool. Pure and non-mutating: returns a new
+ * array, only allocating new message/block objects where something changed.
+ */
+export function markStaleToolBlocksUnresolved(messages: readonly ChatMessage[]): ChatMessage[] {
+  return messages.map((msg) => {
+    let changed = false
+    const blocks = msg.blocks.map((block) => {
+      if (block.type !== "tool") return block
+      const state = typeof block.state === "string" ? block.state : undefined
+      if (state && TERMINAL_TOOL_STATES.has(state)) return block
+      changed = true
+      return {
+        ...block,
+        state: "unresolved",
+        error: typeof block.error === "string" && block.error
+          ? block.error
+          : "Tool did not emit a completion event before the server became idle.",
+      }
+    })
+    return changed ? { ...msg, blocks } : msg
+  })
+}
