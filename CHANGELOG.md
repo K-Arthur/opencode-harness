@@ -208,6 +208,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   legacy `as`-style access when the validator's result is empty, ensuring
   backward compatibility with servers that return unexpected shapes. (#§sdk)
 
+## [0.4.66] — 2026-07-27
+
+### Changed
+
+- **Build-only release**: Reinstall packaging and version bump; no functional
+  changes from 0.4.65. (#§ops)
+
+## [0.4.67] — 2026-07-27
+
+### Changed
+
+- **Re-baselined bundle limits**: extension.js → 800KB, main.js → 842KB to
+  accommodate SDK 1.18.7 growth. (#§build)
+
+### Fixed
+
+- **Route dropdown null-check errors**: Applied `as` casts in
+  `setupRouteDropdown()` to resolve TypeScript strict-null errors from
+  `getElementById` returns narrowed through closure captures. (#§typecheck)
+
+## [0.4.68] — 2026-07-27
+
+### Changed
+
+- **Packaging verification**: Production build and VSIX packaging passing all
+  gates (typecheck, bundle-size, install). (#§ops)
+
+## [0.4.69] — 2026-07-27
+
+### Changed
+
+- **Current release**: Finalised reinstall; all gates green. (#§ops)
+
 ## [0.4.62] — 2026-07-11
 
 ### Fixed

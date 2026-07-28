@@ -289,6 +289,9 @@ Run all unit+contract+roundtrip: `npm test`
 - **Webview provider:** `src/chat/ChatProvider.ts` — thin orchestrator, delegates to services
 - **Per-tab state:** `TabManager.ts`, **streaming:** `StreamCoordinator.ts`, **routing:** `MessageRouter.ts`
 - **Server lifecycle:** `src/session/SessionManager.ts`
+- **Server identity & capabilities:** `src/session/serverIdentity.ts` — `ServerIdentity`, `ServerCapabilities`, `ProtocolGeneration` types and `buildDefaultCapabilities()`. Capabilities derived from server version (≥1.17.0 = v2, older = v1).
+- **Compatibility handshake:** `src/session/compatibilityProbe.ts` — `probeServerCompatibility()` contacts health endpoint, reads version, probes v2 capabilities, returns structured result with identity/capabilities/legacy classification. Results cacheable by `serverIdentityCacheKey()`.
+- **Response validation:** `src/session/responseValidator.ts` — typed validators (`expectString`, `expectNumber`, `expectBoolean`, `expectObject`, `expectArray`, `expectEnum`) and structured validators (`validateSession`, `validateAgent`, `validateHealthResponse`) at transport boundaries. Replaces blind `as` casts in `v2ResponseMappers.ts`.
 - **Theme system:** `src/theme/ThemeManager.ts` now delegates to `ThemeAnalyzer` (preset/theme-kind resolution), `ThemeStateMutator` (namespace-isolated merges under `workbench.colorCustomizations.opencodeHarness`), and `ThemeWebviewBridge` (live CSS variable sync). `ThemeManager` exposes `activateTheme()`, `applyOverrides()`, and `resetToDefault()`.
 - **Max concurrent AI streams** configurable via `opencode.sessions.maxConcurrentStreams` (default 5)
 
