@@ -19,6 +19,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Orchestrated session mode pipeline**: Sequential multi-model orchestration
+  engine for the Orchestrated mode (`src/orchestration/pipelineCoordinator.ts`).
+  PipelineCoordinator dispatches each stage (explore → plan → implement →
+  review → fix → synthesise) with role-specific models, typed handoff
+  contracts, cost-limit enforcement, cancellation, retry/fallback, and repair
+  loops. Workflow definitions (Standard, Quick, Debug, Review, Multimodal)
+  with smart `selectWorkflow()` heuristic based on request content. (#§all)
+
+- **Role-specific prompt templates**: Centralised system prompts for explorer,
+  planner, implementer, reviewer, visual analyst, debugger, security reviewer,
+  and synthesizer in `src/orchestration/promptTemplates.ts`. Template variable
+  substitution with safe custom-instruction injection. (#§3)
+
+- **Pipeline progress UI**: Compact frontend in
+  `src/chat/webview/ui/pipelineProgress.ts` showing stage indicators
+  (running/completed/failed/skipped), model badges, duration, and token/cost
+  summary. ARIA-labelled, keyboard-accessible, theme-consistent styling.
+  (#§6)
+
+- **Typed stage handoff contracts**: `ExplorationResult`, `PlanResult`,
+  `ReviewResult`, `VisualAnalysisResult`, `SecurityReviewResult`,
+  `ImplementationResult`, and `TestResult` in `src/orchestration/types.ts`
+  with structured data contracts between pipeline stages instead of
+  unbounded natural-language. (#§2)
+
+- **Cost profiles and budget enforcement**: Economy/Balanced/Quality cost
+  profiles with per-request cost caps, max-token budgets, stage limits,
+  repair-loop ceilings, and parallel-agent toggles. Pipeline coordinator
+  enforces budgets across all stages and surfaces warnings. (#§5)
+
+- **Workflow definitions**: Five built-in workflows (Standard, Quick, Debug,
+  Review, Multimodal) in `pipelineCoordinator.ts` with configurable stage
+  ordering, dependency chains, token budgets, timeouts, retry policies, and
+  skip conditions. (#§2, §4)
+
+- **41 orchestration tests**: Unit tests covering pipeline coordinator, prompt
+  templates, workflow selection, types, cost profiles, fallback handling,
+  cancellation, and all workflow definitions. (#§test)
+
 - **Three-axis capability profiles**: `ModelCapabilities` extended with
   `autonomy` (process self-supervision), `throughput` (task competence/cost
   efficiency), and `visualJudgment` (design quality — separate from raw vision
