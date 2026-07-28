@@ -572,16 +572,14 @@
         </div>
 
         <div class="bottom-bar-right">
-        <label class="role-route-selector" for="role-route-select" title="Route the next prompt to a phase-specific model">
+        <div class="role-route-selector" id="role-route-selector" title="Route the next prompt to a phase-specific model">
           <span class="role-route-label">Route</span>
-          <select id="role-route-select" class="role-route-select" aria-label="Route next prompt">
-            <option value="">Auto</option>
-            <option value="planning">Plan</option>
-            <option value="implementation">Build</option>
-            <option value="review">Review</option>
-            <option value="debugging">Debug</option>
-          </select>
-        </label>
+          <button class="role-route-btn" id="role-route-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Route next prompt: Auto">
+            <span class="role-route-btn-text" id="role-route-current-text">Auto</span>
+            <svg class="chevron" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <input type="hidden" id="role-route-select" value="">
+        </div>
         <!-- Positioning container only. The mode picker is a button + listbox
              combobox (see #mode-dropdown-btn aria-haspopup="listbox" and
              #mode-dropdown-menu role="listbox"); a radiogroup role here was a
@@ -718,9 +716,24 @@
           <svg class="mode-option-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
         </button>
       </div>
+      <div id="route-dropdown-menu" class="route-dropdown-menu hidden" role="listbox" aria-label="Route selection">
+        <button class="route-option" role="option" aria-selected="true" data-value="" tabindex="0">
+          <span class="route-option-name">Auto</span>
+        </button>
+        <button class="route-option" role="option" aria-selected="false" data-value="planning" tabindex="-1">
+          <span class="route-option-name">Plan</span>
+        </button>
+        <button class="route-option" role="option" aria-selected="false" data-value="implementation" tabindex="-1">
+          <span class="route-option-name">Build</span>
+        </button>
+        <button class="route-option" role="option" aria-selected="false" data-value="review" tabindex="-1">
+          <span class="route-option-name">Review</span>
+        </button>
+        <button class="route-option" role="option" aria-selected="false" data-value="debugging" tabindex="-1">
+          <span class="route-option-name">Debug</span>
+        </button>
+      </div>
     </div>
-
-    <!-- Standalone welcome view — shown when no sessions exist -->
     <div id="welcome-view" class="welcome-view" role="region" aria-label="OpenCode welcome">
       <div class="welcome-container">
         <div class="welcome-header">

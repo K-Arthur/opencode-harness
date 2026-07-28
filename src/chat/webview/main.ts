@@ -1003,6 +1003,93 @@ function getVsCodeApi() {
     return !els.welcomeView.classList.contains("hidden")
   }
 
+  /** Custom dropdown for the route selector — replaces the native <select> with
+   *  a styled listbox that matches the mode dropdown pattern. */
+  function setupRouteDropdown(): void {
+    const btn = document.getElementById("role-route-btn")
+    const menu = document.getElementById("route-dropdown-menu")
+    const hidden = els.roleRouteSelect
+    const label = document.getElementById("role-route-current-text")
+    if (!btn || !menu || !hidden || !label) return
+
+    const options = Array.from(menu.querySelectorAll<HTMLElement>(".route-option"))
+    const ROUTE_LABELS: Record<string, string> = {
+      "": "Auto",
+      planning: "Plan",
+      implementation: "Build",
+      review: "Review",
+      debugging: "Debug",
+    }
+
+    function positionMenu(): void {
+      const r = btn.getBoundingClientRect()
+      const margin = 6
+      const menuW = Math.max(r.width, 160)
+      const spaceBelow = window.innerHeight - r.bottom - margin
+      const spaceAbove = r.top - margin
+      const openAbove = spaceBelow < 160 && spaceAbove > spaceBelow
+      const maxHeight = Math.min(200, Math.max(120, (openAbove ? spaceAbove : spaceBelow) - 4))
+      const left = Math.min(Math.max(margin, r.left), window.innerWidth - menuW - margin)
+      const top = openAbove
+        ? Math.max(margin, r.top - Math.min(160, maxHeight) - 6)
+        : Math.min(window.innerHeight - margin - 160, r.bottom + 6)
+      menu.style.position = "fixed"
+      menu.style.left = `${left}px`
+      menu.style.top = `${Math.max(margin, top)}px`
+      menu.style.width = `${menuW}px`
+      menu.style.maxHeight = `${maxHeight}px`
+      menu.style.zIndex = "var(--z-dropdown)"
+    }
+
+    function closeMenu(): void {
+      menu.classList.add("hidden")
+      btn.setAttribute("aria-expanded", "false")
+    }
+
+    function selectOption(value: string): void {
+      hidden.value = value
+      label.textContent = ROUTE_LABELS[value] || value || "Auto"
+      btn.setAttribute("aria-label", `Route next prompt: ${ROUTE_LABELS[value] || "Auto"}`)
+      for (const opt of options) {
+        const isSelected = opt.dataset.value === value
+        opt.setAttribute("aria-selected", String(isSelected))
+        opt.setAttribute("tabindex", isSelected ? "0" : "-1")
+      }
+      closeMenu()
+    }
+
+    btn.addEventListener("click", () => {
+      const isOpen = !menu.classList.contains("hidden")
+      if (isOpen) {
+        closeMenu()
+      } else {
+        menu.classList.remove("hidden")
+        btn.setAttribute("aria-expanded", "true")
+        positionMenu()
+        const active = menu.querySelector('[aria-selected="true"]') as HTMLElement | null
+        if (active) active.focus()
+      }
+    })
+
+    for (const opt of options) {
+      opt.addEventListener("click", () => selectOption(opt.dataset.value ?? ""))
+      opt.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); opt.click() }
+        if (e.key === "Escape") { closeMenu(); btn.focus() }
+        if (e.key === "ArrowDown") { e.preventDefault(); const n = opt.nextElementSibling as HTMLElement | null; if (n) n.focus() }
+        if (e.key === "ArrowUp") { e.preventDefault(); const p = opt.previousElementSibling as HTMLElement | null; if (p) p.focus() }
+      })
+    }
+
+    document.addEventListener("click", (e) => {
+      const target = e.target as Node
+      if (!btn.contains(target) && !menu.contains(target)) closeMenu()
+    })
+    menu.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { closeMenu(); btn.focus() }
+    })
+  }
+
   function setupCoreInteractionControls(): void {
     setupPermissionConfig({
       els,
@@ -1018,6 +1105,7 @@ function getVsCodeApi() {
       getDefaultMode: () => stateManager.getPendingMode(),
       setDefaultMode: (mode) => stateManager.setPendingMode(mode),
     })
+    setupRouteDropdown()
     setupGlobalKeyboardShortcuts()
     setupMarkdownFileLinks()
     new TimestampUpdater().startTicking(60_000)

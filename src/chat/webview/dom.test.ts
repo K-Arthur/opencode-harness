@@ -48,8 +48,8 @@ describe("dom.ts", () => {
   })
 
   it("ElementRefs contains roleRouteSelect", () => {
-    assert.ok(source.includes("roleRouteSelect: HTMLSelectElement"))
-    assert.ok(source.includes('requireElement<HTMLSelectElement>("role-route-select")'))
+    assert.ok(source.includes("roleRouteSelect: HTMLInputElement"))
+    assert.ok(source.includes('requireElement<HTMLInputElement>("role-route-select")'))
   })
 
   it("ElementRefs contains quota bar elements", () => {

@@ -1121,25 +1121,92 @@ body.chat-rtl #prompt-input {
 }
 
 .role-route-label {
-  color: var(--color-muted);
+  color: var(--oc-description, var(--color-muted));
   white-space: nowrap;
   flex-shrink: 0;
 }
 
-.role-route-select {
-  min-width: 0;
-  max-width: 6.5rem;
+.role-route-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-0-5);
+  padding: 0;
   border: none;
   background: transparent;
   color: var(--oc-fg);
   font: inherit;
   cursor: pointer;
   outline: none;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
 }
 
-.role-route-selector:focus-within {
+.role-route-btn:focus-visible {
+  outline: 2px solid var(--oc-focus);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}
+
+.role-route-btn-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.role-route-btn .chevron {
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: transform var(--duration-fast);
+}
+
+.role-route-btn[aria-expanded="true"] .chevron {
+  transform: rotate(180deg);
+}
+
+.route-dropdown-menu {
+  min-width: 120px;
+  overflow-y: auto;
+  background: var(--vscode-quickInput-background,
+               var(--vscode-editorWidget-background,
+               var(--oc-glass-bg, #1e1e2e)));
+  border: 1px solid var(--vscode-widget-border, var(--oc-glass-border));
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  padding: var(--space-1);
+  z-index: var(--z-dropdown);
+}
+
+.route-dropdown-menu.hidden {
+  display: none;
+}
+
+.route-option {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: var(--space-1-5) var(--space-2-5);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--oc-fg);
+  font-size: var(--text-xs);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+
+.route-option:hover,
+.route-option:focus {
+  background: var(--oc-list-hover);
+}
+
+.route-option[aria-selected="true"] {
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  color: var(--color-fg);
+}
+
+.route-option:focus-visible {
   outline: 2px solid var(--oc-focus);
   outline-offset: -2px;
 }
@@ -3314,7 +3381,7 @@ button.modal-session-item:focus {
 
 .model-routing-row-fallback {
   font-size: var(--text-2xs);
-  color: var(--color-muted);
+  color: var(--oc-description, var(--color-muted));
   margin-top: var(--space-1-5);
   padding-left: var(--space-1);
   min-width: 0;
@@ -3328,7 +3395,7 @@ button.modal-session-item:focus {
 
 .model-routing-row-chain {
   font-size: var(--text-2xs);
-  color: var(--color-muted);
+  color: var(--oc-description, var(--color-muted));
   margin-top: var(--space-0-5);
   padding-left: var(--space-1);
   opacity: 0.7;
@@ -4443,10 +4510,6 @@ button.modal-session-item:focus {
   .role-route-selector {
     width: var(--size-target-min);
     padding: var(--space-0-5);
-  }
-
-  .role-route-select {
-    max-width: 100%;
   }
 }
 
