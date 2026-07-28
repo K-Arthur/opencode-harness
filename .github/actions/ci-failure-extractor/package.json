@@ -1,0 +1,18 @@
+{
+  "name": "ci-failure-extractor",
+  "version": "1.0.0",
+  "description": "Extracts and summarizes CI failure information from workflow logs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "github-actions",
+    "ci",
+    "failure-analysis"
+  ],
+  "dependencies": {
+    "@actions/core": "^1.10.0",
+    "@actions/exec": "^1.1.1"
+  }
+}

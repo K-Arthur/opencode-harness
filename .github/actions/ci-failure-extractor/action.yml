@@ -1,0 +1,16 @@
+name: 'CI Failure Extractor'
+description: 'Extracts and summarizes CI failure information from workflow logs'
+inputs:
+  log-path:
+    description: 'Path to the log file to analyze'
+    required: true
+  output-format:
+    description: 'Output format (json or markdown)'
+    required: false
+    default: 'markdown'
+  output-file:
+    description: 'Path to save the output (optional, prints to stdout if not provided)'
+    required: false
+runs:
+  using: 'node20'
+  main: 'index.js'
