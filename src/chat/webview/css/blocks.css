@@ -1448,6 +1448,11 @@
   color: var(--color-success);
   border-color: color-mix(in srgb, var(--color-success) 35%, transparent);
 }
+.message-mode-badge--orchestrated {
+  background: color-mix(in srgb, var(--vscode-charts-purple, #b388ff) 18%, transparent);
+  color: var(--vscode-charts-purple, #b388ff);
+  border-color: color-mix(in srgb, var(--vscode-charts-purple, #b388ff) 35%, transparent);
+}
 
 /* Plan-shaped prose: when detectPlanProse() flags a text block as a plan,
    it wraps the body in .plan-prose so we can give it a richer treatment. */

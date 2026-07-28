@@ -12,7 +12,7 @@ type MessageValidator = (
   deps: WebviewMessageValidatorDeps
 ) => boolean
 
-const MODE_VALUES = new Set(["normal", "plan", "build", "auto"])
+const MODE_VALUES = new Set(["normal", "plan", "build", "auto", "orchestrated"])
 // "append" is a removed mode kept here only so a stale webview's message isn't
 // rejected (the router coerces anything that isn't "interrupt" to "queue").
 const STEER_MODE_VALUES = new Set(["interrupt", "queue", "append"])
@@ -363,7 +363,7 @@ function validatePlanComplete(msg: Record<string, unknown>, _msgType: string, de
 function validateModeSwitchRequest(msg: Record<string, unknown>, _msgType: string, deps: WebviewMessageValidatorDeps): boolean {
   if (invalidRequiredString(msg, "sessionId", "Invalid sessionId in mode_switch_request", deps)) return false
   const targetMode = msg.targetMode
-  if (targetMode !== "plan" && targetMode !== "build" && targetMode !== "auto") {
+  if (targetMode !== "plan" && targetMode !== "build" && targetMode !== "auto" && targetMode !== "orchestrated") {
     return reject(deps, `Invalid targetMode in mode_switch_request: ${String(targetMode)}`)
   }
   return true

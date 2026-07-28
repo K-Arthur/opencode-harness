@@ -11,6 +11,7 @@ export interface ModeDropdownElements {
   modeOptPlan: HTMLButtonElement
   modeOptAuto: HTMLButtonElement
   modeOptBuild: HTMLButtonElement
+  modeOptOrchestrated: HTMLButtonElement
 }
 
 export interface ModeDropdownDeps {
@@ -32,16 +33,17 @@ export interface ModeDropdownDeps {
   setDefaultMode?: (mode: string) => void
 }
 
-export const MODE_ORDER = ["plan", "build", "auto"] as const
+export const MODE_ORDER = ["plan", "build", "auto", "orchestrated"] as const
 const CYCLE_DEBOUNCE_MS = 200
 
 const MODE_ICONS: Record<string, string> = {
   plan: '<svg class="mode-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3v18"/><path d="M7 3v18"/><path d="M3 7.5h18"/><path d="M3 16.5h18"/><path d="M17 3a2 2 0 0 1 2 2"/><path d="M17 21a2 2 0 0 0 2-2"/><path d="M7 3a2 2 0 0 0-2 2"/><path d="M7 21a2 2 0 0 1-2-2"/></svg>',
   auto: '<svg class="mode-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>',
   build: '<svg class="mode-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>',
+  orchestrated: '<svg class="mode-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M12 2v20"/><path d="M2 12h20"/><circle cx="12" cy="12" r="2"/></svg>',
 }
 
-const MODE_LABELS: Record<string, string> = { plan: "Plan", auto: "Auto", build: "Build" }
+const MODE_LABELS: Record<string, string> = { plan: "Plan", auto: "Auto", build: "Build", orchestrated: "Orchestrated" }
 
 let _lastCycleTime = 0
 let _resizeHandler: (() => void) | null = null
@@ -143,7 +145,7 @@ export function updateModeDropdown(mode: string, els: ModeDropdownElements): voi
   const normalized = normalizeSessionMode(mode) || "build"
   els.modeCurrentText.textContent = MODE_LABELS[normalized] || normalized
   els.modeDropdownBtn.dataset.mode = normalized
-  const selectorCopy = getModeSelectorTooltip(normalized as "plan" | "build" | "auto")
+  const selectorCopy = getModeSelectorTooltip(normalized as "plan" | "build" | "auto" | "orchestrated")
   els.modeDropdownBtn.title = selectorCopy.title
   els.modeDropdownBtn.setAttribute("aria-label", selectorCopy.ariaLabel)
 
@@ -151,11 +153,11 @@ export function updateModeDropdown(mode: string, els: ModeDropdownElements): voi
   const iconEl = els.modeDropdownLabel.querySelector(".mode-icon") as HTMLElement | null
   if (iconEl) iconEl.outerHTML = iconSvg
 
-  for (const key of ["plan", "auto", "build"]) {
+  for (const key of ["plan", "auto", "build", "orchestrated"]) {
     const opt = els[`modeOpt${key.charAt(0).toUpperCase() + key.slice(1)}` as keyof ModeDropdownElements] as HTMLButtonElement
     const isSelected = key === normalized
     opt.setAttribute("aria-selected", String(isSelected))
-    const optionCopy = getModeOptionTooltip(key as "plan" | "build" | "auto")
+    const optionCopy = getModeOptionTooltip(key as "plan" | "build" | "auto" | "orchestrated")
     opt.title = optionCopy.title
     opt.setAttribute("aria-label", optionCopy.ariaLabel)
     opt.classList.toggle("selected", isSelected)
@@ -181,7 +183,7 @@ export function updateModeSelectorState(els: ModeDropdownElements, _getActiveSes
   els.modeDropdown.classList.remove("disabled")
   els.modeDropdownBtn.disabled = false
   els.modeDropdownBtn.setAttribute("aria-disabled", "false")
-  for (const btn of [els.modeOptPlan, els.modeOptAuto, els.modeOptBuild]) {
+  for (const btn of [els.modeOptPlan, els.modeOptAuto, els.modeOptBuild, els.modeOptOrchestrated]) {
     btn.disabled = false
     btn.setAttribute("aria-disabled", "false")
   }
@@ -252,7 +254,7 @@ export function setupModeToggle(deps: ModeDropdownDeps): void {
     }
   })
 
-  const options = [els.modeOptPlan, els.modeOptAuto, els.modeOptBuild]
+  const options = [els.modeOptPlan, els.modeOptAuto, els.modeOptBuild, els.modeOptOrchestrated]
   for (const opt of options) {
     opt.addEventListener("click", () => {
       const mode = opt.dataset.mode
@@ -290,7 +292,7 @@ export function setupModeToggle(deps: ModeDropdownDeps): void {
   document.addEventListener("keydown", (e) => {
     if (isModalOrDialogOpen()) return
     if (!e.altKey || e.shiftKey || e.ctrlKey || e.metaKey) return
-    const modeByCode: Record<string, string> = { Digit1: "plan", Digit2: "build", Digit3: "auto" }
+    const modeByCode: Record<string, string> = { Digit1: "plan", Digit2: "build", Digit3: "auto", Digit4: "orchestrated" }
     const mode = modeByCode[e.code]
     if (!mode) return
     e.preventDefault()

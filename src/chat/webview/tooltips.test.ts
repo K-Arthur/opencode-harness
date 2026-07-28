@@ -109,7 +109,7 @@ void describe("getModeSelectorTooltip", () => {
   })
 
   void it("includes the cycle shortcut for every mode", () => {
-    for (const mode of ["plan", "build", "auto"] as const) {
+    for (const mode of ["plan", "build", "auto", "orchestrated"] as const) {
       const result = getModeSelectorTooltip(mode)
       assert.match(result.ariaLabel, /Alt\+Shift\+Tab/)
     }

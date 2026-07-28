@@ -1,4 +1,4 @@
-export const SESSION_MODES = ["plan", "build", "auto"] as const
+export const SESSION_MODES = ["plan", "build", "auto", "orchestrated"] as const
 export type SessionMode = (typeof SESSION_MODES)[number]
 export const DEFAULT_MODE: SessionMode = "build"
 
@@ -81,6 +81,6 @@ export function resolvePermissionForMode(
   if (!mode) return "prompt"
   if (mode === "auto") return "once"
   if (mode === "plan") return resolvePlanPermission(data)
-  if (mode === "build" && isProtectedPath(data.pattern)) return "reject"
+  if ((mode === "build" || mode === "orchestrated") && isProtectedPath(data.pattern)) return "reject"
   return "prompt"
 }

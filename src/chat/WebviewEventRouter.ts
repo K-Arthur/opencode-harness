@@ -808,7 +808,7 @@ export class WebviewEventRouter {
     ["mode_switch_request", async (msg: Record<string, unknown>, sessionId?: string) => {
       const sid = typeof msg.sessionId === "string" ? msg.sessionId : sessionId
       const targetMode = typeof msg.targetMode === "string" ? msg.targetMode : undefined
-      if (!sid || !targetMode || !["plan", "build", "auto"].includes(targetMode)) {
+      if (!sid || !targetMode || !["plan", "build", "auto", "orchestrated"].includes(targetMode)) {
         log.warn("mode_switch_request: missing sessionId or invalid targetMode")
         return
       }

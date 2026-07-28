@@ -759,7 +759,7 @@ export type HostMessage =
   | { type: "model_update"; model: string }
   | { type: "variant_update"; variant: string }
   | { type: "open_model_manager"; forRegeneration?: boolean; messageId?: string }
-  | { type: "mode_change_result"; sessionId: string; mode: "plan" | "build" | "auto"; accepted: boolean; reason?: string }
+  | { type: "mode_change_result"; sessionId: string; mode: "plan" | "build" | "auto" | "orchestrated"; accepted: boolean; reason?: string }
   | { type: "suggest_mode_switch"; sessionId: string; targetMode: "build" | "auto" }
   | { type: "model_list"; items: ModelInfo[] }
   | { type: "mention_results"; items: MentionItem[]; query: string }

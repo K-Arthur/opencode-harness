@@ -315,12 +315,13 @@ export function getVoiceTooltip(state: VoiceState): { title: string; ariaLabel: 
   }
 }
 
-export type SessionMode = "plan" | "build" | "auto"
+export type SessionMode = "plan" | "build" | "auto" | "orchestrated"
 
 const MODE_LABELS: Record<SessionMode, string> = {
   plan: "Plan",
   build: "Build",
   auto: "Auto",
+  orchestrated: "Orchestrated",
 }
 
 const MODE_DESCRIPTIONS: Record<SessionMode, string> = {
@@ -328,12 +329,15 @@ const MODE_DESCRIPTIONS: Record<SessionMode, string> = {
   build:
     "Build: agent reads, writes, and runs commands — changes require approval before applying",
   auto: "Auto: agent applies changes without per-action prompts — review all output carefully",
+  orchestrated:
+    "Orchestrated: agent routes each task phase to a role-specific model with transparent routing",
 }
 
 const MODE_SHORTCUTS: Record<SessionMode, string> = {
   plan: "Ctrl/Cmd+Alt+1",
   build: "Ctrl/Cmd+Alt+2",
   auto: "Ctrl/Cmd+Alt+3",
+  orchestrated: "Ctrl/Cmd+Alt+4",
 }
 
 const CYCLE_SHORTCUT_LABEL = "Shift+Tab · Alt+Shift+Tab · Ctrl+Shift+M to cycle modes"

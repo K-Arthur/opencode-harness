@@ -27,6 +27,7 @@ function installDom(): TestModeDropdownElements {
         <button id="mode-opt-plan" class="mode-option" data-mode="plan"></button>
         <button id="mode-opt-build" class="mode-option" data-mode="build"></button>
         <button id="mode-opt-auto" class="mode-option" data-mode="auto"></button>
+        <button id="mode-opt-orchestrated" class="mode-option" data-mode="orchestrated"></button>
       </div>
     </div>
     <div id="modal-1" aria-modal="true" class="hidden"></div>
@@ -63,6 +64,7 @@ function installDom(): TestModeDropdownElements {
     modeOptPlan: dom.window.document.getElementById("mode-opt-plan") as HTMLButtonElement,
     modeOptAuto: dom.window.document.getElementById("mode-opt-auto") as HTMLButtonElement,
     modeOptBuild: dom.window.document.getElementById("mode-opt-build") as HTMLButtonElement,
+    modeOptOrchestrated: dom.window.document.getElementById("mode-opt-orchestrated") as HTMLButtonElement,
     modeOptions: Array.from(dom.window.document.querySelectorAll<HTMLButtonElement>(".mode-option")),
   }
 }
@@ -195,7 +197,7 @@ void describe("mode dropdown", () => {
       assert.deepEqual(posted[0], { type: "change_mode", mode: "auto", sessionId: "s1" })
     })
 
-    void it("cycles from auto to plan (wrap around)", () => {
+    void it("cycles from auto to orchestrated (wrap around after orchestrated goes to plan)", () => {
       const els = installDom()
       resetCycleTimer()
       const posted: Record<string, unknown>[] = []
@@ -205,7 +207,7 @@ void describe("mode dropdown", () => {
       })
       cycleModeForward(deps)
       assert.equal(posted.length, 1)
-      assert.deepEqual(posted[0], { type: "change_mode", mode: "plan", sessionId: "s1" })
+      assert.deepEqual(posted[0], { type: "change_mode", mode: "orchestrated", sessionId: "s1" })
     })
 
     void it("defaults to build when no session mode is set", () => {
@@ -347,7 +349,7 @@ void describe("mode dropdown", () => {
 
   void describe("MODE_ORDER", () => {
     void it("has expected order", () => {
-      assert.deepEqual([...MODE_ORDER], ["plan", "build", "auto"])
+      assert.deepEqual([...MODE_ORDER], ["plan", "build", "auto", "orchestrated"])
     })
   })
 

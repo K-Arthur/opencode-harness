@@ -23,6 +23,7 @@ function installModeDom(): ModeDropdownElements {
         <button id="mode-opt-plan" class="mode-option" data-mode="plan"></button>
         <button id="mode-opt-build" class="mode-option" data-mode="build"></button>
         <button id="mode-opt-auto" class="mode-option" data-mode="auto"></button>
+        <button id="mode-opt-orchestrated" class="mode-option" data-mode="orchestrated"></button>
       </div>
     </div>
   `)
@@ -55,6 +56,7 @@ function installModeDom(): ModeDropdownElements {
     modeOptPlan: d.getElementById("mode-opt-plan") as HTMLButtonElement,
     modeOptAuto: d.getElementById("mode-opt-auto") as HTMLButtonElement,
     modeOptBuild: d.getElementById("mode-opt-build") as HTMLButtonElement,
+    modeOptOrchestrated: d.getElementById("mode-opt-orchestrated") as HTMLButtonElement,
   }
 }
 

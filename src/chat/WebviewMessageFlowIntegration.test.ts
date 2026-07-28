@@ -41,7 +41,7 @@ void describe("Webview Message Flow Integration Tests", () => {
     void it("validates change_mode values", () => {
       assert.ok(eventRouterSource.includes("validateMessage"), "must call validateMessage")
       assert.ok(validatorSource.includes("change_mode: validateChangeMode"), "must validate change_mode")
-      assert.ok(validatorSource.includes('new Set(["normal", "plan", "build", "auto"])'), "must validate mode values")
+      assert.ok(validatorSource.includes('new Set(["normal", "plan", "build", "auto", "orchestrated"])'), "must validate mode values")
     })
   })
 

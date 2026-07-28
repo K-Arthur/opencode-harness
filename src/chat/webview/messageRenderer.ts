@@ -44,7 +44,7 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
     if (effectiveMode && role === "assistant") {
       const modeBadge = document.createElement("span")
       modeBadge.className = `message-mode-badge message-mode-badge--${effectiveMode}`
-      modeBadge.textContent = effectiveMode === "plan" ? "Plan" : effectiveMode === "auto" ? "Auto" : "Build"
+      modeBadge.textContent = effectiveMode === "plan" ? "Plan" : effectiveMode === "auto" ? "Auto" : effectiveMode === "orchestrated" ? "Orchestrated" : "Build"
       modeBadge.title = `This message was produced in ${effectiveMode} mode`
       header.appendChild(modeBadge)
     }
