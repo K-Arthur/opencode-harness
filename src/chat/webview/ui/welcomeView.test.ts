@@ -44,6 +44,8 @@ describe("welcomeView.ts", () => {
         welcomeModelName: null,
         welcomeSearchInput: document.getElementById("welcome-search-input"),
         promptInput: document.createElement("textarea"),
+        welcomeModelEmptyBanner: null,
+        welcomeEmptyBannerLink: null,
       },
       postMessage: (msg) => { messages.push(msg) },
       getAllSessions: () => [],

@@ -1,5 +1,5 @@
 import * as vscode from "vscode"
-import type { Attachment } from "./webview/types"
+import type { Attachment, AttachmentSummary } from "./webview/types"
 import type { AgentRole } from "../orchestration/modelRouting"
 
 const crypto = globalThis.crypto
@@ -11,6 +11,7 @@ export interface QueuedPrompt {
   text: string
   sessionId: string
   attachments: Attachment[]
+  attachmentSummary?: AttachmentSummary
   mode: "interrupt" | "queue"
   isSteerPrompt: boolean
   state: QueuedPromptState

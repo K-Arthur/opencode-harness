@@ -14,7 +14,7 @@ describe("T1.7 — Auth token migration module", () => {
   })
 
   it("checks SecretStorage first for existing token", () => {
-    assert.ok(migrationSource.includes("context.secrets.get(\"opencode-harness.serverAuthToken\")"), "must check secrets first")
+    assert.ok(migrationSource.includes("context.secrets.get(SECRET_KEY"), "must check secrets first")
   })
 
   it("returns secrets token directly without reading settings", () => {
@@ -22,8 +22,8 @@ describe("T1.7 — Auth token migration module", () => {
   })
 
   it("migrates legacy settings token to SecretStorage", () => {
-    assert.ok(migrationSource.includes("context.secrets.store(\"opencode-harness.serverAuthToken\""), "must store in secrets")
-    assert.ok(migrationSource.includes("vscode.workspace.getConfiguration(\"opencode\").update(\"serverAuthToken\", undefined"), "must clear legacy setting")
+    assert.ok(migrationSource.includes("context.secrets.store(SECRET_KEY"), "must store in secrets")
+    assert.ok(migrationSource.includes("config.update(\"serverAuthToken\", undefined"), "must clear legacy setting")
   })
 
   it("returns empty string when neither secrets nor settings has token", () => {

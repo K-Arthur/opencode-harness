@@ -69,3 +69,9 @@ flowchart TD
     UserAction -->|Close Tab| SoftClose[Stop worker, preserve history]
     SoftClose --> End([Tab closed, history saved])
 ```
+
+## Orchestrated Mode
+
+For the multi-stage Orchestrated pipeline flow — including `AttachmentSummary`
+classification, workflow selection, per-stage model overrides, and revisioned
+`pipeline_progress` state — see `flow-orchestrated-pipeline.md`.

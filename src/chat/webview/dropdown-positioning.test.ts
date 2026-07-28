@@ -75,7 +75,6 @@ describe("floating webview dropdown positioning", () => {
       btn: null,
       panel,
       content: document.getElementById("ctx-content")!,
-      badge: document.getElementById("ctx-badge")!,
       postMessage: () => {},
     })
     openContextUsageDropdown()
@@ -102,6 +101,7 @@ describe("floating webview dropdown positioning", () => {
       badge: document.getElementById("cf-badge")!,
       postMessage: () => {},
       onOpenFile: () => {},
+      onOpenChangedFileDiff: () => {},
     })
     setCurrentSession("session-a")
     updateChangedFiles("session-a", [{ path: "/tmp/example.ts", added: 1, removed: 0 }])

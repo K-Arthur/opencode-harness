@@ -9,7 +9,7 @@ import type { AutoCompactor } from "./AutoCompactor"
 import type { CheckpointManager } from "../checkpoint/CheckpointManager"
 import { checkFileSecurity } from "../utils/security"
 import { isLocalPlaceholderSessionId } from "../session/sessionUtils"
-import { sdkMessagesToChatMessages } from "../session/sdkMessageConverter"
+import { sdkMessagesToChatMessages, markStaleToolBlocksUnresolved } from "../session/sdkMessageConverter"
 import { summarizeOpencodeMessageUsage } from "../session/sdkUsageSummary"
 import { log } from "../utils/outputChannel"
 import { computeMessageCounts } from "./webview/messageCounter"
@@ -100,7 +100,16 @@ export class SessionLifecycleService {
     if (effectiveCliId && this.opts.sessionManager.isRunning) {
       try {
         const rows = await this.opts.sessionManager.getSessionMessages(effectiveCliId)
-        const messages = sdkMessagesToChatMessages(rows)
+        let messages = sdkMessagesToChatMessages(rows)
+        // This tab is never actively streaming at this point — resume only
+        // reaches here after the streaming guard above, and compaction (the
+        // only other caller of this path) never runs while the tab is
+        // streaming either. Safe to terminalize any tool the transcript
+        // still shows as pending/running: its completion event is gone for
+        // good, not merely delayed. See markStaleToolBlocksUnresolved's doc.
+        if (!this.opts.tabManager.getTab(session.id)?.isStreaming) {
+          messages = markStaleToolBlocksUnresolved(messages)
+        }
         if (messages.length > 0) {
           this.opts.sessionStore.applyBackfilledMessages(session.id, messages, summarizeOpencodeMessageUsage(rows))
           this.opts.sessionStore.autoTitleFromMessages(session.id)

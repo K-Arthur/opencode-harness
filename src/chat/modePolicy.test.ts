@@ -39,6 +39,7 @@ void describe("modePolicy", () => {
     assert.equal(normalizeSessionMode("build"), "build")
     assert.equal(normalizeSessionMode("plan"), "plan")
     assert.equal(normalizeSessionMode("auto"), "auto")
+    assert.equal(normalizeSessionMode("orchestrated"), "orchestrated")
     assert.equal(normalizeSessionMode("oops"), null)
     assert.equal(normalizeSessionMode(undefined), null)
   })

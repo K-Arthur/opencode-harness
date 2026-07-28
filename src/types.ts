@@ -41,7 +41,7 @@ export type TokenBreakdown = {
   cacheWrite: number
 }
 
-export type CanonicalToolState = "pending" | "running" | "completed" | "error" | "cancelled"
+export type CanonicalToolState = "pending" | "running" | "completed" | "error" | "cancelled" | "unresolved"
 
 export type CanonicalBlock =
   | {
@@ -143,6 +143,17 @@ export interface DiffChunk {
 export interface Attachment {
   data: string
   mimeType: string
+}
+
+export interface AttachmentSummary {
+  total: number
+  imageCount: number
+  documentCount: number
+  hasImages: boolean
+  hasDocuments: boolean
+  hasUnsupportedImages: boolean
+  /** Approximate base64 payload size in bytes (0 if not computed). */
+  estimatedBytes: number
 }
 
 export interface SteerPrompt {

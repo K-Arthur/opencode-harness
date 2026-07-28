@@ -1,6 +1,7 @@
 /** Webview type definitions */
 
 import type { VoiceInputSettings } from "../voiceInputCore"
+import type { PipelineStateUI } from "./ui/pipelineProgress"
 
 export type MessageRole = "user" | "assistant" | "system"
 
@@ -204,9 +205,9 @@ export type Block = LegacyBlock
 
 // Re-export the canonical discriminated union from the root types module so
 // consumers in the webview can import it via the local types barrel.
-export type { CanonicalBlock, CanonicalToolState } from "../../types"
+export type { AttachmentSummary, CanonicalBlock, CanonicalToolState } from "../../types"
 export type { TokenBreakdown as CanonicalTokenBreakdown } from "../../types"
-import type { CanonicalBlock as _CanonicalBlock } from "../../types"
+import type { AttachmentSummary, CanonicalBlock as _CanonicalBlock } from "../../types"
 
 // ---------------------------------------------------------------------------
 // CanonicalBlock type guards (Layer 2)
@@ -315,6 +316,7 @@ export interface SessionState {
   pinnedPrompts?: string[]
   orchestrationRoute?: OrchestrationRouteStatus
   maskingStats?: MaskingSummaryStats
+  pipeline?: PipelineStateUI & { runId?: string; revision?: number }
 }
 
 export interface OrchestrationRouteStatus {
@@ -709,6 +711,27 @@ export type HostMessage =
   | { type: "prompt_accepted"; sessionId: string; messageId: string; clientRequestId?: string }
   | { type: "prompt_send_failed"; sessionId: string; messageId?: string; clientRequestId?: string; text: string; reason: string; attachments?: Attachment[] }
   | { type: "orchestration_route"; sessionId: string; role: "planning" | "implementation" | "review" | "debugging"; mode: string; model: string; agent: string }
+   | { type: "pipeline_progress"; sessionId: string; state: PipelineStateUI & { runId?: string; workflowState?: string } }
+  /** Request user approval for a pipeline stage (e.g., before implementation) */
+  | { type: "pipeline_approval_request"; sessionId: string; stageId: string }
+  /** Orchestration diagnostic event */
+  | { type: "orchestration_diagnostic"; sessionId: string; event: string; data?: Record<string, unknown> }
+  /** Pipeline snapshot restored after reload (recovery state) */
+  | { type: "pipeline_snapshot_restored"; sessionId: string; runId: string; workflowId: string; state: PipelineStateUI & { runId?: string; workflowState?: string; revision?: number; recoveryState?: string }; interruptedStageIds: string[]; uncertainStageIds: string[] }
+  /** Pipeline recovery requires user input after reload */
+  | { type: "pipeline_recovery_needed"; sessionId: string; runId: string; recoveryState: string; message: string; options: Array<{ action: string; label: string }> }
+  /** Git conflict detected during pipeline execution */
+  | { type: "pipeline_git_conflict"; sessionId: string; stageId: string; risks: Array<{ severity: string; category: string; file?: string; message: string }>; action: string }
+  /** File conflict detected during write stage */
+  | { type: "pipeline_file_conflict"; sessionId: string; stageId: string; file: string; category: string; severity: string }
+  /** Budget warning — approaching limits */
+  | { type: "pipeline_budget_warning"; sessionId: string; used: number; limit: number; unit: "tokens" | "cost" }
+  /** Budget exceeded — pipeline paused/skipping */
+  | { type: "pipeline_budget_exceeded"; sessionId: string; used: number; limit: number; unit: "tokens" | "cost"; action: "pause" | "skip_optional" | "terminate" }
+  /** Repair loop progress update */
+  | { type: "pipeline_repair_progress"; sessionId: string; pass: number; maxPasses: number; findingsBefore: number; findingsAfter: number; resolved: number }
+  /** Pipeline recovery state after reload */
+  | { type: "pipeline_recovery_update"; sessionId: string; recoveryState: string; message: string }
   | { type: "role_models_config"; roleModels: Record<string, string>; modeModels: Record<string, string>; enabled: boolean }
   | { type: "masking_summary"; sessionId: string; stats: { redactedSecrets: number; maskedFileMentions: number; maskedDocumentBlocks: number; removedContextItems: number; truncatedTokens: number; inputTokens: number; outputTokens: number } }
   | { type: "temp_session_created"; activeSessionId: string; session: SessionState }
@@ -759,7 +782,7 @@ export type HostMessage =
   | { type: "model_update"; model: string }
   | { type: "variant_update"; variant: string }
   | { type: "open_model_manager"; forRegeneration?: boolean; messageId?: string }
-  | { type: "mode_change_result"; sessionId: string; mode: "plan" | "build" | "auto"; accepted: boolean; reason?: string }
+  | { type: "mode_change_result"; sessionId: string; mode: "plan" | "build" | "auto" | "orchestrated"; accepted: boolean; reason?: string }
   | { type: "suggest_mode_switch"; sessionId: string; targetMode: "build" | "auto" }
   | { type: "model_list"; items: ModelInfo[] }
   | { type: "mention_results"; items: MentionItem[]; query: string }
@@ -918,7 +941,7 @@ export type WebviewMessage =
   | { type: "webview_ready" }
   | { type: "init_ack" }
   | { type: "create_tab"; sessionId?: string; name?: string; model?: string; mode?: string; ephemeral?: boolean }
-  | { type: "send_prompt"; sessionId: string; text: string; messageId: string; clientRequestId?: string; model: string; mode?: string; variant?: string; attachments?: Attachment[]; isSteerPrompt?: boolean; contextItems?: AttachedContextItem[]; role?: string; agentRole?: string; ephemeral?: boolean }
+  | { type: "send_prompt"; sessionId: string; text: string; messageId: string; clientRequestId?: string; model: string; mode?: string; variant?: string; attachments?: Attachment[]; attachmentSummary?: AttachmentSummary; isSteerPrompt?: boolean; contextItems?: AttachedContextItem[]; role?: string; agentRole?: string; ephemeral?: boolean }
   | { type: "send_steer_prompt"; id: string; text: string; attachments: Attachment[]; mode: "interrupt" | "queue"; sessionId: string; userMessageId?: string }
   | { type: "change_mode"; mode: string; sessionId: string }
   | { type: "set_model"; model: string; sessionId?: string }
@@ -1078,6 +1101,35 @@ export type WebviewMessage =
   /** User response to a suggest_mode_switch prompt. persist=true means "always
    *  switch for this session without asking." */
   | { type: "plan_complete_preference"; sessionId: string; targetMode: "build" | "auto"; persist: boolean }
+  // ── Pipeline control messages ────────────────────────────────────────────
+  /** Cancel the entire pipeline */
+  | { type: "pipeline_cancel"; sessionId: string }
+  /** Cancel a specific stage */
+  | { type: "pipeline_cancel_stage"; sessionId: string; stageId: string }
+  /** Pause the pipeline */
+  | { type: "pipeline_pause"; sessionId: string }
+  /** Resume the pipeline */
+  | { type: "pipeline_resume"; sessionId: string }
+  /** Approve a stage (e.g., plan approval before implementation) */
+  | { type: "pipeline_approve_stage"; sessionId: string; stageId: string; approved: boolean }
+  /** Retry a failed stage */
+  | { type: "pipeline_retry_stage"; sessionId: string; stageId: string; model?: string }
+  /** Skip an optional stage */
+  | { type: "pipeline_skip_stage"; sessionId: string; stageId: string }
+  /** Get current pipeline state */
+  | { type: "pipeline_get_state"; sessionId: string }
+  /** Override model for a specific stage */
+  | { type: "pipeline_override_model"; sessionId: string; stageId: string; model: string }
+  /** Pause after the current stage */
+  | { type: "pipeline_pause_after_stage"; sessionId: string; stageId: string }
+  /** Approve/deny plan (extended, with edits) */
+  | { type: "pipeline_plan_decision"; sessionId: string; approvalId: string; decision: "approve" | "approve_with_edits" | "reject" | "cancel"; editedPlan?: string; modelOverride?: string }
+  /** Stop the pipeline but keep partial results */
+  | { type: "pipeline_stop_with_results"; sessionId: string }
+  /** Resume a recovered pipeline after reload */
+  | { type: "pipeline_confirm_recovery"; sessionId: string; action: "continue" | "cancel" | "review" }
+  /** Request the full pipeline log */
+  | { type: "pipeline_request_log"; sessionId: string }
 
 // Backward-compatible alias
 export type LegacyWebviewMessage = WebviewMessage & Record<string, unknown>

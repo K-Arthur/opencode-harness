@@ -51,6 +51,7 @@ function bootDom() {
     badge,
     postMessage: (msg) => postedMessages.push(msg),
     onOpenFile: () => {},
+    onOpenChangedFileDiff: () => {},
   })
 }
 

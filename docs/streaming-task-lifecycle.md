@@ -24,6 +24,21 @@ does not emit a completion event, the coordinator waits the existing grace windo
 marks the item unresolved, preserves partial output, and finalizes instead of
 leaving a stale running state.
 
+This grace-window path only runs while `waitingForCompletion` is still `true` for
+the tab — it's reached through `maybeFinalizeStream`, which bails immediately if
+that flag is already `false`. A tab can reach "not waiting" through a second path
+that bypasses the grace window entirely: `reconcileAfterReconnect` (fired on
+webview reload, extension-host restart, or SSE reconnect), when it discovers the
+server-side run already finished during the outage. That path now runs the same
+convergence (`markUnresolvedPendingToolCalls` + `markUnresolvedActiveSubagents`)
+*before* declaring the tab idle, so a tool/subagent whose completion event was
+lost to the same outage that caused the reconnect can't be left orphaned with no
+path back to a terminal state. `AutoCompactor` calls the equivalent
+`StreamCoordinator.ensureToolStateConverged` checkpoint after every successful
+compaction, and gates on `hasPendingToolCalls` alongside `isStreaming` before
+starting one — see `docs/TechSpec.md` § "Tool Call Spins Forever After
+Compaction / Reconnect" for the incident this closes.
+
 ## Error Taxonomy
 
 Run-scoped pipeline errors are mapped through `runErrorMapper` with:
@@ -64,7 +79,9 @@ longer invent completion. If OpenCode omits a child status, the extension uses
 Supported recovery remains honest:
 
 - Retry from the last user message is supported through `retry_stream`.
-- Refresh/reconcile after reconnect uses session messages and child sessions.
+- Refresh/reconcile after reconnect uses session messages and child sessions,
+  and converges any tool/subagent state left pending by the outage to a
+  terminal state before the tab is declared idle (see Host Model above).
 - True resume/reattach is not claimed unless the OpenCode server exposes enough
   active-stream state for the extension to prove it can reattach.
 - Cancel calls the existing OpenCode abort API and marks the run as

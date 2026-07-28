@@ -4,13 +4,21 @@
 // Enforces repo-level bundle size limits for the two build outputs that
 // load synchronously into the host process or the chat webview:
 //
-//   dist/extension.js                  ≤ 791KB (host)
+//   dist/extension.js                  ≤ 795KB (host)
 //   dist/chat/webview/main.js          ≤ 838KB (chat webview)
 //   dist/chat/webview/markdownWorker.js ≤ 500KB (advisory)
 //
 // IMPORTANT: these limits describe the **production (minified) build**
 // (`node esbuild.js --production`). The dev build (`node esbuild.js`) is
 // unminified + sourcemapped (~840KB / ~1.2MB) and must NOT be measured here.
+//
+// 2026-07-27 re-baseline (host 791KB -> 795KB): the host limit had almost no
+// headroom (789.9KB actual / 791KB limit), so routine Dependabot patch/minor
+// bumps of host-side runtime deps (e.g. @opencode-ai/sdk, bundled directly
+// into dist/extension.js) trip the gate on version-string-only diffs with no
+// app code change — confirmed by building against @opencode-ai/sdk 1.18.7
+// (791.3KB, over the old limit) vs 1.17.11 (789.9KB). +4KB gives ~0.75%
+// slack for that class of change while still catching real regressions.
 //
 // Re-baseline history is kept in git log — run `git log --all -p -- scripts/check-bundle-size.mjs`.
 
@@ -22,7 +30,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
-  { path: "dist/extension.js", limitBytes: 791 * 1024, label: "extension host" },
+  { path: "dist/extension.js", limitBytes: 795 * 1024, label: "extension host" },
   { path: "dist/chat/webview/main.js", limitBytes: 838 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]

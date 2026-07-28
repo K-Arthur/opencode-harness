@@ -1,5 +1,5 @@
 import { SessionStore, type OpenCodeSession } from "../session/SessionStore"
-import { sdkMessagesToChatMessages } from "../session/sdkMessageConverter"
+import { sdkMessagesToChatMessages, markStaleToolBlocksUnresolved } from "../session/sdkMessageConverter"
 import { summarizeOpencodeMessageUsage } from "../session/sdkUsageSummary"
 import { isLocalPlaceholderSessionId } from "../session/sessionUtils"
 import { TabManager } from "./TabManager"
@@ -36,7 +36,14 @@ export class BackfillService {
     const cliId = session.cliSessionId
     if (!cliId || isLocalPlaceholderSessionId(cliId)) return 0
     const rows = await this.fetchFlight.run(cliId, () => this.deps.getSessionMessages(cliId))
-    const messages = sdkMessagesToChatMessages(rows)
+    let messages = sdkMessagesToChatMessages(rows)
+    // Backfill only ever targets tabs recovered from persisted state (fresh
+    // extension-host start) or sessions not yet open as a live tab — never a
+    // tab that's actively streaming right now. Safe to terminalize a
+    // still-pending/running tool part the same way resume does.
+    if (!this.deps.tabManager.getTab(session.id)?.isStreaming) {
+      messages = markStaleToolBlocksUnresolved(messages)
+    }
     if (messages.length === 0) return 0
     this.deps.sessionStore.applyBackfilledMessages(session.id, messages, summarizeOpencodeMessageUsage(rows))
     this.deps.sessionStore.autoTitleFromMessages(session.id)

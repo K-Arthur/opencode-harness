@@ -40,6 +40,7 @@ function renderChangedFilesList(container: HTMLElement, files: any[], options: a
     badge,
     postMessage: options.postMessage || (() => {}),
     onOpenFile: options.onOpenFile || (() => {}),
+    onOpenChangedFileDiff: () => {},
   })
   setCurrentSession("test-session")
   updateChangedFiles("test-session", files)

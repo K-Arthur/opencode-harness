@@ -21,6 +21,10 @@ C4Container
         Container(inline_actions, "InlineActionProvider", "TypeScript", "CodeLens + context menus for inline actions")
         Container(theme_manager, "ThemeManager", "TypeScript", "Manages extension theming")
         Container(checkpoint_manager, "CheckpointManager", "TypeScript", "Manages conversation checkpoints")
+        Container(orchestration_coordinator, "OrchestrationCoordinator", "TypeScript", "Executes multi-stage orchestrated workflows")
+        Container(pipeline_state_machine, "WorkflowStateMachine", "TypeScript", "Tracks workflow/stage states and revision counter")
+        Container(stage_dispatcher, "enhancedStageDispatcher", "TypeScript", "Dispatches each stage with model/agent overrides")
+        Container(handoff_store, "HandoffStore", "TypeScript", "Typed stage output contracts between pipeline stages")
 
         ContainerDb(webview, "WebviewContent", "HTML/CSS/TypeScript", "Chat UI rendered in VS Code webview panel")
     }
@@ -46,4 +50,11 @@ C4Container
     Rel(terminal_bridge, webview, "Receives agent output", "webview message")
     Rel(skill_manager, webview, "Updates skill state", "webview message")
     Rel(model_manager, webview, "Updates model display", "webview message")
+    Rel(stream_coordinator, orchestration_coordinator, "Starts orchestrated pipeline", "in-process")
+    Rel(orchestration_coordinator, pipeline_state_machine, "Transitions workflow/stage state", "in-process")
+    Rel(orchestration_coordinator, stage_dispatcher, "Executes stages", "in-process")
+    Rel(stage_dispatcher, api, "Sends stage prompts", "HTTP REST")
+    Rel(orchestration_coordinator, handoff_store, "Reads/writes typed handoffs", "in-process")
+    Rel(orchestration_coordinator, webview, "Posts pipeline_progress", "webview message")
+    Rel(message_router, orchestration_coordinator, "Routes pipeline control messages", "in-process")
 ```
