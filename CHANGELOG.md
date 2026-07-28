@@ -17,6 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Branch consolidation**: Merged `fix/streaming-correctness-perf` (32 commits,
+  session-scoped context + token accounting) and `feature/orchestrated-mode`
+  (14 commits, orchestrated pipeline with role-aware model routing) into master.
+  Deleted 11 stale/duplicate remote branches: `agent/pty-terminal`,
+  `cleanup/extension-refactor`, `deps/upgrade-2026-06-22`,
+  `fix/context-usage-counter`, `fix/webview-e2e`, `wave1/diff-wrap`,
+  `fix/commands-palette-routing`, `fix/show-thinking-and-compact-tools`,
+  `fix/steering-queue-shortcuts-redesign`, `wave0/stabilize`,
+  `feature/orchestrated-mode`. (#§ops)
+
 ### Added
 
 - **Attachment-aware workflow selection**: `AttachmentSummary` is now computed

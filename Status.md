@@ -1,7 +1,13 @@
 # Status.md
 
-## Last Updated: 2026-05-29
-## Project State: Context/token usage accounting fix applied and verified
+## Last Updated: 2026-07-27
+## Project State: Branch consolidation complete — all feature branches merged into master
+
+### Branch Consolidation (2026-07-27)
+- **Two feature branches merged**: `fix/streaming-correctness-perf` (session-scoped context + token accounting) and `feature/orchestrated-mode` (multi-stage orchestrated pipeline with role-aware model routing).
+- **Eleven stale/duplicate branches deleted**: `agent/pty-terminal`, `cleanup/extension-refactor`, `deps/upgrade-2026-06-22`, `fix/context-usage-counter`, `fix/webview-e2e`, `wave1/diff-wrap`, `fix/commands-palette-routing`, `fix/show-thinking-and-compact-tools`, `fix/steering-queue-shortcuts-redesign`, `wave0/stabilize`, `feature/orchestrated-mode`.
+- **Verification**: `npm run typecheck`, `npm run build`, and `node --test tests/unit/*.test.mjs` (0 failures) all pass.
+- **Remaining remote branches**: 10 auto-managed dependabot refs + `fix/streaming-correctness-perf` (merge source reference) + `master`.
 
 ### Recent Fix (2026-05-29): Session-scoped context usage + cumulative token accounting
 - **Backend token totals no longer reset after multi-turn sessions** — final SDK assistant
