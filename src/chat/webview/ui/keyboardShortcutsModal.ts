@@ -86,18 +86,38 @@ function trapModalFocus(container: HTMLElement): (e: KeyboardEvent) => void {
   }
 }
 
+function tokenizeKeys(input: string): string[] {
+  const tokens: string[] = []
+  let buf = ""
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i]!
+    if (ch === "+") {
+      if (buf) { tokens.push(buf); buf = "" }
+      tokens.push("+")
+    } else if (ch === "/") {
+      if (buf) { tokens.push(buf); buf = "" }
+      tokens.push("/")
+    } else if (ch === " ") {
+      if (buf) { tokens.push(buf); buf = "" }
+    } else {
+      buf += ch
+    }
+  }
+  if (buf) tokens.push(buf)
+  return tokens.filter(Boolean)
+}
+
 function renderTable(rows: ShortcutRow[]): string {
   return rows
     .map((r) => {
-      const parts = r.keys.split(/\s+\+\s+/).filter(Boolean)
-      const rendered = parts.map((part) => {
-        if (part.includes("(") && part.includes(")")) {
-          return `<kbd>${part}</kbd>`
-        }
-        const keys = part.split("+")
-        return keys.map((k) => `<kbd>${k.trim()}</kbd>`).join("+")
-      }).join(" + ")
-      return `<tr><td>${rendered}</td><td>${r.action}</td><td>${r.context}</td></tr>`
+      const tokens = tokenizeKeys(r.keys)
+      const rendered = tokens.map((t) => {
+        if (t === "+") return '<span class="kbd-separator">+</span>'
+        if (t === "/") return '<span class="kbd-separator">/</span>'
+        if (t.includes("(") && t.includes(")")) return `<kbd>${t}</kbd>`
+        return `<kbd>${t}</kbd>`
+      }).join("")
+      return `<tr><td><span class="kbd-group">${rendered}</span></td><td>${r.action}</td><td>${r.context}</td></tr>`
     })
     .join("")
 }
@@ -161,7 +181,8 @@ export function setupKeyboardShortcutsModal(container: HTMLElement): void {
   const table = document.createElement("table")
   table.className = "keyboard-shortcuts-table"
   table.innerHTML = `
-    <thead><tr><th>Shortcut</th><th>Action</th><th>Context</th></tr></thead>
+    <colgroup><col><col><col></colgroup>
+    <thead><tr><th scope="col">Shortcut</th><th scope="col">Action</th><th scope="col">Context</th></tr></thead>
     <tbody>${renderTable(SHORTCUT_TABLE)}</tbody>
   `
   body.appendChild(table)

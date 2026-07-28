@@ -153,6 +153,7 @@ export function createModelRoutingPanel(deps: ModelRoutingDeps) {
     const row = deps.els.modelRoutingList.querySelector(`[data-role-id="${roleId}"]`)
     if (row) {
       const fallbackEl = row.querySelector(".model-routing-row-fallback") as HTMLElement
+      const selectEl = row.querySelector(".model-routing-row-select") as HTMLSelectElement
       if (fallbackEl) {
         const fallback = resolveFallback(roleId)
         if (pendingRoleModels[roleId]) {
@@ -162,6 +163,9 @@ export function createModelRoutingPanel(deps: ModelRoutingDeps) {
           fallbackEl.textContent = `Falls back to: ${fallback}`
           fallbackEl.className = "model-routing-row-fallback"
         }
+      }
+      if (selectEl) {
+        selectEl.title = pendingRoleModels[roleId] || `Default: ${resolveFallback(roleId)}`
       }
     }
   }
@@ -232,6 +236,7 @@ export function createModelRoutingPanel(deps: ModelRoutingDeps) {
       select.id = `model-routing-input-${role.id}`
       select.disabled = !pendingEnabled
       select.setAttribute("aria-label", `Model for ${role.label} phase`)
+      select.title = pendingRoleModels[role.id] || `Default: ${resolveFallback(role.id)}`
       buildModelOptions(select, pendingRoleModels[role.id])
       select.addEventListener("change", () => handleModelSelect(role.id, select.value))
 
