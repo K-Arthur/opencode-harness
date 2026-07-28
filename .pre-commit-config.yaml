@@ -1,0 +1,96 @@
+# Pre-commit hooks for CI/CD failure prevention
+# Install: pip install pre-commit
+# Run: pre-commit install
+# Manual: pre-commit run --all-files
+
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-yaml
+        args: [--unsafe]
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+      - id: check-case-conflict
+      - id: check-symlinks
+      - id: destroyed-symlinks
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  # TypeScript/JavaScript checks
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v8.56.0
+    hooks:
+      - id: eslint
+        files: \.(js|ts|tsx|jsx)$
+        args: [--fix]
+        additional_dependencies:
+          - eslint@8.56.0
+          - '@typescript-eslint/eslint-plugin@6.19.0'
+          - '@typescript-eslint/parser@6.19.0'
+
+  # YAML formatting
+  - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
+    rev: v2.12.0
+    hooks:
+      - id: pretty-format-yaml
+        args: [--autofix, --indent, '2']
+
+  # Shell script checks
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.6
+    hooks:
+      - id: shellcheck
+        args: [--severity=warning]
+
+  # GitHub Actions workflow linting
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.6.26
+    hooks:
+      - id: actionlint
+
+  # Custom project-specific checks
+  - repo: local
+    hooks:
+      - id: ci-workflow-validation
+        name: Validate CI workflow YAML syntax
+        entry: node scripts/validate-workflows.mjs
+        language: node
+        files: \.github/workflows/.*\.yml$
+        pass_filenames: true
+
+      - id: bundle-size-check
+        name: Check bundle size limits
+        entry: node scripts/check-bundle-size.mjs
+        language: node
+        files: package.json|esbuild.js
+        pass_filenames: false
+
+      - id: architecture-check
+        name: Validate project architecture
+        entry: node scripts/check-architecture.mjs
+        language: node
+        files: src/.*\.ts$
+        pass_filenames: false
+
+      - id: typecheck
+        name: TypeScript type check
+        entry: npm run typecheck
+        language: system
+        files: \.(ts|tsx)$
+        pass_filenames: false
+
+      - id: test-unit
+        name: Run unit tests
+        entry: npm run test:unit
+        language: system
+        files: \.(ts|js|mjs)$
+        pass_filenames: false
