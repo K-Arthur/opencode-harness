@@ -1,7 +1,46 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-07-27
-**Version:** v0.4.63 (unreleased)
+**Version:** v0.4.70
+
+## Highlights (2026-07-27) — Branch consolidation, CI/CD resilience, re-landed fixes
+
+`master` absorbed two long-running branches today: `fix/streaming-correctness-perf`
+(32 commits, session-scoped context/token accounting) and `feature/orchestrated-mode`
+(pipeline + role-aware routing, developed concurrently in this same session — see
+below). The merge dropped part of the tool-call convergence fix in transit; it has
+since been re-applied and re-verified directly on `master`.
+
+- **Stuck-tool-call fix re-landed**: the merge kept the historical-render half of
+  the fix (`sdkMessageConverter.markStaleToolBlocksUnresolved`) but dropped the
+  `StreamCoordinator.ts`/`AutoCompactor.ts`/`ChatProvider.ts`/`WebviewEventRouter.ts`
+  changes. Re-applied verbatim, re-verified (typecheck clean, all regression +
+  supporting tests pass), committed and pushed. Resolves
+  [#18](https://github.com/K-Arthur/opencode-harness/issues/18).
+- **CI/CD resilience infrastructure**: automated GitHub Actions log extraction
+  with AI-assisted failure analysis, a custom failure-extractor Action, workflow
+  YAML validation, a comprehensive pre-commit hook suite, local `act`-based CI
+  testing, and an end-to-end validation cascade run before any CI/CD change is
+  pushed. `actions/cache` upgraded to v6; unit tests no longer run with
+  `continue-on-error`.
+- **Repository hygiene**: untracked AI session-state/generated-metadata files
+  (`.bundle-meta/`, working-memory `.md` files, machine-specific
+  `.claude/settings.json`) with `.gitignore` rules to keep them out; replaced
+  three duplicated 1500+-line AI-tool instruction files with thin stubs
+  referencing `AGENTS.md` as the single source of truth.
+- **UI layout breakage fixed** in the Keyboard Shortcuts, Model Routing, and
+  Theme Customizer dialogs (sticky-header collision, content overflow/truncation,
+  action-bar scroll-under). Closes UI-001–UI-004.
+- **SDK bumped to `@opencode-ai/sdk` 1.18.7** with a new compatibility-probe/
+  capability-model layer (`serverIdentity.ts`, `compatibilityProbe.ts`) and
+  runtime response validation (`responseValidator.ts`) replacing unsafe `as`
+  casts at the SDK boundary, plus compile-time and runtime contract-drift tests.
+  Bundle limits re-baselined for the growth (extension host → 800KB, webview
+  main → 842KB).
+
+See `CHANGELOG.md` `[0.4.65]`–`[0.4.70]` and `[0.4.64]` for full detail, and
+`docs/TechSpec.md` § "Tool Call Spins Forever After Compaction / Reconnect" for
+the fix's root-cause trace.
 
 ## Highlights (2026-07-27) — Tool-call lifecycle convergence and bundle-size gate
 

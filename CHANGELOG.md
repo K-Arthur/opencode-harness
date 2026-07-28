@@ -15,6 +15,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > move items from `[Unreleased]` to the new version section and update the date.
 > Never leave features marked as "unreleased" after they are shipped.
 
+## [0.4.70] — 2026-07-27
+
+### Fixed
+
+- **Re-landed the stuck-tool-call convergence fix**: the fix documented under
+  0.4.64 below (`reconcileAfterReconnect` convergence, `hasPendingToolCalls`/
+  `ensureToolStateConverged`, `AutoCompactor` gating) was dropped from
+  `StreamCoordinator.ts`, `AutoCompactor.ts`, `ChatProvider.ts`, and
+  `WebviewEventRouter.ts` during the branch-consolidation merge — only the
+  historical-render terminalization half (`sdkMessageConverter.markStaleToolBlocksUnresolved`)
+  survived. Re-applied verbatim and re-verified (typecheck clean; all
+  regression tests plus 84 supporting tests pass). Resolves
+  [#18](https://github.com/K-Arthur/opencode-harness/issues/18).
+
+- **UI layout breakage in Keyboard Shortcuts, Model Routing, and Theme
+  Customizer dialogs**: sticky table header collided with content in the
+  keyboard-shortcuts modal on narrow viewports; the model-routing panel
+  allowed content overflow and truncated long model/fallback-chain text
+  without a title tooltip; the theme customizer's action bar could scroll
+  under content. Fixed with `table-layout: fixed` + explicit `colgroup`
+  widths and flex-wrap for the shortcuts table, `overflow: hidden` / `min-width: 0`
+  constraints and `title` attributes for the routing panel, and
+  `scroll-padding-bottom` / solid action-bar backgrounds across all three
+  dialogs. Closes UI-001–UI-004.
+
+### Added
+
+- **CI/CD resilience infrastructure**: automated GitHub Actions log
+  extraction and AI-assisted failure analysis (`.github/actions/ci-failure-extractor`,
+  `scripts/extract-ci-failures.mjs`), workflow YAML validation
+  (`scripts/validate-workflows.mjs`), a comprehensive pre-commit hook suite
+  (`.pre-commit-config.yaml` — YAML/JSON syntax, ESLint, shellcheck, workflow
+  validation, typecheck/unit/bundle-size/architecture gates), local
+  `act`-based CI testing (`.actrc`, `scripts/setup-act.sh`,
+  `docs/development/local-ci-testing.md`), and an end-to-end validation
+  cascade (`scripts/ci-validation-cascade.mjs`) that checks all of the above
+  before a CI/CD change is pushed. `actions/cache` upgraded to v6 with
+  OS-specific keys; unit tests no longer run with `continue-on-error`, so a
+  real test failure now fails the pipeline instead of being silently
+  swallowed.
+
+### Changed
+
+- **Repository hygiene**: untracked AI session-state and generated-metadata
+  files that don't belong in version control (`AGENTS_WORKING_MEMORY.md`,
+  `HARNESS_MEMORY.md`, `GITHUB_PIPELINE_MEMORY.md`, `.bundle-meta/`,
+  machine-specific `.claude/settings.json`), with `.gitignore` rules to keep
+  them out going forward. Replaced three near-identical 1500+-line copies of
+  the same AI-tool instruction template (`.clinerules`, `.windsurfrules`,
+  `.github/copilot-instructions.md`) with thin stubs that reference `AGENTS.md`
+  as the single canonical source, instead of duplicating it three times.
+
 ## [0.4.64] — 2026-07-27
 
 ### Changed
