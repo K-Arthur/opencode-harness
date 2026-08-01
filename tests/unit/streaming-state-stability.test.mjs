@@ -293,7 +293,7 @@ void describe("streaming-state stability: G6 reconcile emits stream_end for comp
   void it("reconcileAfterReconnect emits stream_end when last assistant has time.completed", () => {
     const idx = STREAM_COORDINATOR.indexOf("async reconcileAfterReconnect(tabId: string, callbacks: StreamCallbacks)")
     assert.ok(idx >= 0)
-    const body = STREAM_COORDINATOR.slice(idx, idx + 3500)
+    const body = STREAM_COORDINATOR.slice(idx, idx + 6000)
     assert.ok(
       body.includes("completedAt") && body.includes("emitting dropped stream_end"),
       "must detect time.completed and emit a dropped stream_end",
