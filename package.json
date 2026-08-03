@@ -1310,7 +1310,7 @@
     "jsdom": "^29.1.1",
     "mocha": "^11.7.6",
     "tsx": "^4.23.1",
-    "typescript": "^6.0.0"
+    "typescript": "^7.0.2"
   },
   "overrides": {
     "serialize-javascript": "^7.0.0"
