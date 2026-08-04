@@ -223,7 +223,9 @@ md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
     return defaultLinkOpen(tokens, idx, options, env, self)
   }
 
-  const href = token.attrGet("href") ?? ""
+  // markdown-it 15's attrGet returns string | number | null — coerce so the
+  // href comparisons below stay string-typed.
+  const href = String(token.attrGet("href") ?? "")
 
   if (/^(https?|ftp):/i.test(href)) {
     token.attrSet("target", "_blank")
