@@ -1307,7 +1307,7 @@
     "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
-    "jsdom": "^29.1.1",
+    "jsdom": "^30.0.1",
     "mocha": "^11.7.6",
     "tsx": "^4.23.1",
     "typescript": "^6.0.0"
