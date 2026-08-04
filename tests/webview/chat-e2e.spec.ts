@@ -92,12 +92,10 @@ test.describe("Chat Webview E2E", () => {
       percent: 4,
     })
 
-    // Switch to the empty session via the same host event the extension
-    // sends when the active session changes.
-    await dispatchHostMessage(page, {
-      type: "active_session_changed",
-      sessionId: "session-empty",
-    })
+    // Switch to the empty session the way a user does — clicking the tab.
+    // Host-pushed active_session_changed is intentionally NOT followed
+    // (tab auto-switching is disabled; see sessionFocus.ts).
+    await page.click('.tab-btn[data-tab-id="session-empty"]')
 
     const bar = page.locator("#context-usage")
     // After switch the bar should be hidden again (no usage on the new tab).
@@ -142,10 +140,9 @@ test.describe("Chat Webview E2E", () => {
     const bar = page.locator("#context-usage")
     await expect(bar).toHaveClass(/hidden/, { timeout: 3000 })
 
-    await dispatchHostMessage(page, {
-      type: "active_session_changed",
-      sessionId: "session-b",
-    })
+    // Switch to session-b the way a user does — clicking the tab (host-pushed
+    // active_session_changed is intentionally not followed).
+    await page.click('.tab-btn[data-tab-id="session-b"]')
 
     await expect(bar).not.toHaveClass(/hidden/, { timeout: 3000 })
     await expect(page.locator("#context-label")).toContainText("75%")
@@ -194,16 +191,17 @@ test.describe("Chat Webview E2E", () => {
     // Strip must show a "4 files changed" label
     await expect(strip).toContainText("4 files changed")
 
-    // File basenames appear as chips in the strip
+    // The strip shows the first basename as a chip plus an overflow pill
+    // (CF_STRIP_MAX = 1); the rest live in the dropdown tree.
     await expect(strip).toContainText("foo.ts")
-    await expect(strip).toContainText("bar.py")
-    await expect(strip).toContainText("README.md")
-    await expect(strip).toContainText("config.json")
+    await expect(strip).toContainText("+3 more")
 
-    // Clicking the strip opens the full dropdown tree
-    await strip.click()
-    const tree = page.locator("#cf-dropdown-tree")
+    // Clicking the strip label area (not a file chip, which opens the file)
+    // opens the full dropdown tree
+    await strip.locator(".cf-strip-label").click()
+    const tree = page.locator("#cf-panel-tree")
     await expect(tree).toBeVisible({ timeout: 3000 })
+    await expect(tree).toContainText("bar.py")
 
     expectNoBrowserErrors(captured)
   })
@@ -247,12 +245,19 @@ test.describe("Chat Webview E2E", () => {
     await expect(strip).not.toHaveClass(/hidden/, { timeout: 5000 })
     await expect(strip).toContainText("5 files changed")
 
-    // All 5 basenames appear in the strip chips
+    // First basename appears as a chip; the rest are folded into the
+    // overflow pill (CF_STRIP_MAX = 1).
     await expect(strip).toContainText("Main.kt")
-    await expect(strip).toContainText("deploy.sh")
-    await expect(strip).toContainText("workflow.yaml")
-    await expect(strip).toContainText("index.html")
-    await expect(strip).toContainText("migration.sql")
+    await expect(strip).toContainText("+4 more")
+
+    // The full set lives in the dropdown tree
+    await strip.locator(".cf-strip-label").click()
+    const tree = page.locator("#cf-panel-tree")
+    await expect(tree).toBeVisible({ timeout: 3000 })
+    await expect(tree).toContainText("deploy.sh")
+    await expect(tree).toContainText("workflow.yaml")
+    await expect(tree).toContainText("index.html")
+    await expect(tree).toContainText("migration.sql")
 
     expectNoBrowserErrors(captured)
   })
@@ -404,9 +409,9 @@ test.describe("Chat Webview E2E", () => {
     const strip = page.locator("#changed-files-strip")
     await expect(strip).not.toHaveClass(/hidden/, { timeout: 5000 })
 
-    await strip.click()
+    await strip.locator(".cf-strip-label").click()
 
-    const dropdown = page.locator("#changed-files-dropdown")
+    const dropdown = page.locator("#changed-files-panel")
     await expect(dropdown).not.toHaveClass(/hidden/, { timeout: 3000 })
     await expect(dropdown).toBeVisible()
 

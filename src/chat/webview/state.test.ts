@@ -67,22 +67,22 @@ describe("state.ts", () => {
 	    ]
     methods.forEach(m => {
       assert.ok(source.includes(m), `Missing method ${m} in return object`)
-	  })
+    })
+  })
 
-	  it("tracks model favorites and recents for selector sorting", () => {
-	    assert.ok(source.includes("favoriteModels"), "must persist favorite models")
-	    assert.ok(source.includes("recentModels"), "must persist recent models")
-	    assert.ok(source.includes("recentRank"), "must annotate models with recent rank")
-	  })
+  it("tracks model favorites and recents for selector sorting", () => {
+    assert.ok(source.includes("favoriteModels"), "must persist favorite models")
+    assert.ok(source.includes("recentModels"), "must persist recent models")
+    assert.ok(source.includes("recentRank"), "must annotate models with recent rank")
+  })
 
-	  it("safeStringArray guards against malformed non-array state", () => {
-	    assert.ok(source.includes("function safeStringArray"), "must define safeStringArray helper")
-	    assert.ok(source.includes("if (!Array.isArray(v)) return []"), "must return [] for non-arrays")
-	    assert.ok(source.includes("safeStringArray(candidate.disabledModels)"), "must guard disabledModels")
-	    assert.ok(source.includes("safeStringArray(candidate.favoriteModels)"), "must guard favoriteModels")
-	    assert.ok(source.includes("safeStringArray(candidate.recentModels)"), "must guard recentModels")
-	  })
-	})
+  it("safeStringArray guards against malformed non-array state", () => {
+    assert.ok(source.includes("function safeStringArray"), "must define safeStringArray helper")
+    assert.ok(source.includes("if (!Array.isArray(v)) return []"), "must return [] for non-arrays")
+    assert.ok(source.includes("safeStringArray(candidate.disabledModels)"), "must guard disabledModels")
+    assert.ok(source.includes("safeStringArray(candidate.favoriteModels)"), "must guard favoriteModels")
+    assert.ok(source.includes("safeStringArray(candidate.recentModels)"), "must guard recentModels")
+  })
 })
 
 describe("state.ts — per-session token usage isolation (Batch 2d)", () => {
