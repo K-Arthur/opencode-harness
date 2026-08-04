@@ -72,20 +72,27 @@ test.describe("Frontend Hardening E2E", () => {
     // While A is active, strip shows A's file only
     await expect(strip).toContainText("from-A.ts")
     await expect(strip).not.toContainText("from-B-1.ts")
-    await expect(strip).not.toContainText("from-B-2.ts")
 
-    // Switch to session B
-    await dispatchHostMessage(page, { type: "active_session_changed", sessionId: "sess-B" })
-    await page.waitForTimeout(200)
+    // Switch to session B the way a user does — clicking the tab (host-pushed
+    // active_session_changed is intentionally not followed).
+    await page.click('.tab-btn[data-tab-id="sess-B"]')
 
-    // Now strip shows B's files; A's must not bleed in
+    // Now strip shows B's files; A's must not bleed in. The strip truncates
+    // to one chip + overflow pill (CF_STRIP_MAX = 1); the full list lives in
+    // the dropdown tree.
+    await expect(strip).toContainText("2 files changed")
     await expect(strip).toContainText("from-B-1.ts")
-    await expect(strip).toContainText("from-B-2.ts")
     await expect(strip).not.toContainText("from-A.ts")
+    await strip.locator(".cf-strip-label").click()
+    const tree = page.locator("#cf-panel-tree")
+    await expect(tree).toBeVisible({ timeout: 3000 })
+    await expect(tree).toContainText("from-B-1.ts")
+    await expect(tree).toContainText("from-B-2.ts")
+    await expect(tree).not.toContainText("from-A.ts")
+    await page.keyboard.press("Escape")
 
     // Switch back to A — A's file must still be there, B's gone
-    await dispatchHostMessage(page, { type: "active_session_changed", sessionId: "sess-A" })
-    await page.waitForTimeout(200)
+    await page.click('.tab-btn[data-tab-id="sess-A"]')
     await expect(strip).toContainText("from-A.ts")
     await expect(strip).not.toContainText("from-B-1.ts")
 
@@ -130,7 +137,7 @@ test.describe("Frontend Hardening E2E", () => {
   // ───────────────────────────────────────────────────────────────────
   // Change A: compact banner
   // ───────────────────────────────────────────────────────────────────
-  test("Edited N files banner renders as a single compact row", async ({ page }) => {
+  test("Edited N files banner is suppressed (changed-files strip is canonical)", async ({ page }) => {
     const captured = captureErrors(page)
     await page.goto("/")
 
@@ -162,16 +169,18 @@ test.describe("Frontend Hardening E2E", () => {
     })
     await page.waitForTimeout(300)
 
-    const banner = page.locator(".task-banner--compact").first()
-    await expect(banner).toBeVisible()
-    // The compact variant must NOT use the legacy multi-row card styling
-    // (no big icon, no max-height scroll area).
-    await expect(banner.locator(".task-banner-files")).toHaveCount(0)
-    // The +N more pill must appear since 13 files > FILE_CHIP_VISIBLE (4)
-    await expect(banner.locator(".cf-strip-overflow")).toHaveText(/\+\d+ more/)
+    // Inline "Edited N files" banners are intentionally NOT rendered — they
+    // duplicated the persistent changed-files strip, stacked one card per
+    // edit batch, and leaked unowned edits into the active tab. The strip is
+    // the single, session-scoped source of truth (see renderTaskBanner).
+    await expect(page.locator(".task-banner--compact")).toHaveCount(0)
+    await expect(page.locator(".task-banner")).toHaveCount(0)
+
+    expectNoBrowserErrors(captured)
   })
 
-  test("clicking the compact banner expands the chip list", async ({ page }) => {
+  test("non-edit task banners still render as legacy cards", async ({ page }) => {
+    const captured = captureErrors(page)
     await page.goto("/")
     await dispatchHostMessage(page, {
       type: "init_state",
@@ -186,8 +195,8 @@ test.describe("Frontend Hardening E2E", () => {
               id: "msg-banner-2",
               blocks: [{
                 type: "task_banner",
-                status: "success",
-                text: "Edited 13 files: a.ts, b.ts, c.ts, d.ts, e.ts, f.ts, g.ts, h.ts, i.ts, j.ts, k.ts, l.ts, m.ts",
+                status: "error",
+                text: "Auto-compact failed: model error",
               }],
               timestamp: Date.now(),
               sessionId: "sess-A",
@@ -201,15 +210,11 @@ test.describe("Frontend Hardening E2E", () => {
     })
     await page.waitForTimeout(300)
 
-    const banner = page.locator(".task-banner--compact").first()
-    await expect(banner).not.toHaveClass(/task-banner--expanded/)
-    // Click the chevron, not a file chip — clicking on a chip would route to
-    // open_file instead of toggling expansion (intentional separation).
-    await banner.locator(".task-banner-chevron").click()
-    await expect(banner).toHaveClass(/task-banner--expanded/)
-    // After expansion all 13 chips are present, no overflow pill
-    await expect(banner.locator(".cf-strip-chip")).toHaveCount(13)
-    await expect(banner.locator(".cf-strip-overflow")).toHaveCount(0)
+    const banner = page.locator(".task-banner--error").first()
+    await expect(banner).toBeVisible()
+    await expect(banner).toContainText("Auto-compact failed: model error")
+
+    expectNoBrowserErrors(captured)
   })
 
   // ───────────────────────────────────────────────────────────────────
@@ -254,23 +259,29 @@ test.describe("Frontend Hardening E2E", () => {
     const block = page.locator(".question-block").first()
     await expect(block).toBeVisible()
     await expect(block).toContainText("Which database driver?")
-    await expect(block.locator(".question-option")).toHaveCount(3)
+    // Inline fallback controls (question not registered in the question bar)
+    await expect(block.locator(".question-block-question-item")).toHaveCount(3)
     await expect(block.locator(".question-freetext")).toBeVisible()
 
-    // Click "MySQL"
-    await block.locator(".question-option").filter({ hasText: "MySQL" }).click()
+    // Click "MySQL" then submit — the inline block requires an explicit
+    // answer click (selection alone does not post).
+    await block.locator(".question-block-question-item").filter({ hasText: "MySQL" }).click()
+    await block.locator(".question-submit").click()
 
     // Verify the postMessage was sent
     const sent = await postedMessages(page)
     const answer = sent.find((m) => m.type === "question_answer")
     expect(answer).toBeTruthy()
-    expect(answer!.value).toBe("MySQL")
+    expect(answer!.value).toContain("MySQL")
+    expect(answer!.structuredAnswers).toEqual([["MySQL"]])
     expect(answer!.source).toBe("option")
     expect(answer!.sessionId).toBe("sess-A")
     expect(answer!.toolCallId).toBe("tool-q-1")
 
-    // Block goes into answered state and disables further input
-    await expect(block).toHaveClass(/question-block--answered/)
+    // The submit button flips to a sent state (the transcript block stays
+    // pending until the server resolves the question).
+    await expect(block.locator(".question-submit")).toBeDisabled()
+    await expect(block.locator(".question-submit")).toHaveText("Sent!")
 
     expectNoBrowserErrors(captured)
   })
