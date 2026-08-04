@@ -122,7 +122,7 @@ describe("stream.ts", () => {
 
   it("has handleStreamToken for targeted DOM updates", () => {
     assert.ok(sourceIncludes("handleStreamToken(text?: string)"), "handleStreamToken must exist")
-    assert.ok(sourceIncludes("textEl.innerHTML = renderMarkdown(displayText, true)"), "must set innerHTML with renderMarkdown")
+    assert.ok(sourceIncludes("textEl.innerHTML = renderMarkdown(displayText, false)"), "must set innerHTML with renderMarkdown")
     assert.ok(sourceIncludes("state.lastStreamTextEl = textEl"), "must track last element")
     assert.ok(sourceIncludes("streaming-text"), "must use streaming-text class for CSS cursor")
   })
@@ -149,7 +149,8 @@ describe("stream.ts", () => {
 
   it("has handleToolUpdate method", () => {
     assert.ok(sourceIncludes("handleToolUpdate("), "handleToolUpdate must exist")
-    assert.ok(sourceIncludes("tool-call--${update.state}"), "must update tool call class dynamically")
+    assert.ok(sourceIncludes("TOOL_STATE_CLASS_RE"), "must swap the tool-call state class via regex")
+    assert.ok(sourceIncludes("tool-call--${state}"), "must update tool call class dynamically")
   })
 
   it("has handleToolEnd method", () => {
@@ -232,10 +233,20 @@ describe("stream.ts", () => {
     )
   })
 
+  // Load streamHandlers only AFTER installDom has bootstrapped a JSDOM
+  // window (dompurify binds to the global window), and register the stream
+  // end handler first — handleStreamEnd throws without it, and the elapsed
+  // typing ticker started by handleStreamStart would otherwise never be
+  // cleared, pinning the event loop and hanging the test:unit run.
+  async function loadStreamHandlers(): Promise<typeof import("./streamHandlers")> {
+    await import("./streamEndHandler")
+    return import("./streamHandlers")
+  }
+
   it("recovers late text chunks after stream_end clears the active stream id", async () => {
     const restore = installDom()
     try {
-      const { handleStreamStart, handleStreamEnd, handleStreamChunk } = await import("./streamHandlers")
+      const { handleStreamStart, handleStreamEnd, handleStreamChunk } = await loadStreamHandlers()
       const harness = createHarness()
       const saveState = () => {}
       let lateSaveCount = 0
@@ -261,7 +272,7 @@ describe("stream.ts", () => {
   it("marks unresolved tool calls complete when the stream finishes normally", async () => {
     const restore = installDom()
     try {
-      const { handleStreamStart, handleStreamEnd } = await import("./streamHandlers")
+      const { handleStreamStart, handleStreamEnd } = await loadStreamHandlers()
       const harness = createHarness()
       const saveState = () => {}
 
@@ -273,7 +284,10 @@ describe("stream.ts", () => {
 
       const assistant = harness.messages.find((message) => message.id === "resp-tools")
       const tool = assistant?.blocks.find((block: any) => block.type === "tool-call")
-      assert.equal(tool?.state, "result")
+      // Unresolved tools are marked "unresolved" (not "result") — the
+      // stream ended without a terminal tool event for them.
+      assert.equal(tool?.state, "unresolved")
+      assert.match(tool?.error || "", /did not complete/)
     } finally {
       restore()
     }
@@ -282,7 +296,7 @@ describe("stream.ts", () => {
   it("finalizes using the active stream bubble when stream_end id changes", async () => {
     const restore = installDom()
     try {
-      const { handleStreamStart, handleStreamEnd } = await import("./streamHandlers")
+      const { handleStreamStart, handleStreamEnd } = await loadStreamHandlers()
       const harness = createHarness()
       const saveState = () => {}
 
