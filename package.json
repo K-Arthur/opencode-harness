@@ -1321,7 +1321,7 @@
     "dompurify": "^3.4.12",
     "highlight.js": "^11.11.1",
     "jsonc-parser": "^3.3.1",
-    "katex": "^0.17.0",
+    "katex": "^0.18.1",
     "markdown-it": "^14.3.0",
     "markdown-it-task-lists": "^2.1.1",
     "mermaid": "^11.16.0",
