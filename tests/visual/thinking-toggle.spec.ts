@@ -58,17 +58,7 @@ test.describe('Global Show/Hide Thinking Toggle', () => {
     const thinkingBlock = page.locator('.thinking-block')
     const thinkingBody = page.locator('.thinking-body')
 
-    // Initial state - thinking should be visible
-    await expect(thinkingBlock).toHaveAttribute('open', '')
-    await expect(thinkingBody).toBeVisible()
-
-    // Click to hide thinking — the entire block should disappear from the
-    // layout, not just collapse to the summary chip. This is the bug the
-    // user reported: previously only the body collapsed and the summary
-    // remained on screen.
-    await toggleBtn.click()
-    await expect(thinkingBlock).not.toHaveAttribute('open')
-    await expect(thinkingBlock).not.toBeVisible()
+    // Initial state - thinking is hidden by default (displayPrefs.thinkingVisible=false)
     await expect(thinkingBody).not.toBeVisible()
 
     // Click to show thinking
@@ -76,44 +66,51 @@ test.describe('Global Show/Hide Thinking Toggle', () => {
     await expect(thinkingBlock).toHaveAttribute('open', '')
     await expect(thinkingBlock).toBeVisible()
     await expect(thinkingBody).toBeVisible()
+
+    // Click to hide thinking — the entire block should disappear from the
+    // layout, not just collapse to the summary chip.
+    await toggleBtn.click()
+    await expect(thinkingBlock).not.toHaveAttribute('open')
+    await expect(thinkingBlock).not.toBeVisible()
+    await expect(thinkingBody).not.toBeVisible()
   })
 
   test('hide-thinking body class is added when toggle is unchecked', async ({ page }) => {
     const toggleBtn = page.locator('#thinking-toggle-menu-item')
-    // Initially visible — no body class
-    await expect(page.locator('body')).not.toHaveClass(/hide-thinking/)
-
-    await toggleBtn.click()
+    // Default is hidden — body class present
     await expect(page.locator('body')).toHaveClass(/hide-thinking/)
 
     await toggleBtn.click()
     await expect(page.locator('body')).not.toHaveClass(/hide-thinking/)
+
+    await toggleBtn.click()
+    await expect(page.locator('body')).toHaveClass(/hide-thinking/)
   })
 
   test('should update aria-checked state', async ({ page }) => {
     const toggleBtn = page.locator('#thinking-toggle-menu-item')
 
-    // Initial state should be checked (visible by default)
-    await expect(toggleBtn).toHaveAttribute('aria-checked', 'true')
-
-    await toggleBtn.click()
+    // Initial state is unchecked (hidden by default)
     await expect(toggleBtn).toHaveAttribute('aria-checked', 'false')
 
     await toggleBtn.click()
     await expect(toggleBtn).toHaveAttribute('aria-checked', 'true')
+
+    await toggleBtn.click()
+    await expect(toggleBtn).toHaveAttribute('aria-checked', 'false')
   })
 
   test('should toggle active class on button', async ({ page }) => {
     const toggleBtn = page.locator('#thinking-toggle-menu-item')
 
-    // Initial state should have active class
-    await expect(toggleBtn).toHaveClass(/active/)
-
-    await toggleBtn.click()
+    // Initial state has no active class (hidden by default)
     await expect(toggleBtn).not.toHaveClass(/active/)
 
     await toggleBtn.click()
     await expect(toggleBtn).toHaveClass(/active/)
+
+    await toggleBtn.click()
+    await expect(toggleBtn).not.toHaveClass(/active/)
   })
 
   test('should apply collapsed class to all thinking blocks', async ({ page }) => {
@@ -141,16 +138,19 @@ test.describe('Global Show/Hide Thinking Toggle', () => {
     const toggleBtn = page.locator('#thinking-toggle-menu-item')
     const thinkingBlocks = page.locator('.thinking-block')
 
-    // All blocks should be visible initially
+    // All blocks are hidden initially (default) but keep their open attributes
     await expect(thinkingBlocks).toHaveCount(4) // 1 initial + 3 new
-    await expect(thinkingBlocks.nth(0)).toHaveAttribute('open', '')
-    await expect(thinkingBlocks.nth(1)).toHaveAttribute('open', '')
-    await expect(thinkingBlocks.nth(2)).toHaveAttribute('open', '')
-    await expect(thinkingBlocks.nth(3)).toHaveAttribute('open', '')
 
-    // Toggle to hide — all blocks should be removed from layout AND lose
-    // their open attribute (defense-in-depth: hidden via body class even if
-    // the open attribute is somehow preserved).
+    // Toggle to show — all blocks open and become visible
+    await toggleBtn.click()
+    for (const i of [0, 1, 2, 3]) {
+      await expect(thinkingBlocks.nth(i)).toHaveAttribute('open', '')
+      await expect(thinkingBlocks.nth(i)).toBeVisible()
+    }
+
+    // Toggle to hide — all blocks are removed from layout AND lose their
+    // open attribute (defense-in-depth: hidden via body class even if the
+    // open attribute is somehow preserved).
     await toggleBtn.click()
     for (const i of [0, 1, 2, 3]) {
       await expect(thinkingBlocks.nth(i)).not.toHaveAttribute('open')
@@ -190,19 +190,19 @@ test.describe('Global Show/Hide Thinking Toggle', () => {
     const block1 = page.locator('.thinking-block').nth(0)
     const block2 = page.locator('.thinking-block').nth(1)
 
-    // Initial states
+    // Initial attribute states (hidden by default, but open attr preserved)
     await expect(block1).toHaveAttribute('open', '')
     await expect(block2).not.toHaveAttribute('open')
 
-    // Collapse all
-    await toggleBtn.click()
-    await expect(block1).not.toHaveAttribute('open')
-    await expect(block2).not.toHaveAttribute('open')
-
-    // Expand all - should open both blocks
+    // Show all - should open both blocks
     await toggleBtn.click()
     await expect(block1).toHaveAttribute('open', '')
     await expect(block2).toHaveAttribute('open', '')
+
+    // Hide all - both collapse
+    await toggleBtn.click()
+    await expect(block1).not.toHaveAttribute('open')
+    await expect(block2).not.toHaveAttribute('open')
   })
 
   test('should have smooth transition for expand/collapse', async ({ page }) => {
