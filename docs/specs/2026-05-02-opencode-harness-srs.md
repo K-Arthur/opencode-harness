@@ -187,7 +187,7 @@ The primary interaction point is a rich webview chat panel. It must display:
 | NFR-PLAT-02 | First-class support on Fedora/RHEL (RPM-based distros) |
 | NFR-PLAT-03 | Packaged as standard `.vsix` |
 | NFR-PLAT-04 | Publishable on VS Code Marketplace |
-| NFR-PLAT-05 | Requires VS Code 1.98.0 or higher |
+| NFR-PLAT-05 | Requires VS Code 1.125.0 or higher |
 | NFR-PLAT-06 | Respects `XDG_CONFIG_HOME` and standard Linux paths for opencode binary discovery |
 
 ### 3.4 Security

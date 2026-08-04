@@ -11,13 +11,33 @@
 [![CI](https://github.com/K-Arthur/opencode-harness/actions/workflows/ci.yml/badge.svg)](https://github.com/K-Arthur/opencode-harness/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/K-Arthur/opencode-harness/actions/workflows/codeql.yml/badge.svg)](https://github.com/K-Arthur/opencode-harness/actions/workflows/codeql.yml)
 
-A VS Code extension that puts a chat panel, diff viewer, and multi-session tabs
-in front of the [opencode](https://opencode.ai) CLI agent. It starts
-`opencode serve` for you and talks to it over HTTP — your prompts and files go
-to whichever AI provider you've configured in opencode, same as running the
-CLI directly. opencode itself is open source; this extension is open source
-too and is free to install (you pay your AI provider for usage, not this
-extension).
+A VS Code extension that puts a chat panel, side-by-side diff viewer, and
+multi-session tabs in front of the [opencode](https://opencode.ai) CLI agent —
+the same agent, providers, and config you use from the terminal, with a GUI
+inside your editor. It starts `opencode serve` for you and talks to it over
+HTTP, so your prompts and files go to whichever AI provider you've configured
+in opencode, exactly as if you had run the CLI directly.
+
+### At a glance
+
+| | |
+|---|---|
+| **What it is** | An independent, community-built chat GUI for the opencode CLI agent |
+| **Who it's for** | Developers who use (or want to use) opencode and prefer working inside VS Code |
+| **License & price** | MIT, open source, free — you pay only your AI provider |
+| **Models** | Any model your provider exposes — Claude, GPT, Gemini, and more, from 75+ providers via [Models.dev](https://models.dev) |
+| **Requirements** | VS Code 1.125.0+, Node.js 20.x+, and the `opencode` CLI (auto-installed on first run if missing) |
+| **Status** | Beta — features evolve actively; see [Limitations](#limitations) |
+
+## Quick start
+
+1. **Install** the extension from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=koarthur.opencode-harness) (or the [VSX Registry](https://vscode.marketplace.visualstudio.com/) for VSCodium) and reload the window.
+2. **Configure a provider** if you haven't already: `opencode provider --help`, or follow [opencode.ai/docs/providers](https://opencode.ai/docs/providers).
+3. **Open the OpenCode panel** from the Activity Bar (or `Ctrl+Alt+O`), pick a model, and start chatting.
+
+On first activation the extension detects a missing `opencode` CLI and offers
+to install it for you — no terminal setup required. See
+[Installation](#installation) for all options.
 
 ## How it compares
 
@@ -76,8 +96,8 @@ anything the opencode CLI itself doesn't support.
     <br><strong>Code change review with diff preview, accept/discard controls, and per-file navigation</strong>
   </td>
   <td align="center" width="50%">
-    <img src="media/screenshots/dark/model-controls.png" alt="Model and provider selection with Claude, GPT, Gemini, and 75+ models" width="100%">
-    <br><strong>Model and provider selection with Claude, GPT, Gemini, and 75+ models</strong>
+    <img src="media/screenshots/dark/model-controls.png" alt="Model and provider selection with Claude, GPT, Gemini, and models from 75+ providers (light theme)" width="100%">
+    <br><strong>Model and provider selection with Claude, GPT, Gemini, and models from 75+ providers (light theme)</strong>
   </td>
 </tr>
 <tr>
@@ -399,7 +419,7 @@ The extension warns you before you hit limits:
 
 ## Requirements
 
-- **VS Code** 1.98.0 or higher
+- **VS Code** 1.125.0 or higher
 - **Node.js** 20.x or later
 - **opencode CLI** — the agent runtime. **You usually don't need to install this yourself:** on first activation the extension detects a missing CLI and offers to install it for you (official installer on macOS/Linux, npm on Windows). This is controlled by the [`opencode.autoInstall`](docs/configuration.md) setting (`prompt` by default; set to `auto` for silent install or `off` to manage it yourself). You can also run **`OpenCode: Install CLI`** from the Command Palette at any time. Manual install instructions are below.
 

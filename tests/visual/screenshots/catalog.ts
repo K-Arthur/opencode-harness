@@ -95,7 +95,7 @@ export const catalog: ScreenshotEntry[] = [
   },
   {
     name: "model-controls",
-    caption: "Model and provider selection with Claude, GPT, Gemini, and 75+ models (light theme)",
+    caption: "Model and provider selection with Claude, GPT, Gemini, and models from 75+ providers (light theme)",
     fixture: "model-controls.json",
     theme: "light",
     extraMessages: [

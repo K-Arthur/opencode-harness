@@ -21,7 +21,7 @@ test.describe('Welcome Screen', () => {
     await expect(wordmark).toHaveAttribute('src', /opencode-wordmark-dark\.svg/)
     
     const tagline = page.locator('.welcome-tagline')
-    await expect(tagline).toHaveText('AI-powered coding assistant integrated into your editor')
+    await expect(tagline).toHaveText('Chat with the opencode agent inside VS Code')
   })
 
   test('should display suggestion cards', async ({ page }) => {

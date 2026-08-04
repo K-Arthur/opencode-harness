@@ -59,7 +59,7 @@ OpenCode Harness is a VS Code extension that integrates the opencode AI coding a
 
 ### Tech Stack
 - **Runtime**: TypeScript / Node.js
-- **Framework**: VS Code Extension API (^1.98.0)
+- **Framework**: VS Code Extension API (^1.125.0)
 - **SDK**: @opencode-ai/sdk (official opencode SDK)
 - **UI**: Webview (HTML/CSS/TypeScript embedded in VS Code extension)
 - **Testing**: Playwright (E2E), Node.js built-in test runner (unit + behavioral), Mocha (integration via vscode-test). `npm test` runs `'tests/unit/*.test.mjs'` (64 MJS files, ~1205 tests), `'src/**/*.test.ts'` (303 TS files, ~4280 tests — single-quoted so Node 26 handles `**` recursion; unquoted shell expansion would silently skip `src/chat/handlers/`, `src/chat/webview/` etc.), `'tests/unit/*.test.ts'` (5 TS behavioral files), `tests/webview/message-contract.test.ts`, and `tests/integration/message-roundtrip.test.mjs`.
@@ -347,11 +347,11 @@ The debug Extension Development Host must open the intended workspace folder. If
 | Dependency | Version | Purpose |
 |-----------|---------|---------|
 | @opencode-ai/sdk | latest | Official SDK for opencode server communication |
-| VS Code API | ^1.98.0 | Extension runtime |
+| VS Code API | ^1.125.0 | Extension runtime |
 | esbuild | latest | Build tool |
 | playwright | latest | E2E testing |
 | ts-jest | latest | Unit testing |
-| @types/vscode | ^1.98.0 | TypeScript definitions |
+| @types/vscode | ^1.125.0 | TypeScript definitions |
 
 ## Feature Parity (CLI → Extension)
 
