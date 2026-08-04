@@ -66,43 +66,43 @@ anything the opencode CLI itself doesn't support.
 <!-- SCREENSHOTS:START -->
 
 <p align="center">
-  <img src="media/screenshots/dark/overview.png" alt="Chat interface with model selection, session controls, and project context" width="100%">
+  <img src="media/screenshots/dark/overview.png" alt="OpenCode chat panel in VS Code showing an AI coding conversation with model and session controls" width="100%">
 </p>
 
 <table>
 <tr>
   <td align="center" width="50%">
-    <img src="media/screenshots/dark/coding-workflow.png" alt="AI-assisted refactoring with tool calls, code diffs, and structured responses" width="100%">
+    <img src="media/screenshots/dark/coding-workflow.png" alt="OpenCode assistant refactoring code with tool calls and a diff preview" width="100%">
     <br><strong>AI-assisted refactoring with tool calls, code diffs, and structured responses</strong>
   </td>
   <td align="center" width="50%">
-    <img src="media/screenshots/dark/context-management.png" alt="Context-aware coding with file references, @-mentions, and usage tracking" width="100%">
+    <img src="media/screenshots/dark/context-management.png" alt="OpenCode chat with file references, @-mentions, and context usage tracking" width="100%">
     <br><strong>Context-aware coding with file references, @-mentions, and usage tracking</strong>
   </td>
 </tr>
 <tr>
   <td align="center" width="50%">
-    <img src="media/screenshots/dark/tool-execution.png" alt="Transparent tool execution with search, read, edit, and run operations" width="100%">
+    <img src="media/screenshots/dark/tool-execution.png" alt="OpenCode agent running search, read, edit, and run tools with results as cards" width="100%">
     <br><strong>Transparent tool execution with search, read, edit, and run operations</strong>
   </td>
   <td align="center" width="50%">
-    <img src="media/screenshots/dark/sessions.png" alt="Multi-session management with tab switching and conversation history" width="100%">
+    <img src="media/screenshots/dark/sessions.png" alt="Several OpenCode chat tabs running sessions in parallel" width="100%">
     <br><strong>Multi-session management with tab switching and conversation history</strong>
   </td>
 </tr>
 <tr>
   <td align="center" width="50%">
-    <img src="media/screenshots/dark/review-changes.png" alt="Code change review with diff preview, accept/discard controls, and per-file navigation" width="100%">
+    <img src="media/screenshots/dark/review-changes.png" alt="Code change review with side-by-side diff and accept/discard controls" width="100%">
     <br><strong>Code change review with diff preview, accept/discard controls, and per-file navigation</strong>
   </td>
   <td align="center" width="50%">
-    <img src="media/screenshots/dark/model-controls.png" alt="Model and provider selection with Claude, GPT, Gemini, and models from 75+ providers (light theme)" width="100%">
+    <img src="media/screenshots/dark/model-controls.png" alt="Model picker listing Claude, GPT, and Gemini models" width="100%">
     <br><strong>Model and provider selection with Claude, GPT, Gemini, and models from 75+ providers (light theme)</strong>
   </td>
 </tr>
 <tr>
   <td align="center" width="50%">
-    <img src="media/screenshots/dark/build-mode.png" alt="Auto mode with multi-step tool chains, autonomous coding, and test verification" width="100%">
+    <img src="media/screenshots/dark/build-mode.png" alt="OpenCode auto mode running multi-step tool chains with test verification" width="100%">
     <br><strong>Auto mode with multi-step tool chains, autonomous coding, and test verification</strong>
   </td>
 </tr>

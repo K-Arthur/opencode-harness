@@ -16,6 +16,9 @@ export interface ScreenshotEntry {
   name: string
   /** Human-readable caption for README / marketplace */
   caption: string
+  /** Short alt text for the <img> — distinct from the caption to avoid
+   * screen readers announcing the same sentence twice. Falls back to caption. */
+  alt?: string
   /** Fixture JSON filename (under tests/visual/screenshots/fixtures/sessions/) */
   fixture: string
   /** Additional host messages to dispatch AFTER init_state */
@@ -37,6 +40,7 @@ export const catalog: ScreenshotEntry[] = [
   {
     name: "overview",
     caption: "Chat interface with model selection, session controls, and project context",
+    alt: "OpenCode chat panel in VS Code showing an AI coding conversation with model and session controls",
     fixture: "overview.json",
     waitSelectors: [
       ".message.assistant",
@@ -47,6 +51,7 @@ export const catalog: ScreenshotEntry[] = [
   {
     name: "coding-workflow",
     caption: "AI-assisted refactoring with tool calls, code diffs, and structured responses",
+    alt: "OpenCode assistant refactoring code with tool calls and a diff preview",
     fixture: "coding-workflow.json",
     waitSelectors: [
       ".message.assistant",
@@ -58,6 +63,7 @@ export const catalog: ScreenshotEntry[] = [
   {
     name: "context-management",
     caption: "Context-aware coding with file references, @-mentions, and usage tracking",
+    alt: "OpenCode chat with file references, @-mentions, and context usage tracking",
     fixture: "context-management.json",
     waitSelectors: [
       ".message.user",
@@ -68,6 +74,7 @@ export const catalog: ScreenshotEntry[] = [
   {
     name: "tool-execution",
     caption: "Transparent tool execution with search, read, edit, and run operations",
+    alt: "OpenCode agent running search, read, edit, and run tools with results as cards",
     fixture: "tool-execution.json",
     waitSelectors: [
       ".message.assistant",
@@ -77,6 +84,7 @@ export const catalog: ScreenshotEntry[] = [
   {
     name: "sessions",
     caption: "Multi-session management with tab switching and conversation history",
+    alt: "Several OpenCode chat tabs running sessions in parallel",
     fixture: "sessions.json",
     waitSelectors: [
       ".message.assistant",
@@ -86,6 +94,7 @@ export const catalog: ScreenshotEntry[] = [
   {
     name: "review-changes",
     caption: "Code change review with diff preview, accept/discard controls, and per-file navigation",
+    alt: "Code change review with side-by-side diff and accept/discard controls",
     fixture: "review-changes.json",
     waitSelectors: [
       ".diff-block",
@@ -96,6 +105,7 @@ export const catalog: ScreenshotEntry[] = [
   {
     name: "model-controls",
     caption: "Model and provider selection with Claude, GPT, Gemini, and models from 75+ providers (light theme)",
+    alt: "Model picker listing Claude, GPT, and Gemini models",
     fixture: "model-controls.json",
     theme: "light",
     extraMessages: [
@@ -126,6 +136,7 @@ export const catalog: ScreenshotEntry[] = [
   {
     name: "build-mode",
     caption: "Auto mode with multi-step tool chains, autonomous coding, and test verification",
+    alt: "OpenCode auto mode running multi-step tool chains with test verification",
     fixture: "build-mode.json",
     waitSelectors: [
       ".message.assistant",

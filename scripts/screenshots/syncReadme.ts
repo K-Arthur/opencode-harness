@@ -13,13 +13,17 @@ const README_PATH = path.join(ROOT, "README.md")
 const START_MARKER = "<!-- SCREENSHOTS:START -->"
 const END_MARKER = "<!-- SCREENSHOTS:END -->"
 
+function altFor(entry: { caption: string; alt?: string }): string {
+  return entry.alt ?? entry.caption
+}
+
 function generateScreenshotBlock(): string {
   const lines: string[] = [START_MARKER, ""]
 
   // Hero shot (first entry) — full width
   const hero = catalog[0]
   lines.push(`<p align="center">`)
-  lines.push(`  <img src="media/screenshots/dark/${hero.name}.png" alt="${hero.caption}" width="100%">`)
+  lines.push(`  <img src="media/screenshots/dark/${hero.name}.png" alt="${altFor(hero)}" width="100%">`)
   lines.push(`</p>`)
   lines.push("")
 
@@ -30,13 +34,13 @@ function generateScreenshotBlock(): string {
     lines.push(`<tr>`)
     const left = rest[i]
     lines.push(`  <td align="center" width="50%">`)
-    lines.push(`    <img src="media/screenshots/dark/${left.name}.png" alt="${left.caption}" width="100%">`)
+    lines.push(`    <img src="media/screenshots/dark/${left.name}.png" alt="${altFor(left)}" width="100%">`)
     lines.push(`    <br><strong>${left.caption}</strong>`)
     lines.push(`  </td>`)
     if (i + 1 < rest.length) {
       const right = rest[i + 1]
       lines.push(`  <td align="center" width="50%">`)
-      lines.push(`    <img src="media/screenshots/dark/${right.name}.png" alt="${right.caption}" width="100%">`)
+      lines.push(`    <img src="media/screenshots/dark/${right.name}.png" alt="${altFor(right)}" width="100%">`)
       lines.push(`    <br><strong>${right.caption}</strong>`)
       lines.push(`  </td>`)
     }
