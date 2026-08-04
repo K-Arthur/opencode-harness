@@ -37,7 +37,9 @@ type WorkerResponse =
   | { id: number; error: string }
 
 let registered = false
-let md: MarkdownIt | undefined
+// markdown-it 15 ships MarkdownIt as a value-only export; use InstanceType
+// for the instance type (a bare `MarkdownIt` annotation is no longer a type).
+let md: InstanceType<typeof MarkdownIt> | undefined
 
 function ensureLanguagesRegistered() {
   if (registered) return
@@ -92,7 +94,17 @@ function registerAllLanguages() {
   hljs.registerAliases(["py"], { languageName: "python" })
 }
 
-function getMarkdown(): MarkdownIt {
+// markdown-it 15 renderer rules are strictly typed; keep a minimal structural
+// view of the Token surface the link rules touch instead of importing the
+// package-internal types (the CJS entry only exports the MarkdownIt value).
+type LinkRuleToken = {
+  attrGet(name: string): string | number | null
+  attrSet(name: string, value: string | number): void
+}
+type LinkRuleSelf = { renderToken(tokens: LinkRuleToken[], idx: number, options: unknown): string }
+type LinkOpenRule = (tokens: LinkRuleToken[], idx: number, options: unknown, env: unknown, self: LinkRuleSelf) => string
+
+function getMarkdown(): InstanceType<typeof MarkdownIt> {
   if (md) return md
   md = new MarkdownIt/* lazy */({
     html: false,
@@ -102,12 +114,12 @@ function getMarkdown(): MarkdownIt {
     highlight: (str, lang) => highlightSyntax(str, lang || ""),
   }).use(taskLists, { label: false })
 
-  const defaultLinkOpen = md.renderer.rules.link_open || ((tokens, idx, options, _env, self) =>
-    self.renderToken(tokens, idx, options))
+  const defaultLinkOpen: LinkOpenRule = (tokens, idx, options, _env, self) =>
+    self.renderToken(tokens, idx, options)
   md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
     const token = tokens[idx]
     if (!token) return defaultLinkOpen(tokens, idx, options, env, self)
-    const href = token.attrGet("href") ?? ""
+    const href = String(token.attrGet("href") ?? "")
     if (/^(https?|ftp):/i.test(href)) {
       token.attrSet("target", "_blank")
       token.attrSet("rel", "noopener noreferrer")
