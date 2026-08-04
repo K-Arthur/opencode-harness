@@ -453,7 +453,7 @@ The Changed Files panel (`#changed-files-panel`) is an inline, fully accessible 
 
 ## Key Constraints
 
-- VS Code engine: `^1.98.0`, Node.js: `20.x+`
+- VS Code engine: `^1.125.0` (must match `@types/vscode` so `vsce package` passes), Node.js: `20.x+`
 - `tsconfig.json`: `strict: true` AND `noUncheckedIndexedAccess: true` — both required
 - No mocks in source code (only in tests)
 - Circular imports forbidden (acyclic module graph)
