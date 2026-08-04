@@ -1,14 +1,14 @@
 {
   "name": "opencode-harness",
   "private": true,
-  "displayName": "OpenCode (Beta · Unofficial) — AI Coding Assistant for VS Code",
+  "displayName": "OpenCode (Unofficial) — AI Coding Assistant for VS Code",
   "publisher": "koarthur",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/K-Arthur/opencode-harness"
   },
-  "description": "[Beta · Independent/Unofficial] Open-source AI coding agent client for VS Code — a community-built GUI for the opencode CLI agent. Chat, refactor, debug, and write code using Claude, GPT, Gemini, and 75+ models. Includes cost tracking, custom themes, permission controls, and checkpoint rollback. Not developed by the OpenCode team.",
+  "description": "OpenCode — an open-source, community-built VS Code client for the opencode CLI agent. Chat, refactor, debug, and write code with Claude, GPT, Gemini, and models from 75+ providers in a multi-tab chat panel: side-by-side diffs, permission modes, checkpoint rollback, cost and rate-limit tracking, local voice input, and CLI theme parity. Free to use — you pay only your AI provider. Not developed by, affiliated with, or endorsed by the OpenCode team.",
   "icon": "media/opencode-icon-256.png",
   "version": "0.4.72",
   "engines": {
@@ -25,13 +25,16 @@
     "onView:opencode-harness.chatView"
   ],
   "categories": [
-    "Programming Languages",
+    "AI",
     "Chat",
-    "Machine Learning"
+    "Machine Learning",
+    "Programming Languages"
   ],
   "keywords": [
     "opencode",
+    "opencode-ai",
     "ai",
+    "agent",
     "coding",
     "assistant",
     "vscode",
@@ -48,8 +51,14 @@
     "model",
     "cost-tracking",
     "theme",
-    "privacy"
+    "privacy",
+    "diff-viewer",
+    "checkpoint",
+    "mcp",
+    "voice-input",
+    "side-panel"
   ],
+  "pricing": "Free",
   "galleryBanner": {
     "color": "#1e1e1e",
     "theme": "dark"
