@@ -167,9 +167,11 @@ test.describe('Subagent Activity Panel', () => {
   test('should have proper styling for subagent items', async ({ page }) => {
     const subagentItem = page.locator('.subagent-item').nth(0)
     
-    // Check border
-    const border = await subagentItem.evaluate(el => window.getComputedStyle(el).border)
-    expect(border).toBeTruthy()
+    // Check border — the first item is the running variant whose
+    // border-left differs (3px accent), so the `border` shorthand cannot be
+    // serialized by getComputedStyle. Assert the sides explicitly.
+    const borderTop = await subagentItem.evaluate(el => window.getComputedStyle(el).borderTopWidth)
+    expect(parseFloat(borderTop)).toBeGreaterThan(0)
   })
 
   test('should display subagent name', async ({ page }) => {
