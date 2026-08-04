@@ -43,7 +43,9 @@ test.describe("Context Usage", () => {
     const bar = page.locator("#context-usage")
     await expect(bar).not.toHaveClass(/hidden/, { timeout: 5000 })
     await expect(page.locator("#context-label")).toContainText("25%")
-    await expect(page.locator("#context-label")).toContainText(/50k|50K|50,000/)
+    // The label shows the compact "25% used" format; the token counts live
+    // in the tooltip title ("25% used · 50k / 200k").
+    await expect(page.locator("#context-label")).toHaveAttribute("title", /50k|50K|50,000/)
 
     expectNoBrowserErrors(captured)
   })
@@ -140,7 +142,8 @@ test.describe("Context Usage", () => {
     await expect(contextBar).not.toHaveClass(/hidden/, { timeout: 5000 })
     await expect(page.locator("#status-model")).toHaveText("big-pickle")
     await expect(page.locator("#context-label")).toContainText("25%")
-    await expect(page.locator("#context-label")).toContainText(/50k|50K|50,000/)
+    // Token counts moved to the label's tooltip (compact "25% used" label).
+    await expect(page.locator("#context-label")).toHaveAttribute("title", /50k|50K|50,000/)
     await expect(page.locator("#status-cost")).toHaveText("$0.1234")
 
     expectNoBrowserErrors(captured)
@@ -216,15 +219,16 @@ test.describe("Changed Files", () => {
 
     const strip = page.locator("#changed-files-strip")
     await expect(strip).not.toHaveClass(/hidden/, { timeout: 5000 })
-    await expect(page.locator(".cf-strip-chip")).toHaveCount(3)
+    await expect(strip).toContainText("3 files changed")
 
-    // Filenames (not full paths) should be visible in chips
-    await expect(page.locator(".cf-strip-chip").nth(0)).toHaveText("index.ts")
-    await expect(page.locator(".cf-strip-chip").nth(1)).toHaveText("utils.ts")
-    await expect(page.locator(".cf-strip-chip").nth(2)).toHaveText("Button.tsx")
+    // The strip truncates to one chip + overflow pill (CF_STRIP_MAX = 1).
+    await expect(page.locator(".file-chip")).toHaveCount(1)
+    const firstChip = page.locator(".file-chip").nth(0)
+    await expect(firstChip).toContainText("index.ts")
+    await expect(strip).toContainText("+2 more")
 
     // Full path should be in the chip's title attribute for hover/accessibility
-    await expect(page.locator(".cf-strip-chip").nth(0)).toHaveAttribute("title", "src/index.ts")
+    await expect(firstChip).toHaveAttribute("title", "src/index.ts")
 
     expectNoBrowserErrors(captured)
   })
@@ -288,9 +292,11 @@ test.describe("Changed Files", () => {
     })
 
     await expect(page.locator("#changed-files-strip")).not.toHaveClass(/hidden/, { timeout: 5000 })
-    await expect(page.locator(".cf-strip-chip")).toHaveCount(2)
-    await expect(page.locator(".cf-strip-chip").nth(0)).toHaveText("router.go")
-    await expect(page.locator(".cf-strip-chip").nth(1)).toHaveText("handler.rs")
+    await expect(page.locator("#changed-files-strip")).toContainText("2 files changed")
+    // Strip truncates to one chip + overflow pill (CF_STRIP_MAX = 1).
+    await expect(page.locator(".file-chip")).toHaveCount(1)
+    await expect(page.locator(".file-chip").nth(0)).toContainText("router.go")
+    await expect(page.locator("#changed-files-strip")).toContainText("+1 more")
 
     expectNoBrowserErrors(captured)
   })
@@ -324,9 +330,10 @@ test.describe("Changed Files", () => {
     const strip = page.locator("#changed-files-strip")
     await expect(strip).not.toHaveClass(/hidden/, { timeout: 5000 })
     await expect(strip).toContainText("settings.json")
-    await strip.click()
+    // Click the label area — clicking a file chip would open the file instead.
+    await strip.locator(".cf-strip-label").click()
 
-    const dropdown = page.locator("#changed-files-dropdown")
+    const dropdown = page.locator("#changed-files-panel")
     await expect(dropdown).not.toHaveClass(/hidden/, { timeout: 5000 })
     const box = await dropdown.boundingBox()
     expect(box, "changed files dropdown must be visible").not.toBeNull()
