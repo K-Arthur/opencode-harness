@@ -1306,7 +1306,7 @@
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^26.1.2",
     "@types/vscode": "~1.125.0",
-    "@typescript-eslint/eslint-plugin": "^8.65.0",
+    "@typescript-eslint/eslint-plugin": "^8.66.0",
     "@typescript-eslint/parser": "^8.61.1",
     "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^3.1.0",
@@ -1317,8 +1317,8 @@
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
     "jsdom": "^30.0.1",
-    "mocha": "^11.7.6",
-    "tsx": "^4.23.1",
+    "mocha": "^11.8.0",
+    "tsx": "^4.23.11",
     "typescript": "^6.0.0"
   },
   "overrides": {
