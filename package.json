@@ -1325,7 +1325,7 @@
     "serialize-javascript": "^7.0.0"
   },
   "dependencies": {
-    "@opencode-ai/sdk": "1.18.10",
+    "@opencode-ai/sdk": "1.18.15",
     "diff-match-patch": "^1.0.5",
     "dompurify": "^3.4.12",
     "highlight.js": "^11.11.1",
