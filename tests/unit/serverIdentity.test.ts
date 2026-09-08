@@ -1,6 +1,6 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { buildDefaultCapabilities } from "../../src/session/serverIdentity.js"
+import { buildDefaultCapabilities, classifyProtocolGeneration } from "../../src/session/serverIdentity.js"
 
 describe("serverIdentity", () => {
   describe("buildDefaultCapabilities", () => {
@@ -33,6 +33,19 @@ describe("serverIdentity", () => {
       const caps = buildDefaultCapabilities("0.0.0")
       assert.equal(caps.supportsTerminals, false)
       assert.equal(caps.supportsAsyncPrompts, false)
+      assert.equal(caps.evidence?.supportsTerminals?.state, "unsupported")
     })
+
+    it("returns OpenCode 2 defaults independently of its version string", () => {
+      const caps = buildDefaultCapabilities("1.18.4", "opencode2")
+      assert.equal(caps.supportsSessions, true)
+      assert.equal(caps.evidence?.supportsSessions?.state, "supported")
+      assert.match(caps.evidence?.supportsSessions?.reason ?? "", /OpenCode 2/)
+    })
+  })
+
+  it("does not classify future major versions as a known protocol", () => {
+    assert.equal(classifyProtocolGeneration("2.0.0"), "unknown")
+    assert.equal(classifyProtocolGeneration("v1.18.0"), "v2")
   })
 })
