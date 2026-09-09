@@ -6,6 +6,7 @@ import { SseEventParser } from "./sseParser"
 import { IdleWatchdog } from "./IdleWatchdog"
 import { EventDeduplicator } from "./EventDeduplicator"
 import type { EventStreamLifecycleState, EventStreamStatus, OpencodeEvent, OpencodeEventType } from "./sessionTypes"
+import type { ApiSurface } from "./serverIdentity"
 
 export class SseSubscriber {
   private eventStreamController: AbortController | null = null
@@ -48,6 +49,7 @@ export class SseSubscriber {
     private readonly getBaseUrl: () => string | null,
     private readonly getAuthHeader: () => string | undefined,
     private readonly onEvent: (event: OpencodeEvent) => void,
+    private readonly getApiSurface: () => ApiSurface = () => "legacy",
   ) {}
 
   get status(): EventStreamStatus {
@@ -152,7 +154,10 @@ export class SseSubscriber {
     const headers: Record<string, string> = { Accept: "text/event-stream" }
     const authHeader = this.getAuthHeader()
     if (authHeader) headers["Authorization"] = authHeader
-    if (this.lastSseEventId) headers["Last-Event-ID"] = this.lastSseEventId
+    // OpenCode 2 documents /api/event as volatile: a reconnect starts a new
+    // live subscription and does not replay from Last-Event-ID. Legacy keeps
+    // the header for servers that support durable replay.
+    if (this.getApiSurface() !== "opencode2" && this.lastSseEventId) headers["Last-Event-ID"] = this.lastSseEventId
 
     let connectionTimedOut = false
     const connectTimeout = setTimeout(() => {
@@ -343,6 +348,7 @@ export class SseSubscriber {
   }
 
   private eventStreamUrl(baseUrl: string): string {
+    if (this.getApiSurface() === "opencode2") return `${baseUrl}/api/event`
     return `${baseUrl}/global/event`
   }
 

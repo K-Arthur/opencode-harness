@@ -63,23 +63,25 @@ export class AuthProvider {
   }
 
   generatePassword(): void {
-    const envPassword = process.env["OPENCODE_SERVER_PASSWORD"]
+    // OpenCode 2 uses OPENCODE_PASSWORD. Keep the legacy variable as a
+    // fallback so an existing local setup does not unexpectedly lose auth.
+    const envPassword = process.env["OPENCODE_PASSWORD"] ?? process.env["OPENCODE_SERVER_PASSWORD"]
     if (envPassword) {
       this._serverPassword = envPassword
-      log.info("Using OPENCODE_SERVER_PASSWORD from environment")
+      log.info(`Using ${process.env["OPENCODE_PASSWORD"] ? "OPENCODE_PASSWORD" : "OPENCODE_SERVER_PASSWORD"} from environment`)
     } else {
       this._serverPassword = `oc-${randomUUID()}`
     }
   }
 
   /** Connection config for the local spawned server (baseUrl + Basic auth when set). */
-  private localClientConfig(port: number): ClientConfig {
+  private localClientConfig(port: number, directory?: string): ClientConfig {
     const baseUrl = `http://127.0.0.1:${port}`
     if (this._serverPassword) {
       const basic = Buffer.from(`opencode:${this._serverPassword}`).toString("base64")
-      return { baseUrl, headers: { Authorization: `Basic ${basic}` } }
+      return { baseUrl, headers: { Authorization: `Basic ${basic}`, ...(directory ? { "x-opencode-directory": directory } : {}) } }
     }
-    return { baseUrl }
+    return { baseUrl, ...(directory ? { headers: { "x-opencode-directory": directory } } : {}) }
   }
 
   /** Connection config for a remote attach (baseUrl + remote auth header when set). */
@@ -90,8 +92,11 @@ export class AuthProvider {
     return { baseUrl }
   }
 
-  makeV2Client(port: number): V2OpencodeClient {
-    return this.createV2Client(this.localClientConfig(port))
+  makeV2Client(port: number): V2OpencodeClient
+  makeV2Client(port: number, directory?: string): V2OpencodeClient
+  makeV2Client(port: number, directory?: string): V2OpencodeClient {
+    if (!directory) return this.createV2Client(this.localClientConfig(port))
+    return this.createV2Client(this.localClientConfig(port, directory))
   }
 
   makeRemoteV2Client(baseUrl: string): V2OpencodeClient {

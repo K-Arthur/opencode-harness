@@ -48,7 +48,7 @@ describe("probeServerCompatibility", () => {
     assert.deepEqual(calls, ["http://127.0.0.1:4096/api/health", "session.list"])
   })
 
-  it("falls back from an unavailable OpenCode 2 route to the legacy route in auto mode", async () => {
+  it("falls back from an unidentifying OpenCode 2 route to the legacy route in auto mode", async () => {
     const paths: string[] = []
     const result = await probeServerCompatibility({
       baseUrl: "http://localhost:4096",
@@ -58,7 +58,9 @@ describe("probeServerCompatibility", () => {
       fetchFn: async (input) => {
         const url = String(input)
         paths.push(new URL(url).pathname)
-        return url.endsWith("/api/health") ? new Response("not found", { status: 404 }) : health("1.16.0")
+        return url.endsWith("/api/health")
+          ? new Response(JSON.stringify({ healthy: true }), { status: 200, headers: { "content-type": "application/json" } })
+          : health("1.16.0")
       },
     })
 

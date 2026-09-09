@@ -92,6 +92,7 @@ const EXPECTED_COMMANDS = [
 
 const EXPECTED_CONFIG_KEYS = [
   "opencode.binaryPath",
+  "opencode.runtime",
   "opencode.autoInstall",
   "opencode.serverUrl",
   "opencode.serverAuthToken",

@@ -50,6 +50,10 @@ export interface PromptOptions {
   messageID?: string
   /** Extension-local request ID used only for tracing and UI recovery. */
   clientRequestId?: string
+  /** OpenCode 2 admission policy for prompts accepted while a turn is active. */
+  delivery?: "steer" | "queue"
+  /** OpenCode 2 may admit input without starting an agent loop when false. */
+  resume?: boolean
   signal?: AbortSignal
 }
 

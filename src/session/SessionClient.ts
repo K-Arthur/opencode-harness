@@ -18,7 +18,13 @@ import {
   mapV2MessageWithPartsArray,
   mapV2Agent,
 } from "./v2ResponseMappers"
+import {
+  mapOpenCode2MessagePage,
+  mapOpenCode2PromptAdmission,
+  mapOpenCode2Session,
+} from "./opencode2ResponseMappers"
 import type { ModelRef, PromptOptions as BasePromptOptions } from "./sessionTypes"
+import type { ApiSurface } from "./serverIdentity"
 import { isLocalPlaceholderSessionId } from "./sessionUtils"
 import { v2ErrorDetail } from "./v2ErrorDetail"
 import { logStreamTrace } from "./streamTrace"
@@ -62,6 +68,8 @@ export class SessionClient {
     private readonly mcpServerManager?: McpServerManager,
     private readonly disposed: () => boolean = () => false,
     private readonly getV2Client: () => V2OpencodeClient | null = () => null,
+    private readonly getApiSurface: () => ApiSurface = () => "legacy",
+    private readonly getDirectory: () => string | undefined = () => undefined,
   ) {}
 
   get model(): ModelRef | null {
@@ -83,6 +91,55 @@ export class SessionClient {
     const client = this.getV2Client()
     if (!client) throw new Error("Server not running")
     return client
+  }
+
+  private usesOpenCode2(): boolean {
+    return this.getApiSurface() === "opencode2"
+  }
+
+  private unsupportedOpenCode2(operation: string): never {
+    throw new Error(`${operation} is not available on the verified OpenCode 2 API surface`)
+  }
+
+  private openCode2Prompt(parts: (TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput)[]): {
+    text: string
+    files?: Array<{ uri: string; name?: string }>
+    agents?: Array<{ name: string }>
+  } {
+    const text: string[] = []
+    const files: Array<{ uri: string; name?: string }> = []
+    const agents: Array<{ name: string }> = []
+    for (const part of parts) {
+      if (part.type === "text") text.push(part.text)
+      else if (part.type === "file") files.push({ uri: part.url, ...(part.filename ? { name: part.filename } : {}) })
+      else if (part.type === "agent") agents.push({ name: part.name })
+      else if (part.type === "subtask") text.push(part.prompt)
+    }
+    return {
+      text: text.join("\n"),
+      ...(files.length > 0 ? { files } : {}),
+      ...(agents.length > 0 ? { agents } : {}),
+    }
+  }
+
+  private async configureOpenCode2PromptSession(
+    client: V2OpencodeClient,
+    sessionId: string,
+    modelRef: ModelRef | undefined,
+    variant: string | undefined,
+    agent: string | undefined,
+  ): Promise<void> {
+    if (modelRef) {
+      const resp = await client.v2.session.switchModel({
+        sessionID: sessionId,
+        model: { providerID: modelRef.providerID, id: modelRef.modelID, ...(variant ? { variant } : {}) },
+      })
+      this.throwOnV2Error(resp, "Failed to select OpenCode 2 model")
+    }
+    if (agent) {
+      const resp = await client.v2.session.switchAgent({ sessionID: sessionId, agent })
+      this.throwOnV2Error(resp, "Failed to select OpenCode 2 agent")
+    }
   }
 
   private throwOnV2Error(resp: { error?: unknown; response?: { status?: number } }, label: string): void {
@@ -112,6 +169,16 @@ export class SessionClient {
 
   async createSession(title?: string): Promise<Session> {
     const client = this.guardV2()
+    if (this.usesOpenCode2()) {
+      const resp = await client.v2.session.create({
+        ...(title ? { title } : {}),
+        ...(this.getDirectory() ? { location: { directory: this.getDirectory()! } } : {}),
+      } as Parameters<typeof client.v2.session.create>[0])
+      this.throwOnV2Error(resp, "Failed to create session")
+      const session = mapOpenCode2Session(resp.data)
+      log.info(`Created OpenCode 2 session: ${session.id}`)
+      return session
+    }
     const resp = await client.session.create({ title })
     this.throwOnV2Error(resp, "Failed to create session")
     const session = mapV2Session(resp.data as Record<string, unknown>)
@@ -120,6 +187,20 @@ export class SessionClient {
   }
 
   async deleteSession(id: string): Promise<boolean> {
+    if (this.usesOpenCode2()) {
+      const client = this.guardV2()
+      // The installed SDK typings lag the verified OpenCode 2 route set and
+      // omit session.delete. Keep the compatibility boundary explicit while
+      // still allowing a newer SDK (or a contract-test client) to provide it.
+      const sessionApi = client.v2.session as unknown as {
+        delete?: (params: { sessionID: string }) => Promise<unknown>
+      }
+      if (!sessionApi.delete) this.unsupportedOpenCode2("Deleting a session")
+      const resp = await sessionApi.delete({ sessionID: id }) as { error?: unknown; response?: { status?: number } }
+      this.throwOnV2Error(resp, "Failed to delete session")
+      log.info(`Deleted OpenCode 2 session: ${id}`)
+      return true
+    }
     // v2 migration (Phase 2): flat `{ sessionID }` replaces v1 `{ path: { id } }`.
     const client = this.guardV2()
     await client.session.delete({ sessionID: id })
@@ -129,12 +210,18 @@ export class SessionClient {
 
   async getSession(id: string): Promise<Session> {
     const client = this.guardV2()
+    if (this.usesOpenCode2()) {
+      const resp = await client.v2.session.get({ sessionID: id })
+      this.throwOnV2Error(resp, "Failed to get session")
+      return mapOpenCode2Session(resp.data)
+    }
     const resp = await client.session.get({ sessionID: id })
     this.throwOnV2Error(resp, "Failed to get session")
     return mapV2Session(resp.data as Record<string, unknown>)
   }
 
   async updateSessionTitle(id: string, title: string): Promise<Session> {
+    if (this.usesOpenCode2()) this.unsupportedOpenCode2("Updating a session title")
     const client = this.guardV2()
     const resp = await client.session.update({ sessionID: id, title })
     this.throwOnV2Error(resp, "Failed to update session title")
@@ -142,6 +229,7 @@ export class SessionClient {
   }
 
   async archiveSession(id: string, archived: boolean): Promise<Session> {
+    if (this.usesOpenCode2()) this.unsupportedOpenCode2("Archiving a session")
     const client = this.guardV2()
     const resp = await client.session.update({
       sessionID: id,
@@ -153,6 +241,13 @@ export class SessionClient {
 
   async getSessionMessages(id: string): Promise<Array<{ info: Message; parts: Part[] }>> {
     const client = this.guardV2()
+    if (this.usesOpenCode2()) {
+      const resp = await client.v2.session.messages({ sessionID: id })
+      this.throwOnV2Error(resp, "Failed to get session messages")
+      const data = mapOpenCode2MessagePage(resp.data, id)
+      this.assertResponseSize(data, "getSessionMessages")
+      return data
+    }
     const resp = await client.session.messages({ sessionID: id })
     this.throwOnV2Error(resp, "Failed to get session messages")
     const data = mapV2MessageWithPartsArray((resp.data as Array<Record<string, unknown>>) ?? [])
@@ -167,9 +262,13 @@ export class SessionClient {
   async getToolPartialOutput(sessionId: string, callId: string, sinceToken = 0): Promise<LiveToolOutputSnapshot> {
     if (!callId) return unavailableToolSnapshot(callId, sinceToken)
     const client = this.guardV2()
-    const resp = await client.session.messages({ sessionID: sessionId })
+    const resp = this.usesOpenCode2()
+      ? await client.v2.session.messages({ sessionID: sessionId })
+      : await client.session.messages({ sessionID: sessionId })
     this.throwOnV2Error(resp, "Failed to get tool partial output")
-    const data = mapV2MessageWithPartsArray((resp.data as Array<Record<string, unknown>>) ?? [])
+    const data = this.usesOpenCode2()
+      ? mapOpenCode2MessagePage(resp.data, sessionId)
+      : mapV2MessageWithPartsArray((resp.data as Array<Record<string, unknown>>) ?? [])
     this.assertResponseSize(data, "getToolPartialOutput")
 
     for (let i = data.length - 1; i >= 0; i--) {
@@ -195,6 +294,14 @@ export class SessionClient {
 
   async listSessions(): Promise<Session[]> {
     const client = this.guardV2()
+    if (this.usesOpenCode2()) {
+      const resp = await client.v2.session.list({ ...(this.getDirectory() ? { directory: this.getDirectory()! } : {}) })
+      this.throwOnV2Error(resp, "Failed to list sessions")
+      const raw = resp.data as { data?: unknown } | undefined
+      const data = Array.isArray(raw?.data) ? raw.data.map(mapOpenCode2Session) : []
+      this.assertResponseSize(data, "listSessions")
+      return data
+    }
     const resp = await client.session.list()
     this.throwOnV2Error(resp, "Failed to list sessions")
     const data = mapV2SessionArray((resp.data as Array<Record<string, unknown>>) ?? [])
@@ -215,6 +322,21 @@ export class SessionClient {
     const filteredTools = this.filterToolsForModel(options?.tools, modelRef)
     const idempotencyKey = `${sessionId}-${randomUUID()}`
     log.info(`Sending prompt to session ${sessionId} (idempotency: ${idempotencyKey.slice(0, 16)}..., model=${modelRef ? `${modelRef.providerID}/${modelRef.modelID}` : "default"}, agent=${agent ?? "default"}, variant=${variant ?? "none"}, tools=${JSON.stringify(options?.tools ?? {})}, filteredTools=${JSON.stringify(filteredTools ?? {})})`)
+
+    if (this.usesOpenCode2()) {
+      if (filteredTools && Object.keys(filteredTools).length > 0) this.unsupportedOpenCode2("Per-prompt tool selection")
+      await this.configureOpenCode2PromptSession(client, sessionId, modelRef, variant, agent)
+      const resp = await client.v2.session.prompt({
+        sessionID: sessionId,
+        ...(messageID ? { id: messageID } : {}),
+        prompt: this.openCode2Prompt(parts),
+        ...(options?.delivery ? { delivery: options.delivery } : {}),
+        ...(options?.resume !== undefined ? { resume: options.resume } : {}),
+      })
+      this.throwOnV2Error(resp, "Prompt failed")
+      if (!resp.data) throw new Error("Prompt returned no admission data")
+      return mapOpenCode2PromptAdmission(resp.data, sessionId)
+    }
 
     const resp = await client.session.prompt(
       {
@@ -265,6 +387,41 @@ export class SessionClient {
         .map(part => part.text)
         .join("\n"),
     })
+
+    if (this.usesOpenCode2()) {
+      if (signal?.aborted) return
+      try {
+        if (filteredTools && Object.keys(filteredTools).length > 0) this.unsupportedOpenCode2("Per-prompt tool selection")
+        await this.configureOpenCode2PromptSession(client, sessionId, modelRef, variant, agent)
+        const resp = await (signal
+          ? Promise.race([
+              client.v2.session.prompt({
+                sessionID: sessionId,
+                ...(messageID ? { id: messageID } : {}),
+                prompt: this.openCode2Prompt(parts),
+                ...(options?.delivery ? { delivery: options.delivery } : {}),
+                ...(options?.resume !== undefined ? { resume: options.resume } : {}),
+              }),
+              new Promise<never>((_, reject) => {
+                if (signal.aborted) return reject(new DOMException("Aborted", "AbortError"))
+                const onAbort = () => reject(new DOMException("Aborted", "AbortError"))
+                signal.addEventListener("abort", onAbort, { once: true })
+              }),
+            ])
+          : client.v2.session.prompt({
+              sessionID: sessionId,
+              ...(messageID ? { id: messageID } : {}),
+              prompt: this.openCode2Prompt(parts),
+              ...(options?.delivery ? { delivery: options.delivery } : {}),
+              ...(options?.resume !== undefined ? { resume: options.resume } : {}),
+            }))
+        this.throwOnV2Error(resp, "Async prompt failed")
+        return
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return
+        throw error instanceof Error ? error : new Error(String(error))
+      }
+    }
 
     let lastError: Error | null = null
 
@@ -323,6 +480,7 @@ export class SessionClient {
   }
 
   async sendCommand(sessionId: string, command: string, args?: string): Promise<{ info: Message; parts: Part[] }> {
+    if (this.usesOpenCode2()) this.unsupportedOpenCode2("Running a slash command")
     const client = this.guardV2()
     const resp = await client.session.command({
       sessionID: sessionId,
@@ -335,6 +493,12 @@ export class SessionClient {
 
   async compactSession(sessionId: string, model?: ModelRef): Promise<boolean> {
     const client = this.guardV2()
+    if (this.usesOpenCode2()) {
+      const resp = await client.v2.session.compact({ sessionID: sessionId })
+      this.throwOnV2Error(resp, "Compaction failed")
+      log.info(`OpenCode 2 session compacted: ${sessionId}`)
+      return true
+    }
     const modelRef = model ?? this._currentModel ?? undefined
     const resp = await client.session.summarize({
       sessionID: sessionId,
@@ -347,7 +511,9 @@ export class SessionClient {
 
   async listCommands(): Promise<Array<{ name: string; description?: string; template: string; agent?: string; source?: string }>> {
     const client = this.guardV2()
-    const resp = await client.command.list()
+    const resp = this.usesOpenCode2()
+      ? await client.v2.command.list({ ...(this.getDirectory() ? { location: { directory: this.getDirectory()! } } : {}) })
+      : await client.command.list()
     this.throwOnV2Error(resp, "Failed to list commands")
     // The /command endpoint returns a bare `Array<Command>` in current SDK
     // builds; older builds wrapped it as `{ location, data: [...] }`. Accept
@@ -379,15 +545,23 @@ export class SessionClient {
 
   async listSkills(): Promise<Array<{ name: string; description?: string; source: "skill" }>> {
     const client = this.guardV2()
-    const resp = await client.v2.skill.list()
+    const resp = await client.v2.skill.list(this.getDirectory() ? { location: { directory: this.getDirectory()! } } : undefined)
     this.throwOnV2Error(resp, "Failed to list skills")
     // v2 response shape: { location, data: Array<SkillV2Info> }
-    const data = (resp.data as { data?: Array<{ name: string; description?: string; slash?: boolean }> }).data ?? []
+    const raw = resp.data as unknown
+    const data = (Array.isArray(raw) ? raw : (raw as { data?: unknown } | undefined)?.data ?? []) as Array<{ name: string; description?: string; slash?: boolean }>
     // Only include skills marked as slash commands
     return data.filter(s => s.slash).map(s => ({ name: s.name, description: s.description, source: "skill" as const }))
   }
 
   async abortSession(sessionId: string): Promise<boolean> {
+    if (this.usesOpenCode2()) {
+      const client = this.guardV2()
+      const resp = await client.v2.session.interrupt({ sessionID: sessionId })
+      this.throwOnV2Error(resp, "Failed to interrupt session")
+      log.info(`Interrupted OpenCode 2 session: ${sessionId}`)
+      return true
+    }
     // v2 migration (Phase 2): flat `{ sessionID }` replaces v1 `{ path: { id } }`.
     const client = this.guardV2()
     await client.session.abort({ sessionID: sessionId })
@@ -397,6 +571,13 @@ export class SessionClient {
 
   async getMessages(sessionId: string, limit?: number): Promise<{ info: unknown; parts: Part[] }[]> {
     const client = this.guardV2()
+    if (this.usesOpenCode2()) {
+      const resp = await client.v2.session.messages({ sessionID: sessionId, ...(limit !== undefined ? { limit } : {}) })
+      this.throwOnV2Error(resp, "Failed to get messages")
+      const data = mapOpenCode2MessagePage(resp.data, sessionId)
+      this.assertResponseSize(data, "getMessages")
+      return data
+    }
     const resp = await client.session.messages({
       sessionID: sessionId,
       ...(limit !== undefined ? { limit } : {}),
@@ -408,6 +589,7 @@ export class SessionClient {
   }
 
   async getSessionDiff(sessionId: string, messageId?: string): Promise<unknown> {
+    if (this.usesOpenCode2()) this.unsupportedOpenCode2("Reading a session diff")
     const client = this.guardV2()
     const resp = await client.session.diff({
       sessionID: sessionId,
@@ -424,6 +606,7 @@ export class SessionClient {
    * `diff` string) for the changed-files view.
    */
   async readFile(path: string, directory?: string, _messageId?: string): Promise<unknown> {
+    if (this.usesOpenCode2()) this.unsupportedOpenCode2("Reading a workspace file with diff metadata")
     const client = this.guardV2()
     const resp = await client.file.read({ path, ...(directory ? { directory } : {}) })
     this.throwOnV2Error(resp, `Failed to read file '${path}'`)
@@ -431,6 +614,7 @@ export class SessionClient {
   }
 
   async revertMessage(sessionId: string, messageId: string): Promise<boolean> {
+    if (this.usesOpenCode2()) this.unsupportedOpenCode2("Reverting a message")
     // v2 migration (Phase 2): flat `{ sessionID, messageID }` replaces v1
     // `{ path: { id }, body: { messageID } }`.
     const client = this.guardV2()
@@ -440,6 +624,7 @@ export class SessionClient {
   }
 
   async revert(sessionId: string, messageID: string, partID?: string): Promise<boolean> {
+    if (this.usesOpenCode2()) this.unsupportedOpenCode2("Reverting a message part")
     const client = this.guardV2()
     const req: { sessionID: string; messageID: string; partID?: string } = { sessionID: sessionId, messageID }
     if (partID) req.partID = partID
@@ -449,6 +634,7 @@ export class SessionClient {
   }
 
   async unrevert(sessionId: string): Promise<boolean> {
+    if (this.usesOpenCode2()) this.unsupportedOpenCode2("Clearing a staged revert")
     const client = this.guardV2()
     await client.session.unrevert({ sessionID: sessionId })
     log.info(`Unreverted all messages in session ${sessionId}`)
@@ -456,6 +642,7 @@ export class SessionClient {
   }
 
   async forkSession(sessionId: string, messageID: string): Promise<Session> {
+    if (this.usesOpenCode2()) this.unsupportedOpenCode2("Forking a session")
     const client = this.guardV2()
     const resp = await client.session.fork({ sessionID: sessionId, messageID })
     this.throwOnV2Error(resp, "Failed to fork session")
@@ -475,6 +662,7 @@ export class SessionClient {
     command: string,
     opts?: { model?: { providerID: string; modelID: string }; agent?: string; messageID?: string },
   ): Promise<{ messageId: string; text: string }> {
+    if (this.usesOpenCode2()) this.unsupportedOpenCode2("Running a shell prompt")
     const client = this.guardV2()
     const params: Record<string, unknown> = { sessionID: sessionId, command }
     if (opts?.model) params.model = opts.model
@@ -495,6 +683,7 @@ export class SessionClient {
    * Returns the updated Session with a `share.url` field.
    */
   async shareSession(sessionId: string): Promise<Session> {
+    if (this.usesOpenCode2()) this.unsupportedOpenCode2("Sharing a session")
     const client = this.guardV2()
     const resp = await client.session.share({ sessionID: sessionId })
     this.throwOnV2Error(resp, "Failed to share session")
@@ -508,6 +697,7 @@ export class SessionClient {
    * Returns the updated Session with `share` cleared.
    */
   async unshareSession(sessionId: string): Promise<Session> {
+    if (this.usesOpenCode2()) this.unsupportedOpenCode2("Unsharing a session")
     const client = this.guardV2()
     const resp = await client.session.unshare({ sessionID: sessionId })
     this.throwOnV2Error(resp, "Failed to unshare session")
@@ -521,7 +711,9 @@ export class SessionClient {
     if (!sessionId) throw new Error("Permission response missing session ID")
     if (!permissionId) throw new Error("Permission response missing permission ID")
     const normalized = this.normalizePermissionResponse(response)
-    const resp = await client.permission.reply({ requestID: permissionId, reply: normalized })
+    const resp = this.usesOpenCode2()
+      ? await client.v2.session.permission.reply({ sessionID: sessionId, requestID: permissionId, reply: normalized })
+      : await client.permission.reply({ requestID: permissionId, reply: normalized })
     this.throwOnV2Error(resp, "Permission response failed")
     log.info(`Permission ${permissionId} responded with: ${normalized}`)
   }
@@ -553,6 +745,7 @@ export class SessionClient {
   }
 
   async getSessionTodos(id: string): Promise<Array<{ id: string; content: string; status: string; priority: string }>> {
+    if (this.usesOpenCode2()) this.unsupportedOpenCode2("Reading session todos")
     const client = this.guardV2()
     const resp = await client.session.todo({ sessionID: id })
     this.throwOnV2Error(resp, "Failed to get session todos")
@@ -561,6 +754,7 @@ export class SessionClient {
   }
 
   async getChildSessions(parentId: string): Promise<Session[]> {
+    if (this.usesOpenCode2()) this.unsupportedOpenCode2("Reading child sessions")
     const client = this.guardV2()
     const resp = await client.session.children({ sessionID: parentId })
     this.throwOnV2Error(resp, "Failed to get child sessions")
@@ -575,6 +769,13 @@ export class SessionClient {
 
   async listAgents(directory?: string): Promise<Array<{ name: string; description?: string; mode: string; builtIn: boolean }>> {
     const client = this.guardV2()
+    if (this.usesOpenCode2()) {
+      const resolvedDirectory = directory ?? this.getDirectory()
+      const resp = await client.v2.agent.list(resolvedDirectory ? { location: { directory: resolvedDirectory } } : undefined)
+      this.throwOnV2Error(resp, "Failed to list agents")
+      this.assertResponseSize(resp.data, "listAgents")
+      return ((resp.data as { data?: Array<Record<string, unknown>> }).data ?? []).map(mapV2Agent)
+    }
     const resp = await client.app.agents(directory ? { directory } : undefined)
     this.throwOnV2Error(resp, "Failed to list agents")
     this.assertResponseSize(resp.data, "listAgents")

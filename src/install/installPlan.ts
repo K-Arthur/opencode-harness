@@ -1,4 +1,5 @@
 import { join } from "node:path"
+import type { RuntimePreference } from "../session/serverIdentity"
 
 /**
  * Pure, vscode-free planning logic for installing the opencode CLI.
@@ -14,8 +15,18 @@ export const INSTALL_SCRIPT_URL = "https://opencode.ai/install"
 /** npm package name for the opencode CLI. */
 export const NPM_PACKAGE = "opencode-ai"
 
+/** npm distribution for the OpenCode 2 preview executable. */
+export const NPM_OPENCODE2_PACKAGE = "@opencode-ai/cli@next"
+
 /** Docs landing page used for the "Manual Instructions" path. */
 export const DOCS_URL = "https://opencode.ai/docs/"
+
+/** Ordered executable names used by runtime discovery. */
+export function executableNamesForRuntime(preference: RuntimePreference): readonly string[] {
+  if (preference === "opencode2") return ["opencode2"]
+  if (preference === "opencode") return ["opencode"]
+  return ["opencode2", "opencode"]
+}
 
 export type InstallStrategy = "script" | "npm" | "manual"
 
@@ -43,7 +54,33 @@ export interface InstallPlan {
  * - Windows → no official bash script exists, so prefer `npm i -g opencode-ai`
  *   when npm is present, otherwise fall back to manual instructions.
  */
-export function buildInstallPlan(platform: NodeJS.Platform, hasNpm: boolean): InstallPlan {
+export function buildInstallPlan(platform: NodeJS.Platform, hasNpm: boolean, runtime: RuntimePreference = "opencode"): InstallPlan {
+  const executable = runtime === "opencode2" ? "opencode2" : "opencode"
+  const runtimeManual = runtime === "opencode2"
+    ? [`npm install -g ${NPM_OPENCODE2_PACKAGE}`]
+    : [`npm install -g ${NPM_PACKAGE}`, `scoop install ${executable}`, `choco install ${executable}`]
+
+  // The public shell installer is for the legacy `opencode` executable. The
+  // OpenCode 2 binary is shipped by the npm package, so do not silently run a
+  // legacy installer when the user explicitly selected OpenCode 2.
+  if (runtime === "opencode2") {
+    if (hasNpm) {
+      return {
+        strategy: "npm",
+        description: `Installing the ${executable} preview CLI globally via npm (${NPM_OPENCODE2_PACKAGE})…`,
+        npmCommand: { cmd: "npm", args: ["install", "-g", NPM_OPENCODE2_PACKAGE] },
+        docsUrl: DOCS_URL,
+        manualCommands: runtimeManual,
+      }
+    }
+    return {
+      strategy: "manual",
+      description: "OpenCode 2 installation requires npm.",
+      docsUrl: DOCS_URL,
+      manualCommands: runtimeManual,
+    }
+  }
+
   if (platform !== "win32") {
     return {
       strategy: "script",
@@ -54,12 +91,12 @@ export function buildInstallPlan(platform: NodeJS.Platform, hasNpm: boolean): In
     }
   }
 
-  const windowsManual = [`npm install -g ${NPM_PACKAGE}`, "scoop install opencode", "choco install opencode"]
+  const windowsManual = runtimeManual
 
   if (hasNpm) {
     return {
       strategy: "npm",
-      description: `Installing the opencode CLI globally via npm (${NPM_PACKAGE})…`,
+      description: `Installing the ${executable} CLI globally via npm (${NPM_PACKAGE})…`,
       npmCommand: { cmd: "npm", args: ["install", "-g", NPM_PACKAGE] },
       docsUrl: DOCS_URL,
       manualCommands: windowsManual,
@@ -86,9 +123,10 @@ export function knownOpencodeBinaryPaths(
   platform: NodeJS.Platform,
   homedir: string,
   env: Record<string, string | undefined> = {},
+  executable = "opencode",
 ): string[] {
   const isWindows = platform === "win32"
-  const exe = isWindows ? "opencode.exe" : "opencode"
+  const exe = isWindows ? `${executable}.exe` : executable
   const paths: string[] = []
 
   // Official install-script target.
@@ -102,7 +140,8 @@ export function knownOpencodeBinaryPaths(
     const appData = env["APPDATA"]
     if (appData) {
       paths.push(join(appData, "npm", exe))
-      paths.push(join(appData, "npm", "node_modules", "opencode-ai", "bin", exe))
+      const packageName = executable === "opencode2" ? ["@opencode-ai", "cli"] : ["opencode-ai"]
+      paths.push(join(appData, "npm", "node_modules", ...packageName, "bin", exe))
     }
   } else {
     // Common npm global prefixes and package-manager locations on unix.

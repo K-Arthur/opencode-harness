@@ -21,6 +21,8 @@ import { SseSubscriber } from "./SseSubscriber"
 import { SessionClient } from "./SessionClient"
 import { PtyService } from "./PtyService"
 import type { LiveToolOutputSnapshot } from "./liveToolOutput"
+import { probeServerCompatibility } from "./compatibilityProbe"
+import type { BackendRuntime, CompatibilityProbeResult, RuntimePreference } from "./serverIdentity"
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -64,6 +66,8 @@ function parseSkillFrontmatter(content: string): { name?: string; description?: 
 
 export class SessionManager {
   private v2Client: V2OpencodeClient | null = null
+  private compatibility: CompatibilityProbeResult | null = null
+  private connectionGeneration = 0
   private disposed = false
   private _onEvent = new vscode.EventEmitter<OpencodeEvent>()
   private readonly lifecycleDisposables: vscode.Disposable[] = []
@@ -81,6 +85,8 @@ export class SessionManager {
       mcpServerManager ?? undefined,
       () => this.disposed,
       () => this.v2Client,
+      () => this.apiSurface,
+      () => this.workspaceDirectory(),
     )
     this.ptyService = new PtyService(
       () => this.v2Client,
@@ -92,11 +98,13 @@ export class SessionManager {
       () => this.serverBaseUrl(),
       () => this.authHeader,
       (event) => this._onEvent.fire(event),
+      () => this.apiSurface,
     )
     this.lifecycleDisposables.push(
       this.serverLifecycle.onDisconnected((data) => {
         this.sseSubscriber.disconnect()
         this.v2Client = null
+        this.compatibility = null
         this._onEvent.fire({ type: "server_disconnected", data })
       }),
     )
@@ -123,6 +131,22 @@ export class SessionManager {
 
   getV2Client(): V2OpencodeClient | null {
     return this.v2Client
+  }
+
+  get serverIdentity(): CompatibilityProbeResult["identity"] | null {
+    return this.compatibility?.identity ?? null
+  }
+
+  get capabilities(): CompatibilityProbeResult["capabilities"] | null {
+    return this.compatibility?.capabilities ?? null
+  }
+
+  get runtime(): BackendRuntime {
+    return this.compatibility?.identity.runtime ?? this.serverLifecycle.runtime
+  }
+
+  get apiSurface(): "legacy" | "opencode2" | "unknown" {
+    return this.compatibility?.identity.apiSurface ?? "unknown"
   }
 
   get currentPort(): number {
@@ -171,37 +195,33 @@ export class SessionManager {
     }
 
     await this.serverLifecycle.start(async (port) => {
-      this.v2Client = this.authProvider.makeV2Client(port)
-      this.sseSubscriber.subscribe()
-      await this.recoverSessions()
+      this.v2Client = this.authProvider.makeV2Client(port, this.workspaceDirectory())
+      try {
+        await this.verifyCompatibility(`http://127.0.0.1:${port}`, false)
+        this._onEvent.fire({ type: "server_connected", data: this.connectionData(port, false) })
+        this.sseSubscriber.subscribe()
+        await this.recoverSessions()
+      } catch (error) {
+        this.v2Client = null
+        await this.serverLifecycle.stop()
+        throw error
+      }
     })
   }
 
   private async _startRemote(): Promise<void> {
     const baseUrl = this.authProvider.remoteServerUrl!
-    log.info(`Attaching to remote opencode server at ${baseUrl}`)
-
-    const headers: Record<string, string> = {}
-    if (this.authProvider.authHeader) headers["Authorization"] = this.authProvider.authHeader
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 5_000)
-    try {
-      const resp = await fetch(`${baseUrl}/global/health`, {
-        signal: controller.signal,
-        headers,
-      })
-      if (!resp.ok) throw new Error(`Remote server returned HTTP ${resp.status}`)
-      const data = (await resp.json()) as { healthy?: boolean; version?: string }
-      if (!data.healthy) throw new Error("Remote server reported unhealthy")
-      log.info(`Remote opencode healthy (version ${data.version ?? "unknown"})`)
-    } finally {
-      clearTimeout(timer)
-    }
-
+    log.info(`Attaching to remote OpenCode server at ${baseUrl}`)
     this.v2Client = this.authProvider.makeRemoteV2Client(baseUrl)
-    this._onEvent.fire({ type: "server_connected", data: { port: 0, remote: true, url: baseUrl } })
-    this.sseSubscriber.subscribe()
-    await this.recoverSessions()
+    try {
+      await this.verifyCompatibility(baseUrl, true)
+      this._onEvent.fire({ type: "server_connected", data: this.connectionData(0, true) })
+      this.sseSubscriber.subscribe()
+      await this.recoverSessions()
+    } catch (error) {
+      this.v2Client = null
+      throw error
+    }
   }
 
   async stop(): Promise<void> {
@@ -209,6 +229,71 @@ export class SessionManager {
     this.ptyService.dispose()
     await this.serverLifecycle.stop()
     this.v2Client = null
+    this.compatibility = null
+  }
+
+  /**
+   * Change the runtime used by this extension connection.
+   *
+   * The extension deliberately owns one active runtime at a time. Switching
+   * tears down the current HTTP/SSE client before persisting the preference and
+   * starting the selected runtime, so sessions and event state cannot leak
+   * between the legacy and OpenCode 2 API surfaces.
+   */
+  private runtimeSwitchPromise: Promise<void> | null = null
+
+  async setRuntimePreference(preference: RuntimePreference): Promise<void> {
+    if (this.disposed) throw new Error("SessionManager has been disposed")
+    if (this.runtimeSwitchPromise) return this.runtimeSwitchPromise
+    if (this.v2Client && this.runtimePreference() === preference) return
+
+    const operation = (async () => {
+      const previousPreference = this.runtimePreference()
+      const currentlyConnected = this.v2Client !== null
+      if (currentlyConnected) {
+        this._onEvent.fire({
+          type: "server_disconnected",
+          data: { reason: "runtime_switch", runtime: this.runtime },
+        })
+        // stop() disposes PTY permanently. Runtime switching is a reconnect,
+        // not extension disposal, so retain the PTY service for the new client.
+        this.sseSubscriber.disconnect()
+        await this.serverLifecycle.stop()
+        this.v2Client = null
+        this.compatibility = null
+      }
+
+      try {
+        await vscode.workspace.getConfiguration("opencode").update(
+          "runtime",
+          preference,
+          vscode.ConfigurationTarget.Global,
+        )
+        await this.start()
+      } catch (error) {
+        // A failed switch must not leave the setting pointing at a runtime
+        // that did not pass the compatibility handshake. Restore the prior
+        // preference and, when possible, reattach the previous connection.
+        try {
+          await vscode.workspace.getConfiguration("opencode").update(
+            "runtime",
+            previousPreference,
+            vscode.ConfigurationTarget.Global,
+          )
+          if (currentlyConnected) await this.start()
+        } catch (restoreError) {
+          log.error("Failed to restore the previous OpenCode runtime after a switch failure", restoreError)
+        }
+        throw error
+      }
+    })()
+
+    this.runtimeSwitchPromise = operation
+    try {
+      await operation
+    } finally {
+      this.runtimeSwitchPromise = null
+    }
   }
 
   dispose(): void {
@@ -230,6 +315,7 @@ export class SessionManager {
 
   setRemoteServer(url: string | null | undefined, password?: string | null): void {
     this.authProvider.setRemoteServer(url, password)
+    this.compatibility = null
   }
 
   /* ---- session operations (delegate to SessionClient) ---- */
@@ -409,6 +495,45 @@ export class SessionManager {
       })
     } catch (err) {
       log.warn("Could not recover sessions from server (non-fatal)", err)
+    }
+  }
+
+  private runtimePreference(): RuntimePreference {
+    const value = vscode.workspace.getConfiguration("opencode").get<string>("runtime", "auto")
+    return value === "opencode" || value === "opencode2" ? value : "auto"
+  }
+
+  private workspaceDirectory(): string | undefined {
+    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+  }
+
+  private async verifyCompatibility(baseUrl: string, isRemote: boolean): Promise<void> {
+    const result = await probeServerCompatibility({
+      baseUrl,
+      authHeader: this.authHeader,
+      v2Client: this.v2Client,
+      directory: this.workspaceDirectory(),
+      isRemote,
+      runtimePreference: this.runtimePreference(),
+    })
+    this.compatibility = result
+    this.connectionGeneration++
+    if (!result.supported) {
+      throw new Error(result.reason ?? "The selected OpenCode server is not compatible with this extension")
+    }
+    log.info(`Verified OpenCode runtime=${result.identity.runtime}, API=${result.identity.apiSurface}, version=${result.identity.version}, connection=${this.connectionGeneration}`)
+  }
+
+  private connectionData(port: number, remote: boolean): Record<string, unknown> {
+    return {
+      port,
+      remote,
+      url: this.serverBaseUrl() ?? undefined,
+      runtime: this.runtime,
+      apiSurface: this.apiSurface,
+      preference: this.runtimePreference(),
+      version: this.serverIdentity?.version,
+      connectionGeneration: this.connectionGeneration,
     }
   }
 

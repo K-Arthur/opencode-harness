@@ -29,6 +29,14 @@ describe("package configuration schema", () => {
     assert.equal(schema.default, "prompt", "autoInstall must default to prompt-once")
   })
 
+  it("exposes strict runtime selection with Auto as the default", () => {
+    const schema = properties["opencode.runtime"]
+    assert.ok(schema, "opencode.runtime must be contributed for runtime selection")
+    assert.deepEqual(schema.enum, ["auto", "opencode", "opencode2"])
+    assert.equal(schema.default, "auto")
+    assert.equal(schema.scope, "machine")
+  })
+
   it("exposes ANSI rendering for tool output as an opt-in setting", () => {
     const schema = properties["opencode.toolOutput.renderAnsi"]
     assert.ok(schema, "opencode.toolOutput.renderAnsi must be contributed")

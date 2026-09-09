@@ -7,9 +7,24 @@ import {
   preferExeOnWindows,
   INSTALL_SCRIPT_URL,
   NPM_PACKAGE,
+  NPM_OPENCODE2_PACKAGE,
+  executableNamesForRuntime,
 } from "./installPlan"
 
 describe("buildInstallPlan", () => {
+  it("uses npm rather than the legacy shell installer for an explicit OpenCode 2 selection", () => {
+    const plan = buildInstallPlan("linux", true, "opencode2")
+    assert.equal(plan.strategy, "npm")
+    assert.deepEqual([...(plan.npmCommand?.args ?? [])], ["install", "-g", NPM_OPENCODE2_PACKAGE])
+    assert.match(plan.description, /opencode2/i)
+  })
+
+  it("requires manual npm installation for OpenCode 2 when npm is unavailable", () => {
+    const plan = buildInstallPlan("darwin", false, "opencode2")
+    assert.equal(plan.strategy, "manual")
+    assert.ok(plan.manualCommands[0]?.includes(NPM_OPENCODE2_PACKAGE))
+  })
+
   it("uses the official bash install script on linux", () => {
     const plan = buildInstallPlan("linux", true)
     assert.equal(plan.strategy, "script")
@@ -60,6 +75,14 @@ describe("buildInstallPlan", () => {
   })
 })
 
+describe("executableNamesForRuntime", () => {
+  it("keeps explicit selections strict and auto detection deterministic", () => {
+    assert.deepEqual([...executableNamesForRuntime("opencode")], ["opencode"])
+    assert.deepEqual([...executableNamesForRuntime("opencode2")], ["opencode2"])
+    assert.deepEqual([...executableNamesForRuntime("auto")], ["opencode2", "opencode"])
+  })
+})
+
 describe("knownOpencodeBinaryPaths", () => {
   const home = "/home/tester"
 
@@ -77,6 +100,11 @@ describe("knownOpencodeBinaryPaths", () => {
       paths.some((p) => p.endsWith("opencode.exe")),
       "Windows candidates must target opencode.exe",
     )
+  })
+
+  it("can locate the OpenCode 2 executable name", () => {
+    const paths = knownOpencodeBinaryPaths("linux", home, {}, "opencode2")
+    assert.ok(paths.includes(`${home}/.opencode/bin/opencode2`))
   })
 
   it("returns only absolute paths", () => {
@@ -114,6 +142,15 @@ describe("knownOpencodeBinaryPaths", () => {
     assert.ok(
       paths.some((p) => p.includes("node_modules") && p.includes("opencode-ai") && p.endsWith("opencode.exe")),
       "must probe the real .exe inside node_modules\\opencode-ai\\bin on Windows",
+    )
+  })
+
+  it("uses the scoped node_modules layout for OpenCode 2 on Windows", () => {
+    const appData = "C:\\Users\\tester\\AppData\\Roaming"
+    const paths = knownOpencodeBinaryPaths("win32", "C:\\Users\\tester", { APPDATA: appData }, "opencode2")
+    assert.ok(
+      paths.some((p) => p.includes("node_modules") && p.includes("@opencode-ai") && p.includes("cli") && p.endsWith("opencode2.exe")),
+      "must probe the OpenCode 2 @opencode-ai/cli executable on Windows",
     )
   })
 

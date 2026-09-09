@@ -8,7 +8,7 @@
     "type": "git",
     "url": "https://github.com/K-Arthur/opencode-harness"
   },
-  "description": "OpenCode — an open-source, community-built VS Code client for the opencode CLI agent. Chat, refactor, debug, and write code with Claude, GPT, Gemini, and models from 75+ providers in a multi-tab chat panel: side-by-side diffs, permission modes, checkpoint rollback, cost and rate-limit tracking, local voice input, and CLI theme parity. Free to use — you pay only your AI provider. Not developed by, affiliated with, or endorsed by the OpenCode team.",
+  "description": "OpenCode and OpenCode 2 — an open-source, community-built VS Code client for the OpenCode agent. Chat, refactor, debug, and write code with Claude, GPT, Gemini, and models from 75+ providers in a multi-tab chat panel: side-by-side diffs, permission modes, checkpoint rollback, cost and rate-limit tracking, local voice input, and CLI theme parity. Free to use — you pay only your AI provider. Not developed by, affiliated with, or endorsed by the OpenCode team.",
   "icon": "media/opencode-icon-256.png",
   "version": "0.4.73",
   "engines": {
@@ -32,6 +32,7 @@
   ],
   "keywords": [
     "opencode",
+    "opencode2",
     "opencode-ai",
     "ai",
     "agent",
@@ -478,6 +479,22 @@
           "default": "",
           "scope": "machine",
           "description": "Explicit path to the opencode CLI binary. Leave empty to auto-detect from PATH or default install locations (~/.opencode/bin on macOS/Linux, npm global on Windows)."
+        },
+        "opencode.runtime": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "opencode",
+            "opencode2"
+          ],
+          "enumDescriptions": [
+            "Detect the available runtime by health route and verified endpoint responses.",
+            "Use the legacy OpenCode runtime and /global/* API surface.",
+            "Use the OpenCode 2 runtime and /api/* API surface."
+          ],
+          "default": "auto",
+          "scope": "machine",
+          "description": "Select which OpenCode runtime to start or attach to. Auto detects OpenCode 2 first and safely falls back to the legacy runtime."
         },
         "opencode.autoInstall": {
           "type": "string",

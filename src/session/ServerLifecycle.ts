@@ -4,8 +4,9 @@ import * as os from "os"
 import * as vscode from "vscode"
 import { findFreePort } from "../utils/portFinder"
 import { log } from "../utils/outputChannel"
-import { knownOpencodeBinaryPaths, preferExeOnWindows } from "../install/installPlan"
+import { executableNamesForRuntime, knownOpencodeBinaryPaths, preferExeOnWindows } from "../install/installPlan"
 import type { AuthProvider } from "./AuthProvider"
+import type { BackendRuntime, RuntimePreference } from "./serverIdentity"
 
 export class ServerLifecycle {
   private serverProcess: ChildProcess | null = null
@@ -15,6 +16,7 @@ export class ServerLifecycle {
   private startPromise: Promise<void> | null = null
   private disposed = false
   private storedPort: number | undefined
+  private selectedRuntime: BackendRuntime = "unknown"
 
   private readonly _onConnected = new vscode.EventEmitter<{ port: number; remote: boolean; url?: string }>()
   private readonly _onDisconnected = new vscode.EventEmitter<{ code: number | null; signal: string | null }>()
@@ -30,6 +32,11 @@ export class ServerLifecycle {
 
   get currentPort(): number {
     return this.port
+  }
+
+  /** Runtime inferred from the executable or reused server health route. */
+  get runtime(): BackendRuntime {
+    return this.selectedRuntime
   }
 
   setStoredPort(port?: number): void {
@@ -62,6 +69,7 @@ export class ServerLifecycle {
     const proc = this.serverProcess
     this.serverProcess = null
     this.port = 0
+    this.selectedRuntime = "unknown"
     this.reconnectAttempts = 0
 
     if (proc) {
@@ -105,30 +113,40 @@ export class ServerLifecycle {
     if (this.storedPort) {
       try {
         const healthHeaders = this.auth.buildHealthHeaders()
-        const controller = new AbortController()
-        const timer = setTimeout(() => controller.abort(), 2000)
-        const resp = await fetch(`http://127.0.0.1:${this.storedPort}/global/health`, {
-          signal: controller.signal,
-          headers: healthHeaders,
-        })
-        clearTimeout(timer)
-        if (resp.ok) {
-          const data = await resp.json() as { healthy?: boolean }
-          if (data.healthy) {
-            this.port = this.storedPort
-            this.reconnectAttempts = 0
-            this._onConnected.fire({ port: this.port, remote: false })
-            log.info("OpenCode server connected (reused)")
-            await onReady(this.port)
-            return
+        const preference = this.runtimePreference()
+        const legacyHealthUrl = `http://127.0.0.1:${this.storedPort}/global/health`
+        const healthUrls = preference === "opencode2"
+          ? [`http://127.0.0.1:${this.storedPort}/api/health`]
+          : preference === "opencode"
+            ? [legacyHealthUrl]
+            : [`http://127.0.0.1:${this.storedPort}/api/health`, legacyHealthUrl]
+        for (const healthUrl of healthUrls) {
+          const controller = new AbortController()
+          const timer = setTimeout(() => controller.abort(), 2000)
+          try {
+            const resp = await fetch(healthUrl, { signal: controller.signal, headers: healthHeaders })
+            if (resp.ok) {
+              const data = await resp.json() as { healthy?: boolean; version?: string }
+              if (data.healthy === true) {
+                this.port = this.storedPort
+                this.selectedRuntime = healthUrl.endsWith("/api/health") ? "opencode2" : "opencode"
+                this.reconnectAttempts = 0
+                this._onConnected.fire({ port: this.port, remote: false })
+                log.info(`OpenCode server connected (reused, runtime=${this.selectedRuntime})`)
+                await onReady(this.port)
+                return
+                }
+            } else if (resp.status !== 404 || healthUrls.length === 1) {
+              log.warn(`Zombie server detected on port ${this.storedPort} (health check HTTP ${resp.status}); starting a fresh instance`)
+            }
+          } finally {
+            clearTimeout(timer)
           }
-          // Health endpoint responded but reported unhealthy — a zombie or
-          // partially-started process is holding the port. Log explicitly so
-          // the user can distinguish this from a clean fresh start.
-          log.warn(`Zombie server detected on port ${this.storedPort} (health check returned healthy=false); starting a fresh instance`)
-        } else {
-          log.warn(`Zombie server detected on port ${this.storedPort} (health check HTTP ${resp.status}); starting a fresh instance`)
         }
+        // Health endpoint responded but reported unhealthy — a zombie or
+        // partially-started process is holding the port. Log explicitly so
+        // the user can distinguish this from a clean fresh start.
+        log.warn(`Zombie server detected on port ${this.storedPort} (health check returned healthy=false or endpoint unavailable); starting a fresh instance`)
       } catch (e) {
         const msg = (e as Error).message
         if (!msg.includes("Auth verification failed")) {
@@ -167,6 +185,10 @@ export class ServerLifecycle {
       const val = process.env[key]
       if (val) childEnv[key] = val
     }
+    // Both names are intentionally supplied: this lets an explicitly selected
+    // runtime and an auto-detected runtime authenticate during transitions,
+    // while the selected runtime remains the source of truth for diagnostics.
+    childEnv["OPENCODE_PASSWORD"] = this.auth.serverPassword
     childEnv["OPENCODE_SERVER_PASSWORD"] = this.auth.serverPassword
     this.serverProcess = spawn(opencodePath, ["serve", "--port", String(this.port), "--hostname", "127.0.0.1"], {
       stdio: ["ignore", "pipe", "pipe"],
@@ -177,18 +199,20 @@ export class ServerLifecycle {
     const proc = this.serverProcess
 
     proc.stdout?.on("data", (data: Buffer) => {
-      log.info(`[opencode:stdout] ${data.toString().trimEnd()}`)
+      log.info(`[${this.selectedRuntime}:stdout] ${data.toString().trimEnd()}`)
     })
 
     proc.stderr?.on("data", (data: Buffer) => {
-      log.warn(`[opencode:stderr] ${data.toString().trimEnd()}`)
+      log.warn(`[${this.selectedRuntime}:stderr] ${data.toString().trimEnd()}`)
     })
 
     proc.on("exit", (code, signal) => {
       const intentional = this.serverProcess !== proc || this.disposed
+      const runtime = this.selectedRuntime
       if (this.serverProcess === proc) this.serverProcess = null
       this.port = 0
-      log.warn(`opencode server exited (code=${code}, signal=${signal})`)
+      this.selectedRuntime = "unknown"
+      log.warn(`${runtime} server exited (code=${code}, signal=${signal})`)
       this._onDisconnected.fire({ code, signal })
       if (!intentional) this.scheduleReconnect(onReady)
     })
@@ -201,7 +225,7 @@ export class ServerLifecycle {
 
     this.reconnectAttempts = 0
     this._onConnected.fire({ port: this.port, remote: false })
-    log.info("OpenCode server connected")
+    log.info(`OpenCode server connected (runtime=${this.selectedRuntime})`)
     await onReady(this.port)
   }
 
@@ -212,17 +236,21 @@ export class ServerLifecycle {
       try {
         const controller = new AbortController()
         const timer = setTimeout(() => controller.abort(), 2_000)
-        const resp = await fetch(`http://127.0.0.1:${this.port}/global/health`, {
-          signal: controller.signal,
-          headers: healthHeaders,
-        })
-        clearTimeout(timer)
-        if (resp.ok) {
-          const data = (await resp.json()) as { healthy?: boolean; version?: string }
-          if (data.healthy) {
-            log.info(`OpenCode server healthy (version ${data.version ?? "unknown"})`)
-            return
+        try {
+          const urls = this.healthUrlsForRuntime(this.selectedRuntime === "unknown" ? this.runtimePreference() : this.selectedRuntime)
+          for (const url of urls) {
+            const resp = await fetch(url, { signal: controller.signal, headers: healthHeaders })
+            if (resp.ok) {
+              const data = (await resp.json()) as { healthy?: boolean; version?: string }
+              if (data.healthy === true) {
+                this.selectedRuntime = url.endsWith("/api/health") ? "opencode2" : "opencode"
+                log.info(`OpenCode server healthy (runtime=${this.selectedRuntime}, version=${data.version ?? "unknown"})`)
+                return
+              }
+            }
           }
+        } finally {
+          clearTimeout(timer)
         }
       } catch {
         // not ready yet
@@ -234,6 +262,7 @@ export class ServerLifecycle {
 
   private async findOpencodeBinary(): Promise<string | null> {
     const config = vscode.workspace.getConfiguration("opencode")
+    const preference = this.runtimePreference()
     const customPath = config.get<string>("binaryPath")
     if (customPath) {
       if (!/^[/\\]|[A-Za-z]:/.test(customPath) || /[;&|`$(){}!#~<>]/.test(customPath)) {
@@ -241,32 +270,62 @@ export class ServerLifecycle {
       } else if (process.platform === "win32" && /\.(cmd|ps1)$/i.test(customPath)) {
         log.warn(`Custom binary path "${customPath}" is a .cmd/.ps1 wrapper. Node.js cannot spawn it with shell:false (EFTYPE/EINVAL). Falling back to PATH lookup.`)
       } else {
-        log.info(`Using custom opencode binary path: ${customPath}`)
+        this.selectedRuntime = preference === "opencode2" || preference === "opencode"
+          ? preference
+          : this.runtimeFromExecutable(customPath)
+        log.info(`Using custom ${this.selectedRuntime} binary path: ${customPath}`)
         return customPath
       }
     }
 
     const isWindows = process.platform === "win32"
     const cmd = isWindows ? "where" : "which"
-    const which = spawn(cmd, ["opencode"], { shell: false })
-    const fromPath = await new Promise<string | null>((resolve) => {
-      let output = ""
-      which.stdout?.on("data", (d: Buffer) => { output += d.toString() })
-      which.on("close", () => { resolve(preferExeOnWindows(output, process.platform)) })
-      which.on("error", () => resolve(null))
-    })
-    if (fromPath) return fromPath
+    for (const executable of executableNamesForRuntime(preference)) {
+      const which = spawn(cmd, [executable], { shell: false })
+      const fromPath = await new Promise<string | null>((resolve) => {
+        let output = ""
+        which.stdout?.on("data", (d: Buffer) => { output += d.toString() })
+        which.on("close", () => { resolve(preferExeOnWindows(output, process.platform)) })
+        which.on("error", () => resolve(null))
+      })
+      if (fromPath) {
+        this.selectedRuntime = this.runtimeFromExecutable(fromPath)
+        return fromPath
+      }
+    }
 
     // PATH lookup failed. The official install script writes to ~/.opencode/bin
     // and updates shell rc files, but the running extension host won't see that
     // PATH change until VS Code restarts — so probe the known locations directly.
-    for (const candidate of knownOpencodeBinaryPaths(process.platform, os.homedir(), process.env)) {
-      if (existsSync(candidate)) {
-        log.info(`Found opencode binary at ${candidate} (not on PATH)`)
-        return candidate
+    for (const executable of executableNamesForRuntime(preference)) {
+      const candidates = executable === "opencode"
+        ? knownOpencodeBinaryPaths(process.platform, os.homedir(), process.env)
+        : knownOpencodeBinaryPaths(process.platform, os.homedir(), process.env, executable)
+      for (const candidate of candidates) {
+        if (existsSync(candidate)) {
+          this.selectedRuntime = this.runtimeFromExecutable(candidate)
+          log.info(`Found ${this.selectedRuntime} binary at ${candidate} (not on PATH)`)
+          return candidate
+        }
       }
     }
     return null
+  }
+
+  private runtimePreference(): RuntimePreference {
+    const value = vscode.workspace.getConfiguration("opencode").get<string>("runtime", "auto")
+    return value === "opencode" || value === "opencode2" ? value : "auto"
+  }
+
+  private runtimeFromExecutable(executable: string): BackendRuntime {
+    return /(^|[\\/])opencode2(?:\.exe)?$/i.test(executable) ? "opencode2" : "opencode"
+  }
+
+  private healthUrlsForRuntime(runtime: RuntimePreference | BackendRuntime): string[] {
+    const baseUrl = `http://127.0.0.1:${this.port}`
+    if (runtime === "opencode2") return [`${baseUrl}/api/health`]
+    if (runtime === "opencode") return [`${baseUrl}/global/health`]
+    return [`${baseUrl}/api/health`, `${baseUrl}/global/health`]
   }
 
   private scheduleReconnect(onReady: (port: number) => Promise<void>): void {

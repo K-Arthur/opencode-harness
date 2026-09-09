@@ -97,6 +97,7 @@
 | ID | Key | Type | Default | Scope | Status |
 |---|---|---|---|---|---|
 | FM-CFG-001 | `opencode.binaryPath` | string | `""` | machine | stable |
+| FM-CFG-002a | `opencode.runtime` | enum | `"auto"` | machine | preview |
 | FM-CFG-002 | `opencode.autoInstall` | enum | `"prompt"` | machine | stable |
 | FM-CFG-003 | `opencode.serverUrl` | string | `""` | machine | stable |
 | FM-CFG-004 | `opencode.serverAuthToken` | string | `""` | machine | deprecated |

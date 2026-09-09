@@ -6,7 +6,8 @@ import { writeFile, unlink } from "node:fs/promises"
 import { join } from "node:path"
 import { randomBytes } from "node:crypto"
 import { log } from "../utils/outputChannel"
-import { buildInstallPlan, knownOpencodeBinaryPaths, preferExeOnWindows, type InstallPlan } from "./installPlan"
+import { buildInstallPlan, executableNamesForRuntime, knownOpencodeBinaryPaths, preferExeOnWindows, type InstallPlan } from "./installPlan"
+import type { RuntimePreference } from "../session/serverIdentity"
 
 export type AutoInstallMode = "prompt" | "auto" | "off"
 
@@ -44,11 +45,20 @@ export class OpencodeInstaller {
    * `~/.opencode/bin` won't be on the extension host's PATH until VS Code is
    * restarted — then falls back to a PATH lookup.
    */
-  async locateBinary(): Promise<string | null> {
-    for (const candidate of knownOpencodeBinaryPaths(process.platform, os.homedir(), process.env)) {
-      if (existsSync(candidate)) return candidate
+  async locateBinary(preference: RuntimePreference = this.runtimePreference()): Promise<string | null> {
+    for (const executable of executableNamesForRuntime(preference)) {
+      const candidates = executable === "opencode"
+        ? knownOpencodeBinaryPaths(process.platform, os.homedir(), process.env)
+        : knownOpencodeBinaryPaths(process.platform, os.homedir(), process.env, executable)
+      for (const candidate of candidates) {
+        if (existsSync(candidate)) return candidate
+      }
     }
-    return await this.whichOpencode()
+    for (const executable of executableNamesForRuntime(preference)) {
+      const found = await this.whichOpencode(executable)
+      if (found) return found
+    }
+    return null
   }
 
   /**
@@ -60,7 +70,7 @@ export class OpencodeInstaller {
     if (await this.isInstalled()) return true
 
     if (mode === "off") {
-      log.info("opencode CLI not found; autoInstall is off. Run 'OpenCode: Install CLI' to install.")
+      log.info(`${this.runtimeDisplayName()} not found; autoInstall is off. Run 'OpenCode: Install CLI' to install.`)
       return false
     }
 
@@ -70,12 +80,12 @@ export class OpencodeInstaller {
 
     // prompt mode — ask once, then remember a decline.
     if (this.globalState.get<boolean>(DECLINED_KEY)) {
-      log.info("opencode CLI not found; install previously declined. Run 'OpenCode: Install CLI' to install.")
+      log.info(`${this.runtimeDisplayName()} not found; install previously declined. Run 'OpenCode: Install CLI' to install.`)
       return false
     }
 
     const choice = await vscode.window.showInformationMessage(
-      "OpenCode needs the opencode CLI, which isn't installed yet. Install it now?",
+      `OpenCode needs ${this.runtimeDisplayName()}, which isn't installed yet. Install it now?`,
       "Install",
       "Manual Instructions",
       "Not Now",
@@ -98,7 +108,7 @@ export class OpencodeInstaller {
    * Returns true on success (binary located afterwards).
    */
   async install(): Promise<boolean> {
-    const plan = buildInstallPlan(process.platform, await this.hasNpm())
+    const plan = buildInstallPlan(process.platform, await this.hasNpm(), this.runtimePreference())
 
     if (plan.strategy === "manual") {
       await this.showManualInstructions(plan)
@@ -108,7 +118,7 @@ export class OpencodeInstaller {
     const ok = await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: "Installing OpenCode CLI",
+        title: "Installing OpenCode runtime",
         cancellable: false,
       },
       async (progress) => {
@@ -120,15 +130,15 @@ export class OpencodeInstaller {
             await this.runNpm(plan.npmCommand!.cmd, [...plan.npmCommand!.args])
           }
         } catch (err) {
-          log.error("OpenCode CLI install failed", err)
+          log.error("OpenCode runtime install failed", err)
           return false
         }
         const bin = await this.locateBinary()
         if (!bin) {
-          log.error("Install finished but the opencode binary could not be located")
+          log.error("Install finished but the selected OpenCode runtime could not be located")
           return false
         }
-        log.info(`OpenCode CLI installed at ${bin}`)
+        log.info(`OpenCode runtime installed at ${bin}`)
         return true
       },
     )
@@ -210,10 +220,10 @@ export class OpencodeInstaller {
     })
   }
 
-  private whichOpencode(): Promise<string | null> {
+  private whichOpencode(executable = "opencode"): Promise<string | null> {
     return new Promise((resolve) => {
       const finder = process.platform === "win32" ? "where" : "which"
-      const proc = spawn(finder, ["opencode"], { shell: false })
+      const proc = spawn(finder, [executable], { shell: false })
       let out = ""
       proc.stdout?.on("data", (d: Buffer) => { out += d.toString() })
       proc.on("error", () => resolve(null))
@@ -223,11 +233,23 @@ export class OpencodeInstaller {
     })
   }
 
+  private runtimePreference(): RuntimePreference {
+    const value = vscode.workspace.getConfiguration("opencode").get<string>("runtime", "auto")
+    return value === "opencode" || value === "opencode2" ? value : "auto"
+  }
+
+  private runtimeDisplayName(): string {
+    const preference = this.runtimePreference()
+    return preference === "opencode2" ? "the OpenCode 2 preview runtime (opencode2)"
+      : preference === "opencode" ? "the stable OpenCode runtime (opencode)"
+        : "an OpenCode runtime"
+  }
+
   private async showManualInstructions(plan?: InstallPlan): Promise<void> {
-    const resolved = plan ?? buildInstallPlan(process.platform, await this.hasNpm())
+    const resolved = plan ?? buildInstallPlan(process.platform, await this.hasNpm(), this.runtimePreference())
     const primary = resolved.manualCommands[0] ?? ""
     const choice = await vscode.window.showInformationMessage(
-      `Install the opencode CLI by running: ${primary}`,
+      `Install the selected OpenCode runtime by running: ${primary}`,
       "Copy Command",
       "Open Docs",
     )
@@ -242,7 +264,7 @@ export class OpencodeInstaller {
   private showInstallError(plan: InstallPlan): void {
     void vscode.window
       .showErrorMessage(
-        "OpenCode CLI installation failed. Check the OpenCode Harness output channel, or install it manually.",
+        "OpenCode runtime installation failed. Check the OpenCode Harness output channel, or install it manually.",
         "Show Logs",
         "Manual Instructions",
       )

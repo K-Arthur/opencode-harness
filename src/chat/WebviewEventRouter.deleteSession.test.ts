@@ -280,13 +280,14 @@ describe("Session deletion — comprehensive", () => {
       )
     })
 
-    it("does not check response error (fire-and-forget for delete)", () => {
-      // deleteSession is the one v2 call that doesn't use throwOnV2Error —
-      // the server returns 204 No Content and resp.data is null, so
-      // throwOnV2Error would incorrectly throw. This is intentional.
+    it("does not check the legacy delete response (fire-and-forget for delete)", () => {
+      // The legacy server returns 204 No Content and resp.data is null, so
+      // throwOnV2Error would incorrectly throw. OpenCode 2 has a separate
+      // adapter branch whose response is validated when that route exists.
+      const legacyBlock = deleteBlock.slice(deleteBlock.indexOf("// v2 migration"))
       assert.ok(
-        !deleteBlock.includes("throwOnV2Error"),
-        "deleteSession must not call throwOnV2Error — 204 No Content has no error but resp.data is null",
+        !legacyBlock.includes("throwOnV2Error"),
+        "legacy deleteSession must not call throwOnV2Error — 204 No Content has no error but resp.data is null",
       )
     })
   })

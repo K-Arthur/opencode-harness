@@ -100,7 +100,17 @@ async function probeHealth(
       return { surface, status: response.status, kind: "invalid", detail: "health response was not JSON" }
     }
     const health = validateHealthResponse(raw)
-    if (!health) return { surface, status: response.status, kind: "invalid", detail: "health response failed shape validation" }
+    if (!health) {
+      // Stable OpenCode releases may expose an /api/health compatibility
+      // route without the version field that identifies the OpenCode 2
+      // contract. In auto mode this is an unsupported candidate, not a
+      // malformed authenticated response: allow the authoritative legacy
+      // health route to identify the server.
+      if (isRecord(raw) && raw.healthy === true && typeof raw.version !== "string") {
+        return { surface, status: response.status, kind: "unsupported", detail: "health response omitted runtime version" }
+      }
+      return { surface, status: response.status, kind: "invalid", detail: "health response failed shape validation" }
+    }
     return { surface, status: response.status, response: health, kind: "ok" }
   } catch (error) {
     if (isAbortError(error)) return { surface, kind: "unavailable", detail: "probe timed out or was cancelled" }

@@ -44,7 +44,7 @@ void describe("ServerLifecycle", () => {
 
   void describe("findOpencodeBinary() known-location fallback", () => {
     void it("falls back to known install dirs when PATH lookup fails", () => {
-      assert.ok(source.includes("if (fromPath) return fromPath"), "returns PATH hit first")
+      assert.ok(source.includes("if (fromPath)"), "returns PATH hit first")
       assert.ok(
         source.includes("knownOpencodeBinaryPaths(process.platform, os.homedir(), process.env)"),
         "probes the shared known-locations list",
@@ -109,6 +109,7 @@ void describe("ServerLifecycle", () => {
 
     void it("resets port and reconnectAttempts", () => {
       assert.ok(source.includes("this.port = 0"), "resets port to 0")
+      assert.ok(source.includes('this.selectedRuntime = "unknown"'), "forgets the previous runtime before restart")
       assert.ok(source.includes("this.reconnectAttempts = 0"), "resets reconnectAttempts")
     })
   })

@@ -37,6 +37,13 @@ describe("SessionManager.ts", () => {
     assert.ok(source.includes("async stop()"))
   })
 
+  it("serializes runtime switches and restores the previous preference on failure", () => {
+    assert.ok(source.includes("runtimeSwitchPromise"), "runtime switches must be serialized")
+    assert.ok(source.includes("const previousPreference = this.runtimePreference()"), "must capture the prior preference")
+    assert.ok(source.includes('"runtime",\n            previousPreference'), "must restore the prior preference")
+    assert.ok(source.includes("if (currentlyConnected) await this.start()"), "must reattach the previous runtime when possible")
+  })
+
   it("has dispose method", () => {
     assert.ok(source.includes("dispose()"))
   })

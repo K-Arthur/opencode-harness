@@ -61,10 +61,11 @@ function mapAssistantContent(sessionId: string, messageId: string, content: unkn
       const mappedState: RawRecord = {
         status,
         input: parseInput(state.input),
-        ...(typeof state.output === "string" ? { output: state.output } : {}),
-        ...(typeof state.error === "string" ? { error: state.error } : {}),
+        ...(contentText(state.content) ? { output: contentText(state.content) } : {}),
+        ...(state.result !== undefined ? { result: state.result } : {}),
+        ...(state.error !== undefined ? { error: typeof state.error === "string" ? state.error : stringValue(record(state.error).message, JSON.stringify(state.error)) } : {}),
         ...(state.metadata && typeof state.metadata === "object" ? { metadata: state.metadata } : {}),
-        ...(state.time && typeof state.time === "object" ? { time: state.time } : {}),
+        ...(item.time && typeof item.time === "object" ? { time: item.time } : {}),
         ...(typeof state.title === "string" ? { title: state.title } : {}),
       }
       return [{
