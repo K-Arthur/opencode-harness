@@ -65,4 +65,13 @@ test.describe('OpenCode runtime control', () => {
     })
     await expect(page.locator('#runtime-badge')).toHaveText('Not connected')
   })
+
+  test('keeps the runtime selector usable without header overflow at 280px', async ({ page }) => {
+    await page.setViewportSize({ width: 280, height: 700 })
+    const selector = page.locator('#runtime-select')
+    await expect(selector).toBeVisible()
+    await expect(selector).toHaveCSS('max-width', '62px')
+    const overflow = await page.evaluate(() => document.body.scrollWidth - document.body.clientWidth)
+    expect(overflow).toBeLessThanOrEqual(0)
+  })
 })

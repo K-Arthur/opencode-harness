@@ -68,3 +68,11 @@
     max-width: 94px;
   }
 }
+
+@media (max-width: 320px) {
+  .runtime-control select {
+    max-width: 62px;
+    padding-left: 4px;
+    padding-right: 14px;
+  }
+}
