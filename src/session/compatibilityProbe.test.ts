@@ -16,7 +16,7 @@ function fakeClient(overrides: {
 } = {}): V2OpencodeClient {
   return {
     session: { list: overrides.legacyList ?? (async () => ({ data: [] })) },
-    v2: { session: { list: overrides.openCode2List ?? (async () => ({ data: { data: [], cursor: undefined } })) } },
+    v2: { session: { list: overrides.openCode2List ?? (async () => ({ data: { data: [], cursor: {} } })) } },
   } as unknown as V2OpencodeClient
 }
 
@@ -28,7 +28,7 @@ describe("probeServerCompatibility", () => {
       v2Client: fakeClient({
         openCode2List: async () => {
           calls.push("session.list")
-          return { data: { data: [], cursor: undefined } }
+          return { data: { data: [], cursor: {} } }
         },
       }),
       isRemote: false,
@@ -88,6 +88,20 @@ describe("probeServerCompatibility", () => {
     assert.match(result.reason ?? "", /Authentication rejected/)
     assert.deepEqual(paths, ["/api/health"])
     assert.equal(result.capabilities.evidence?.supportsSessions?.state, "temporarily-unavailable")
+  })
+
+  it("does not mark a health-only OpenCode 2 server as supported", async () => {
+    const result = await probeServerCompatibility({
+      baseUrl: "http://localhost:4096",
+      v2Client: fakeClient({ openCode2List: async () => ({ error: { message: "not implemented" } }) }),
+      isRemote: true,
+      runtimePreference: "opencode2",
+      fetchFn: async () => health("0.0.0-next-1"),
+    })
+
+    assert.equal(result.supported, false)
+    assert.equal(result.capabilities.supportsSessions, false)
+    assert.match(result.reason ?? "", /session endpoint was not compatible/)
   })
 
   it("marks an unrecognized future legacy version as unknown instead of inheriting v2", async () => {

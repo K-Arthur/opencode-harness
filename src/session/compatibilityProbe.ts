@@ -147,10 +147,17 @@ async function probeEndpointCapabilities(
       : await client.session.list({ ...(directory ? { directory } : {}), limit: 1 })
     if (isRecord(response) && response.error) {
       setCapabilityEvidence(capabilities, "supportsSessions", "unsupported", "session list returned an API error", "endpoint")
+      capabilities.supportsSessions = false
       return capabilities
     }
     const data = isRecord(response) ? response.data : undefined
     const isPaged = runtime === "opencode2" && isRecord(data) && Array.isArray(data.data) && isRecord(data.cursor)
+    const hasValidSessionEnvelope = runtime === "opencode2" ? isPaged : Array.isArray(data)
+    if (!hasValidSessionEnvelope) {
+      capabilities.supportsSessions = false
+      setCapabilityEvidence(capabilities, "supportsSessions", "unsupported", "session list returned an invalid response envelope", "endpoint")
+      return capabilities
+    }
     capabilities.supportsSessions = true
     setCapabilityEvidence(capabilities, "supportsSessions", "supported", "session list returned a validated response", "endpoint")
     if (runtime === "opencode2" && isPaged) {
@@ -161,6 +168,7 @@ async function probeEndpointCapabilities(
     }
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error)
+    capabilities.supportsSessions = false
     setCapabilityEvidence(capabilities, "supportsSessions", "temporarily-unavailable", `session list probe failed: ${detail}`, "unavailable")
   }
   return capabilities
@@ -247,12 +255,21 @@ export async function probeServerCompatibility(options: ProbeOptions): Promise<C
     setCapabilityEvidence(capabilities, "supportsEventStream", "supported", `${selected.surface} health endpoint is available; stream is probed by the owned subscriber`, "health")
     if (options.v2Client) await probeEndpointCapabilities(options.v2Client, runtime, options.directory, capabilities)
 
+    const sessionReady = capabilities.supportsSessions && capabilities.evidence?.supportsSessions?.state === "supported"
+    const supportedByVersion = protocolGeneration !== "unknown" || runtime === "opencode2"
+    const supported = supportedByVersion && sessionReady
     return {
       identity,
       capabilities,
-      supported: protocolGeneration !== "unknown" || runtime === "opencode2",
-      legacy: runtime === "opencode" && protocolGeneration === "v1",
-      ...(protocolGeneration === "unknown" ? { reason: `Unrecognized OpenCode version ${version}; only verified health/session contracts are enabled` } : {}),
+      supported,
+      legacy: supported && runtime === "opencode" && protocolGeneration === "v1",
+      ...(!supported ? {
+        reason: protocolGeneration === "unknown"
+          ? `Unrecognized OpenCode version ${version}; only verified health/session contracts are enabled`
+          : !sessionReady
+            ? `Server health succeeded but the ${selected.surface} session endpoint was not compatible`
+            : "Server did not pass the selected compatibility contract",
+      } : {}),
       metadata: {
         probedAt: Date.now(),
         healthPath: selected.surface === "opencode2" ? "/api/health" : "/global/health",
