@@ -13,20 +13,21 @@
 
 A VS Code extension that puts a chat panel, side-by-side diff viewer, and
 multi-session tabs in front of the [opencode](https://opencode.ai) CLI agent —
-the same agent, providers, and config you use from the terminal, with a GUI
-inside your editor. It starts `opencode serve` for you and talks to it over
-HTTP, so your prompts and files go to whichever AI provider you've configured
-in opencode, exactly as if you had run the CLI directly.
+including the stable opencode runtime and the OpenCode 2 preview runtime. The
+same agent, providers, and config you use from the terminal are available from
+a GUI inside your editor. It starts the selected runtime's server for you and
+talks to it over HTTP, so your prompts and files go to whichever AI provider
+you've configured in OpenCode.
 
 ### At a glance
 
 | | |
 |---|---|
-| **What it is** | An independent, community-built chat GUI for the opencode CLI agent |
+| **What it is** | An independent, community-built chat GUI for OpenCode and OpenCode 2 |
 | **Who it's for** | Developers who use (or want to use) opencode and prefer working inside VS Code |
 | **License & price** | MIT, open source, free — you pay only your AI provider |
 | **Models** | Any model your provider exposes — Claude, GPT, Gemini, and more, from 75+ providers via [Models.dev](https://models.dev) |
-| **Requirements** | VS Code 1.125.0+, Node.js 20.x+, and the `opencode` CLI (auto-installed on first run if missing) |
+| **Requirements** | VS Code 1.125.0+, Node.js 20.x+, and an OpenCode runtime (auto-installed on first run if missing) |
 | **Status** | Beta — features evolve actively; see [Limitations](#limitations) |
 
 ## Quick start
@@ -35,8 +36,9 @@ in opencode, exactly as if you had run the CLI directly.
 2. **Configure a provider** if you haven't already: `opencode provider --help`, or follow [opencode.ai/docs/providers](https://opencode.ai/docs/providers).
 3. **Open the OpenCode panel** from the Activity Bar (or `Ctrl+Alt+O`), pick a model, and start chatting.
 
-On first activation the extension detects a missing `opencode` CLI and offers
-to install it for you — no terminal setup required. See
+On first activation the extension detects a missing selected runtime and offers
+to install it for you — no terminal setup required. Use the Runtime selector in
+the chat header to choose Auto, OpenCode, or OpenCode 2. See
 [Installation](#installation) for all options.
 
 ## How it compares
@@ -164,6 +166,7 @@ anything the opencode CLI itself doesn't support.
 
 ### Fallback behavior
 - If the opencode CLI server isn't running, session history is read directly from its SQLite database (via a Python3 subprocess, no native SQLite dependency), so viewing past sessions doesn't hard-depend on the server being up.
+- **Runtime selection** — Both executables may stay installed. Auto verifies OpenCode 2 first, while explicit selection stays strict. The panel has one active backend at a time; switch only when idle. See the [runtime compatibility matrix](docs/compatibility/opencode-runtime-matrix.md) for preview limitations and the [coexistence ADR](docs/adrs/2026-09-08-opencode-runtime-selection.md).
 
 ## Keyboard Shortcuts
 
@@ -421,7 +424,7 @@ The extension warns you before you hit limits:
 
 - **VS Code** 1.125.0 or higher
 - **Node.js** 20.x or later
-- **opencode CLI** — the agent runtime. **You usually don't need to install this yourself:** on first activation the extension detects a missing CLI and offers to install it for you (official installer on macOS/Linux, npm on Windows). This is controlled by the [`opencode.autoInstall`](docs/configuration.md) setting (`prompt` by default; set to `auto` for silent install or `off` to manage it yourself). You can also run **`OpenCode: Install CLI`** from the Command Palette at any time. Manual install instructions are below.
+- **OpenCode runtime** — stable `opencode` or preview `opencode2`. **You usually don't need to install this yourself:** on first activation the extension detects a missing selected runtime and offers to install it for you. This is controlled by the [`opencode.autoInstall`](docs/configuration.md) setting (`prompt` by default; set to `auto` for silent install or `off` to manage it yourself). Choose the runtime with [`opencode.runtime`](docs/configuration.md), or run **`OpenCode: Install CLI`** from the Command Palette at any time. Manual install instructions are below.
 
 ## Frequently Asked Questions
 
@@ -433,9 +436,19 @@ The extension is free and open-source. You pay your AI provider for usage (token
 
 ### How do I install it?
 1. Open the VS Code Extensions view (`Ctrl+Shift+X`), search "OpenCode", click Install.
-2. On first activation, the extension offers to install the `opencode` CLI for you if it's missing.
+2. On first activation, the extension offers to install the selected OpenCode runtime if it's missing.
 3. Configure a provider/API key (`opencode provider --help`).
-4. Open the OpenCode panel and pick a model.
+4. Open the OpenCode panel, choose Auto, OpenCode, or OpenCode 2, and pick a model.
+
+### Can I use OpenCode and OpenCode 2 at the same time?
+Both executables can remain installed, but this extension uses one active
+backend connection per panel. Switch from the header while idle; drafts and
+queued prompts are preserved, while an accepted server request is never
+silently resent to another runtime. Running both runtimes concurrently against
+their default data directories is not supported because the preview can share
+and migrate the stable runtime's database. Use separately isolated data/config
+directories for independent external processes. See the [compatibility
+matrix](docs/compatibility/opencode-runtime-matrix.md).
 
 ### Is my code private?
 The extension doesn't store or transmit your code anywhere on its own. It sends prompts and context to whichever AI provider you've configured, under that provider's privacy policy — the same exposure as using their API directly. Voice transcription runs on-device, and chat history is saved to local VS Code storage.
@@ -472,11 +485,11 @@ OpenCode uses AI models to assist with coding tasks. Please note:
 
 ### Project Status & SDK Constraints
 
-This is an **independent, unofficial, beta** VS Code client for the opencode CLI
-agent. It is **not developed by, affiliated with, or endorsed by the OpenCode
-team.** Features are actively evolving. The extension is a client over the
-opencode HTTP server (via `@opencode-ai/sdk` v2) and can only do what the SDK
-and server expose. Known constraints:
+This is an **independent, unofficial, beta** VS Code client for the OpenCode
+agent runtimes. It is **not developed by, affiliated with, or endorsed by the
+OpenCode team.** Features are actively evolving. The extension is a client over
+the selected OpenCode HTTP server (via `@opencode-ai/sdk` v2) and can only do
+what the SDK and server expose. Known constraints:
 
 - **Temperature / effort / reasoning-level** are not exposed as prompt
   parameters by the SDK — these are server-side only and not adjustable from
@@ -490,6 +503,12 @@ and server expose. Known constraints:
   it, and falls back to a polling approximation on older servers.
 - **Message edit / regenerate** have no dedicated SDK API; the extension
   implements them via `session.revert` + a new prompt.
+- **OpenCode 2 preview** — core connection, session, prompt-admission, model,
+  agent, interruption, compaction, and event adaptation are available. Preview
+  operations whose semantics are not preserved by the installed client (such as
+  some diff, shell, fork/share, archive/revert, todo, and command paths) report
+  unsupported instead of silently using the legacy route. See the [compatibility
+  matrix](docs/compatibility/opencode-runtime-matrix.md).
 
 Full detail: [`docs/limitations.md`](docs/limitations.md).
 
@@ -498,11 +517,13 @@ Full detail: [`docs/limitations.md`](docs/limitations.md).
 ### From the VS Code Marketplace (VS Code)
 
 1. Open the Extensions view in VS Code (`Ctrl+Shift+X`), search "OpenCode", and click Install.
-2. The extension needs the `opencode` CLI as its agent backend. If it's missing, the extension detects that on first activation and offers to install it for you (see [`opencode.autoInstall`](docs/configuration.md), or run **`OpenCode: Install CLI`** any time). To install it manually instead:
+2. The extension needs either the stable `opencode` or preview `opencode2` runtime as its agent backend. If the selected runtime is missing, the extension detects it on first activation and offers to install it (see [`opencode.autoInstall`](docs/configuration.md), or run **`OpenCode: Install CLI`** any time). To install it manually instead:
    ```bash
    curl -fsSL https://opencode.ai/install | bash   # macOS/Linux, no sudo
-   npm install -g opencode-ai                       # or via npm (also Windows)
-   opencode --version && opencode doctor            # verify + check provider config
+   npm install -g opencode-ai                       # stable runtime (also Windows)
+   npm install -g @opencode-ai/cli@next              # OpenCode 2 preview
+   opencode --version && opencode doctor             # verify stable setup
+   opencode2 --version                                # verify preview setup
    ```
 3. Configure at least one LLM provider (`opencode provider --help`, or [opencode.ai/docs/providers](https://opencode.ai/docs/providers)).
 4. **Linux only:** some setups need `libsecret` for credential storage (`sudo pacman -S libsecret` / `sudo apt install libsecret-1-dev` / `sudo dnf install libsecret-devel`, depending on distro).
@@ -577,7 +598,7 @@ This was caused by the stream handler's internal `messages` array being replaced
 
 The extension fetches models from the opencode server on startup. If the dropdown is empty:
 1. Check the output channel — look for `Refreshed models from server: N models available`
-2. Verify the opencode CLI is installed: `opencode --version`
+2. Verify the selected runtime is installed: `opencode --version` or `opencode2 --version`
 3. Verify at least one provider is configured: `opencode provider list`
 4. If models load but the dropdown doesn't update, press `Ctrl+Shift+P` → `Developer: Reload Window`
 
@@ -636,7 +657,7 @@ $content = '{ "model": "anthropic/claude-sonnet-4", "providers": {} }'
 
 ## Settings
 
-Full settings reference (defaults, scope, and descriptions) is in [docs/configuration.md](docs/configuration.md). The ones most people touch: `opencode.binaryPath`, `opencode.model`, `opencode.theme`, `opencode.autoInstall`, and `opencode.sessions.maxConcurrentStreams`.
+Full settings reference (defaults, scope, and descriptions) is in [docs/configuration.md](docs/configuration.md). The ones most people touch: `opencode.runtime`, `opencode.binaryPath`, `opencode.model`, `opencode.theme`, `opencode.autoInstall`, and `opencode.sessions.maxConcurrentStreams`.
 
 ## Commands
 
@@ -690,7 +711,7 @@ All commands are available via the Command Palette (`Ctrl+Shift+P`). Commands ma
 
 ## Architecture
 
-- **Multi-tab concurrency** — each tab maps to an independent server session; a single `opencode serve` instance hosts all of them.
+- **Multi-tab concurrency** — each tab maps to an independent server session; a single selected OpenCode runtime hosts all of them. The extension does not multiplex OpenCode and OpenCode 2 in one panel.
 - **Modular backend** — `ChatProvider` delegates to focused handlers (`TabManager`, `StreamCoordinator`, `MessageRouter`, `DiffHandler`).
 - **Soft tab close** — closing a tab aborts its stream but preserves chat history for resume.
 - **Token-based CSS** — spacing, typography, color, and animation are CSS custom properties, bundled by esbuild.

@@ -6,7 +6,7 @@
 > agent. Features are actively evolving.
 
 This document records the hard constraints that shape what the extension can
-and cannot do, verified against `@opencode-ai/sdk` v1.17.7 + the v2 client
+and cannot do, verified against `@opencode-ai/sdk` v1.18.10 + the v2 client
 (`node_modules/@opencode-ai/sdk/dist/v2/gen/*.d.ts`).
 
 ## How the extension relates to opencode
@@ -94,6 +94,43 @@ The SDK's `session.next.shell.ended` event returns `output` as a single
 string, not a structured `{ stdout, stderr, exitCode }` triple. The PTY
 WebSocket stream carries raw bytes (stdout); stderr is not separately
 demarcated. The extension renders combined output with ANSI handling.
+
+### OpenCode and OpenCode 2 runtime boundary
+
+The extension supports the stable `opencode` runtime and a preview `opencode2`
+runtime through separate, verified API-surface adapters. The SDK import path
+does not identify the executable. The connection handshake verifies the health
+route, response shape, server version, and session endpoint before the selected
+adapter is used. `auto` checks `/api/health` first and then `/global/health`;
+explicit choices do not silently downgrade after an authentication or malformed
+response failure.
+
+OpenCode 2 core connection, session list/get/create/messages, prompt admission,
+model/agent switching, interruption, compaction, and event normalization are
+implemented for the pinned preview contract. Operations without a verified
+preview semantic equivalent (including some diff, shell, fork/share,
+archive/revert, todo, child-session, and command paths) return an explicit
+unsupported-operation error. This is safer than sending a legacy request to a
+preview server.
+
+The event stream at `/api/event` is volatile in the preview protocol. The
+extension therefore does not claim lossless replay or exactly-once delivery and
+does not send a legacy `Last-Event-ID` cursor to that route. Reconnects use
+snapshot/recovery and preserve the distinction between accepted prompt
+admission and generation completion.
+
+Both executables can remain installed, but one extension panel has one active
+runtime connection. Switching is serialized and available while idle; drafts
+and queued prompts are retained, while accepted server work is never silently
+resent to a different backend. Concurrent external use against default data
+directories is not supported: [upstream issue #42260](https://github.com/anomalyco/opencode/issues/42260)
+reports shared database migration between the runtimes, and [#46757](https://github.com/anomalyco/opencode/issues/46757)
+tracks shared config roots. Users who need simultaneous external processes must
+provide isolated XDG config/data/state/cache roots themselves. There is no
+automatic V1-to-V2 session migration.
+
+See the [full runtime compatibility matrix](compatibility/opencode-runtime-matrix.md)
+for version, platform, install-channel, issue-ledger, and test evidence.
 
 ## Soft constraints (extension-side choices, not SDK limits)
 

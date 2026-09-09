@@ -28,16 +28,32 @@ All settings are under the `opencode.*` namespace and can be configured in VS Co
 
   See the [Windows troubleshooting section](../README.md#windows-binary-path-resolution-eftype--einval) in the README for full diagnostics.
 
+### `opencode.runtime`
+- **Type**: `string` (enum)
+- **Values**: `"auto"` | `"opencode"` | `"opencode2"`
+- **Default**: `"auto"`
+- **Scope**: `machine`
+- **Description**: Selects the backend runtime used by the extension. `auto` probes OpenCode 2's `/api/health` contract first and falls back to the legacy OpenCode `/global/health` contract only when the first route is unavailable or unsupported. Explicit selections stay strict; an authentication failure or malformed response is reported instead of silently switching runtimes.
+- **UI**: Use the **Runtime** selector in the chat header. The badge reports the runtime actually verified by the handshake, so `Auto` can display either `OpenCode · verified` or `OpenCode 2 · verified`.
+- **Switching**: Switching is available while the extension is idle. The current HTTP client, SSE subscription, and owned local server are closed before the new runtime starts; drafts and queued prompts remain in the extension, but an accepted or active server operation is never silently resent to another runtime. If a response is active, finish or stop it first.
+- **Installation**: `opencode` is installed through the official installer or `opencode-ai` package. `opencode2` is the preview executable from `@opencode-ai/cli@next`; the extension does not use the legacy shell installer for an explicit OpenCode 2 request. See the [runtime compatibility matrix](compatibility/opencode-runtime-matrix.md).
+- **Example**:
+  ```json
+  {
+    "opencode.runtime": "auto"
+  }
+  ```
+
 ### `opencode.autoInstall`
 - **Type**: `string` (enum)
 - **Values**: `"prompt"` | `"auto"` | `"off"`
 - **Default**: `"prompt"`
 - **Scope**: `machine`
-- **Description**: Controls how the extension installs the required opencode CLI when it is not found on activation. VS Code has no install-time hook, so this runs the first time the extension activates without a binary present.
+- **Description**: Controls how the extension installs the selected OpenCode runtime when it is not found on activation. VS Code has no install-time hook, so this runs the first time the extension activates without a compatible runtime present.
   - **`prompt`** (default): Ask before installing. The prompt offers **Install / Manual Instructions / Not Now** and is shown **once** — if you decline, the choice is remembered (in `globalState`) so you aren't asked again on every reload. Re-trigger any time with the `OpenCode: Install CLI` command.
   - **`auto`**: Install automatically and silently (behind a progress notification) whenever the binary is missing.
   - **`off`**: Never install automatically. Use the `OpenCode: Install CLI` command to install on demand.
-- **Install mechanism**: macOS/Linux use the official install script (`https://opencode.ai/install`), which installs to `~/.opencode/bin` without sudo. For safety the script is downloaded, content-validated, written to a `0o700` temp file, and run as `bash <file>` with `shell: false` (no `curl | bash` pipe). Windows uses `npm install -g opencode-ai` when npm is available, otherwise shows manual instructions (npm / scoop / choco).
+- **Install mechanism**: macOS/Linux use the official install script (`https://opencode.ai/install`) for the legacy `opencode` runtime, which installs to `~/.opencode/bin` without sudo. For safety the script is downloaded, content-validated, written to a `0o700` temp file, and run as `bash <file>` with `shell: false` (no `curl | bash` pipe). OpenCode 2 uses `npm install -g @opencode-ai/cli@next` when npm is available. Windows uses npm when available, otherwise shows manual instructions.
 - **Note**: Remote-attach mode (`opencode.serverUrl` set) does not require a local binary, so the install check is skipped there.
 - **Example**:
   ```json
