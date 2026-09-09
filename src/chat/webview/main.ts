@@ -69,6 +69,7 @@ import { switchTabImpl } from "./tabSwitcher"
 import { setupProviderPanel, openProviderPanel, closeProviderPanel, renderProviderDiscoveryList, renderProviderCredentialList, handleOAuthStarted, handleOAuthCompleted, onProviderKeyResult } from "./ui/providerPanel"
 import type { ProviderDiscoveryItem, ProviderAuthMethodInfo, ProviderCredentialInfo } from "./types"
 import { createEscapeRegistry, visibleByClass } from "./escapeCoordinator"
+import { setupRuntimeControl } from "./runtimeControl"
 
 import { handleTokenUsage as handleTokenUsageModule, accumulateTokenUsage as accumulateTokenUsageModule, accumulateCost as accumulateCostModule, applyTokenUsageTotals as applyTokenUsageTotalsModule, rememberStepUsage, isDuplicateRecentStepUsage, handleRateLimitState as handleRateLimitStateModule, updateCostDisplay as updateCostDisplayModule, updateTokenDisplay as updateTokenDisplayModule, clearTokenDisplay as clearTokenDisplayModule, updateContextBarFromSession as updateContextBarFromSessionModule, type TokenCostDeps, type RateLimitWebviewState } from "./ui/tokenCostDisplay"
 import { createAttachmentManager } from "./ui/attachments"
@@ -219,6 +220,11 @@ function getVsCodeApi() {
   const stateManager = createState(vscode)
   _stateManagerRef = stateManager
   const els = getElementRefs()
+  const runtimeControl = setupRuntimeControl({
+    select: els.runtimeSelect,
+    badge: els.runtimeBadge,
+    postMessage: (message) => vscode.postMessage(message),
+  })
 
   // Extracted modules
   const todosApi = createTodosModule({
@@ -3151,6 +3157,22 @@ function setupTodoSkillAndSubagentPanels(): void {
         // context usage history/statistics panel was removed — no-op
       }],
       ["server_status", (msg, sid) => { if (sid) handleServerStatus(sid, msg.status as string, msg.errorContext) }],
+      ["runtime_status", (msg) => {
+        runtimeControl.applyStatus({
+          connected: msg.connected === true,
+          runtime: msg.runtime === "opencode" || msg.runtime === "opencode2" || msg.runtime === "unknown" ? msg.runtime : "unknown",
+          apiSurface: msg.apiSurface === "legacy" || msg.apiSurface === "opencode2" || msg.apiSurface === "unknown" ? msg.apiSurface : undefined,
+          version: typeof msg.version === "string" ? msg.version : undefined,
+          preference: msg.preference === "auto" || msg.preference === "opencode" || msg.preference === "opencode2" ? msg.preference : undefined,
+        })
+      }],
+      ["runtime_switch_result", (msg) => {
+        runtimeControl.applySwitchResult({
+          ok: msg.ok === true,
+          runtime: msg.runtime === "auto" || msg.runtime === "opencode" || msg.runtime === "opencode2" ? msg.runtime : undefined,
+          error: typeof msg.error === "string" ? msg.error : undefined,
+        })
+      }],
       ["role_models_config", (msg) => {
         const roleModels = (msg.roleModels && typeof msg.roleModels === "object" ? msg.roleModels : {}) as Record<string, string>
         const modeModels = (msg.modeModels && typeof msg.modeModels === "object" ? msg.modeModels : {}) as Record<string, string>

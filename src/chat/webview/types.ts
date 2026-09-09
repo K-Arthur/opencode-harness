@@ -698,6 +698,8 @@ export type HostMessage =
   | { type: "instructions_changed"; sessionId: string; instructions: string }
   | { type: "context_usage"; sessionId: string; percent: number; tokens: number; maxTokens: number; usage?: ContextUsage | UsageDelta; source?: "estimated" | "actual"; updatedAt?: number }
   | { type: "server_status"; sessionId?: string; status: string; errorContext?: unknown }
+  | { type: "runtime_status"; connected: boolean; runtime: "opencode" | "opencode2" | "unknown"; apiSurface?: "legacy" | "opencode2" | "unknown"; version?: string; preference?: "auto" | "opencode" | "opencode2" }
+  | { type: "runtime_switch_result"; ok: boolean; runtime?: "auto" | "opencode" | "opencode2"; error?: string }
   | { type: "run_activity_update"; sessionId: string; activity: RunActivitySnapshot; seq?: number }
   | { type: "permission_request"; sessionId: string; permissionId?: string; title: string; permissionType?: string; pattern?: string | string[]; metadata?: Record<string, unknown> }
   | { type: "todos_update"; sessionId: string; todos: unknown[] }
@@ -940,6 +942,7 @@ export interface SteerPrompt {
 export type WebviewMessage =
   | { type: "webview_ready" }
   | { type: "init_ack" }
+  | { type: "set_runtime"; runtime: "auto" | "opencode" | "opencode2" }
   | { type: "create_tab"; sessionId?: string; name?: string; model?: string; mode?: string; ephemeral?: boolean }
   | { type: "send_prompt"; sessionId: string; text: string; messageId: string; clientRequestId?: string; model: string; mode?: string; variant?: string; attachments?: Attachment[]; attachmentSummary?: AttachmentSummary; isSteerPrompt?: boolean; contextItems?: AttachedContextItem[]; role?: string; agentRole?: string; ephemeral?: boolean }
   | { type: "send_steer_prompt"; id: string; text: string; attachments: Attachment[]; mode: "interrupt" | "queue"; sessionId: string; userMessageId?: string }

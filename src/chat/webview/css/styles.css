@@ -32,3 +32,4 @@
 @import url("./animations.css")          layer(animations);
 @import url("./accessibility.css")       layer(accessibility);
 @import url("./theme-customizer.css")    layer(components);
+@import url("./runtime-control.css")      layer(components);

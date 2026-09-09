@@ -110,6 +110,8 @@ export interface ElementRefs {
 
   agentStatusLed: HTMLDivElement
   agentStatusText: HTMLSpanElement
+  runtimeSelect: HTMLSelectElement | null
+  runtimeBadge: HTMLSpanElement | null
 
   sessionModal: HTMLDivElement
   sessionModalBody: HTMLDivElement
@@ -313,6 +315,8 @@ export function getElementRefs(): ElementRefs {
 
     agentStatusLed: requireElement<HTMLDivElement>("agent-status-led"),
     agentStatusText: requireElement<HTMLSpanElement>("agent-status-text"),
+    runtimeSelect: document.getElementById("runtime-select") as HTMLSelectElement | null,
+    runtimeBadge: document.getElementById("runtime-badge") as HTMLSpanElement | null,
 
     sessionModal: requireElement<HTMLDivElement>("session-modal"),
     sessionModalBody: requireElement<HTMLDivElement>("session-modal-body"),

@@ -16,6 +16,7 @@ const MODE_VALUES = new Set(["normal", "plan", "build", "auto", "orchestrated"])
 // "append" is a removed mode kept here only so a stale webview's message isn't
 // rejected (the router coerces anything that isn't "interrupt" to "queue").
 const STEER_MODE_VALUES = new Set(["interrupt", "queue", "append"])
+const RUNTIME_PREFERENCES = new Set(["auto", "opencode", "opencode2"])
 const MCP_SERVER_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/
 const MCP_COMMAND_PATTERN = /^[A-Za-z0-9@._/\\:-]+$/
 const MCP_HEADER_NAME_PATTERN = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/
@@ -387,6 +388,12 @@ const WEBVIEW_MESSAGE_VALIDATORS: Record<string, MessageValidator> = {
   update_switch_workbench_theme: (msg, msgType, deps) => validateBooleanFlag(msg, "enabled", msgType, deps),
   set_model: validateModelVariant,
   set_variant: validateModelVariant,
+  set_runtime: (msg, _msgType, deps) => {
+    if (!RUNTIME_PREFERENCES.has(msg.runtime as string)) {
+      return reject(deps, `Invalid runtime preference: ${String(msg.runtime)}`)
+    }
+    return true
+  },
   model_favorite: validateModelFavorite,
   model_toggle: validateModelToggle,
   edit_message: validateEditMessage,

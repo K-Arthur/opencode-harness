@@ -245,6 +245,7 @@ export class WebviewEventRouter {
     "get_voice_settings", "setup_voice_input", "voice_start", "voice_stop", "voice_cancel",
     "mode_switch_request",
     "plan_complete_preference",
+    "set_runtime",
     "open_subagent_detail",
     "webview_error",
     "chat_dir_change",
@@ -284,6 +285,24 @@ export class WebviewEventRouter {
   }
 
   private readonly webviewHandlers: Map<string, (msg: Record<string, unknown>, sessionId?: string) => void | Promise<void>> = new Map([
+    ["set_runtime", async (msg: Record<string, unknown>) => {
+      const runtime = msg.runtime
+      if (runtime !== "auto" && runtime !== "opencode" && runtime !== "opencode2") return
+      const activeStream = this.opts.tabManager.getAllTabs().find((tab) => tab.isStreaming || tab.waitingForCompletion)
+      if (activeStream) {
+        const error = "Switching runtimes is unavailable while a response is active. Wait for it to finish first."
+        this.opts.postMessage({ type: "runtime_switch_result", ok: false, runtime, error })
+        return
+      }
+      try {
+        await this.opts.sessionManager.setRuntimePreference(runtime)
+        this.opts.postMessage({ type: "runtime_switch_result", ok: true, runtime })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        log.error(`Runtime switch to ${runtime} failed`, error)
+        this.opts.postMessage({ type: "runtime_switch_result", ok: false, runtime, error: message })
+      }
+    }],
     ["create_tab", (msg: Record<string, unknown>, sessionId?: string) => {
       if (sessionId) {
         const ephemeral = msg.ephemeral === true
@@ -2775,7 +2794,7 @@ export class WebviewEventRouter {
    * messages like init_state or stream_end.
    */
   private static readonly COALESCEABLE_TYPES = new Set([
-    "theme_vars", "theme_config", "model_list", "model_update",
+    "theme_vars", "theme_config", "model_list", "model_update", "runtime_status",
     "rate_limit_state", "context_usage", "cost_update", "streaming_state",
   ])
 
@@ -2783,7 +2802,7 @@ export class WebviewEventRouter {
   private static readonly UNDROPPABLE_TYPES = new Set([
     "init_state", "stream_start", "stream_end", "stream_tool_start", "stream_tool_partial", "stream_tool_end",
     "error", "request_error", "session_deleted", "session_renamed", "session_list_update",
-    "webview_request_error", "prompt_rejected",
+    "webview_request_error", "prompt_rejected", "runtime_switch_result",
   ])
 
   /**

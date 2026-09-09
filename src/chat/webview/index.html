@@ -26,6 +26,15 @@
           </div>
         </div>
         <div class="header-actions">
+          <label class="runtime-control" title="Choose the OpenCode runtime used by this connection">
+            <span class="runtime-control-label">Runtime</span>
+            <select id="runtime-select" data-testid="runtime-select" aria-label="OpenCode runtime">
+              <option value="auto">Auto</option>
+              <option value="opencode">OpenCode</option>
+              <option value="opencode2">OpenCode 2</option>
+            </select>
+            <span id="runtime-badge" class="runtime-badge" role="status" aria-live="polite">Not connected</span>
+          </label>
           <button class="icon-btn" id="timeline-toggle-header-btn" title="Conversation timeline (Ctrl+Alt+T)" aria-label="Toggle conversation timeline" aria-pressed="false">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <line x1="8" y1="6" x2="21" y2="6"/>

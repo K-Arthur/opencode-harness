@@ -1780,6 +1780,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
     }],
     ["server_disconnected", () => {
       log.info("Server disconnected — capturing streaming snapshot and arming disconnect grace timers")
+      this.pushRuntimeStatusToWebview(false)
       this.tabManager.captureStreamingSnapshot()
       const callbacks = {
         postMessage: (m: Record<string, unknown>) => this.postMessage(m),
@@ -1795,8 +1796,10 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       }
       this.postRequestError("OpenCode server connection lost. Attempting to reconnect...")
     }],
-    ["server_connected", () => {
+    ["server_connected", (event) => {
       this.pushModelListToWebview()
+      const data = event.data && typeof event.data === "object" ? event.data as Record<string, unknown> : {}
+      this.pushRuntimeStatusToWebview(true, data)
       this.postMessage({ type: "error_cleared", correlationIds: ["server_connected"] })
     }],
     ["event_stream_reconnected", () => {
@@ -2459,6 +2462,30 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
     this.postMessage({ type: "tool_output_config", renderAnsi })
   }
 
+  private pushRuntimeStatusToWebview(connected: boolean, connectionData?: Record<string, unknown>): void {
+    const configured = vscode.workspace.getConfiguration("opencode").get<string>("runtime", "auto")
+    const preference = connectionData?.preference === "opencode" || connectionData?.preference === "opencode2" || connectionData?.preference === "auto"
+      ? connectionData.preference
+      : configured === "opencode" || configured === "opencode2" || configured === "auto" ? configured : "auto"
+    const fallbackRuntime = connected && (this.sessionManager.runtime === "opencode" || this.sessionManager.runtime === "opencode2")
+      ? this.sessionManager.runtime
+      : "unknown"
+    const runtime = connectionData?.runtime === "opencode" || connectionData?.runtime === "opencode2"
+      ? connectionData.runtime
+      : fallbackRuntime
+    const apiSurface = connectionData?.apiSurface === "legacy" || connectionData?.apiSurface === "opencode2"
+      ? connectionData.apiSurface
+      : connected ? this.sessionManager.apiSurface : "unknown"
+    this.postMessage({
+      type: "runtime_status",
+      connected,
+      runtime,
+      apiSurface,
+      version: typeof connectionData?.version === "string" ? connectionData.version : this.sessionManager.serverIdentity?.version,
+      preference,
+    })
+  }
+
   /**
    * Push the chat font configuration (opencode.chat.fontSize / fontFamily)
    * to the webview as CSS custom property values. The webview applies them
@@ -2531,6 +2558,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     this.themeController.pushThemeConfigToWebview()
     this.pushChatFontConfigToWebview()
     this.pushChatDirectionToWebview()
+    this.pushRuntimeStatusToWebview(this.sessionManager.isRunning)
     this.pushRateLimitStateToWebview()
     this.pushCommandListToWebview()
     this.pushMcpServersToWebview()
@@ -2667,7 +2695,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     // H3: Buffer messages if webview isn't ready yet.
     // Allow init_state, theme_vars, model_update, and model_list through
     // so the webview is fully initialized on first load.
-    const passthrough = ["init_state", "theme_vars", "theme_config", "tool_output_config", "rate_limit_state", "model_update", "model_list", "webview_ready", "session_list_update", "active_file", "workspace_files", "reconnect_sync"]
+    const passthrough = ["init_state", "theme_vars", "theme_config", "tool_output_config", "rate_limit_state", "model_update", "model_list", "runtime_status", "webview_ready", "session_list_update", "active_file", "workspace_files", "reconnect_sync"]
     if (!this.eventRouter.webviewReady && !passthrough.includes(msg.type as string)) {
       // Use centralized queue enforcement in WebviewEventRouter
       this.eventRouter.enqueueMessage(msg)
