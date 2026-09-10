@@ -366,6 +366,22 @@ export class TabManager {
     return true
   }
 
+  /**
+   * Clear server-issued session links while preserving the local tabs.
+   *
+   * A server restart or runtime switch invalidates the IDs in SessionStore;
+   * keeping them in the tab index would let the next prompt skip
+   * ensureSession and send the stale ID to a different server/API surface.
+   * Streaming snapshots are captured before this method runs, so interrupted
+   * tabs can still offer resume to the user.
+   */
+  clearAllCliSessionIds(): void {
+    if (this.cliSessionIndex.size === 0) return
+    for (const tab of this.tabs.values()) tab.cliSessionId = undefined
+    this.cliSessionIndex.clear()
+    log.info("Cleared all tab server-session links after server disconnect")
+  }
+
   setWaitingForCompletion(id: string, waiting: boolean): boolean {
     const tab = this.tabs.get(id)
     if (!tab) return false

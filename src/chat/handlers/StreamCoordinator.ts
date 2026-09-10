@@ -1054,11 +1054,18 @@ export class StreamCoordinator {
 
       const localTitle = this.sessionStore.get(tabId)?.name?.trim()
       // B10: Skip ensureSession HTTP roundtrip when tab already has a real
-      // server session ID (not a local placeholder). The session ID is stable
-      // and re-verifying on every prompt adds unnecessary latency.
+      // server session ID (not a local placeholder) and SessionStore still
+      // confirms that it belongs to the current server connection. The local
+      // tab ID is stable across runtime switches, but the server-issued ID is
+      // not: a disconnect or runtime switch invalidates it.
       const existingCliId = tab.cliSessionId
+      const storeSession = this.sessionStore.get(tabId)
+      const currentApiSurface = this.getSm(tabId).apiSurface
+      const hasCurrentServerBinding = existingCliId !== undefined &&
+        storeSession?.cliSessionId === existingCliId &&
+        storeSession.serverApiSurface === currentApiSurface
       let cliSessionId: string
-      if (existingCliId && !isLocalPlaceholderSessionId(existingCliId)) {
+      if (existingCliId && !isLocalPlaceholderSessionId(existingCliId) && hasCurrentServerBinding) {
         cliSessionId = existingCliId
       } else {
         cliSessionId = await this.getSm(tabId).ensureSession(existingCliId, localTitle || undefined)
@@ -1266,7 +1273,7 @@ export class StreamCoordinator {
     if (!tab.model && !this.modelManager.model) {
       try {
         await Promise.race([
-          this.modelManager.refreshModels(this.sessionManager.currentPort, this.sessionManager.authHeader),
+          this.modelManager.refreshModels(this.sessionManager.currentPort, this.sessionManager.authHeader, this.sessionManager.apiSurface),
           new Promise<void>((_, reject) => {
             const id = setTimeout(() => reject(new Error("timeout")), 3_000)
             if (typeof id === "object" && typeof id.unref === "function") id.unref()

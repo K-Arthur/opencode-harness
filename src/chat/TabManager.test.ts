@@ -68,6 +68,7 @@ void describe("TabManager.ts", () => {
     assert.ok(source.includes("setModel("), "must have setModel")
     assert.ok(source.includes("setMode("), "must have setMode")
     assert.ok(source.includes("setCliSessionId("), "must have setCliSessionId")
+    assert.ok(source.includes("clearAllCliSessionIds("), "must clear server links without closing local tabs")
   })
 
   void it("has EventEmitter-based events", () => {

@@ -20,6 +20,7 @@ import {
   promotePendingServerLink as promotePendingServerLinkPure,
   type MigratableSession,
   type ServerSessionSnapshot,
+  type ServerApiSurface,
   type ImportResult,
   type MigrationResult,
 } from "./sessionMigration"
@@ -33,6 +34,8 @@ export interface OpenCodeSession {
   variant?: string
   mode: string
   cliSessionId?: string
+  /** API surface that owns cliSessionId; absent for pre-marker persisted rows. */
+  serverApiSurface?: ServerApiSurface
   /** True when the local session was created offline and has not yet been linked to a server session. */
   pendingServerLink?: boolean
   /** True when the session was imported from the server and its messages have not yet been backfilled. */
@@ -117,6 +120,7 @@ export class SessionStore {
   private activeSessionId = ""
   private saveTimer: ReturnType<typeof setTimeout> | null = null
   private emptySessionCleanupTimer: ReturnType<typeof setInterval> | null = null
+  private serverApiSurface: ServerApiSurface | undefined
   private static readonly SAVE_DEBOUNCE_MS = 500
   private static readonly ONE_HOUR = 60 * 60 * 1000
   private _onSessionsChanged = new vscode.EventEmitter<void>()
@@ -479,8 +483,8 @@ create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
    *
    * Idempotent.
    */
-  importServerSessions(serverSessions: readonly ServerSessionForImport[]): ImportResult {
-    const result = mergeServerSessionsPure(this.sessions as unknown as Map<string, MigratableSession>, serverSessions)
+  importServerSessions(serverSessions: readonly ServerSessionForImport[], apiSurface?: ServerApiSurface): ImportResult {
+    const result = mergeServerSessionsPure(this.sessions as unknown as Map<string, MigratableSession>, serverSessions, Date.now, apiSurface)
 
     // Prune orphaned imported sessions: any local entry that was previously
     // imported (`needsBackfill`) but is no longer present in the server's
@@ -524,7 +528,7 @@ create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
    * `workspacePath` rather than the current VS Code workspace folder — the
    * session belongs to that project and should be scoped to it.
    */
-  importOneServerSession(serverId: string, title?: string, directory?: string): OpenCodeSession {
+  importOneServerSession(serverId: string, title?: string, directory?: string, apiSurface?: ServerApiSurface): OpenCodeSession {
     // Prefer an existing entry keyed by the server id or whose cliSessionId matches.
     const existing =
       this.sessions.get(serverId) ??
@@ -545,6 +549,7 @@ create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
       cliSessionId: serverId,
       needsBackfill: true,
       workspacePath: directory,
+      ...(apiSurface ? { serverApiSurface: apiSurface } : {}),
     }
     this.sessions.set(serverId, session)
     this.save()
@@ -584,6 +589,8 @@ create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
   promotePendingServerLink(fromId: string, serverId: string): boolean {
     const ok = promotePendingServerLinkPure(this.sessions as unknown as Map<string, MigratableSession>, fromId, serverId)
     if (ok) {
+      const session = this.sessions.get(serverId)
+      if (session && this.serverApiSurface) session.serverApiSurface = this.serverApiSurface
       if (this.activeSessionId === fromId) {
         this.activeSessionId = serverId
         this._onActiveSessionChanged.fire(serverId)
@@ -1051,6 +1058,14 @@ validateSessionName(name: string): string | null {
     return false
   }
 
+  /** Record which verified API surface owns new server-session links. */
+  setServerApiSurface(apiSurface: ServerApiSurface): void {
+    if (this.serverApiSurface && this.serverApiSurface !== apiSurface) {
+      this.invalidateAllCliSessionIds()
+    }
+    this.serverApiSurface = apiSurface
+  }
+
   updateCliSessionId(id: string, cliId: string): void {
     // Validate: prevent duplicate cliSessionId across sessions (one-to-one mapping)
     for (const [otherId, otherSess] of this.sessions) {
@@ -1062,6 +1077,7 @@ validateSessionName(name: string): string | null {
     const session = this.sessions.get(id)
     if (!session) return
     session.cliSessionId = cliId
+    if (this.serverApiSurface) session.serverApiSurface = this.serverApiSurface
     delete session.pendingServerLink
     this.save()
 
@@ -1408,6 +1424,7 @@ validateSessionName(name: string): string | null {
   invalidateAllCliSessionIds(): void {
     for (const session of this.sessions.values()) {
       session.cliSessionId = undefined
+      delete session.serverApiSurface
     }
     this.save()
     log.info("All CLI session IDs invalidated (server restart detected)")

@@ -321,7 +321,7 @@ export class MessageRouter {
     })
     context.postMessage({ type: "model_list", items: models, model: this.modelManager.model })
     if (models.length === 0) {
-      this.modelManager.refreshModels(this.sessionManager.currentPort, this.sessionManager.authHeader).catch(() => {})
+      this.modelManager.refreshModels(this.sessionManager.currentPort, this.sessionManager.authHeader, this.sessionManager.apiSurface).catch(() => {})
     }
   }
 

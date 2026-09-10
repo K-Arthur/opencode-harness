@@ -33,6 +33,11 @@ describe("SessionManager.ts", () => {
     assert.ok(source.includes("async start()"))
   })
 
+  it("does not expose the SDK client as ready before compatibility verification", () => {
+    assert.ok(source.includes("this.compatibility?.supported === true"), "isRunning must require a verified compatibility result")
+    assert.ok(source.includes("private startPromise"), "concurrent callers must await the in-flight handshake")
+  })
+
   it("has stop method", () => {
     assert.ok(source.includes("async stop()"))
   })
@@ -67,6 +72,10 @@ describe("SessionManager.ts", () => {
   it("has sendPromptAsync with retry logic", () => {
     assert.ok(clientSource.includes("async sendPromptAsync("))
     assert.ok(clientSource.includes("MAX_RETRIES"))
+  })
+
+  it("does not fall back to legacy routes before the API surface is verified", () => {
+    assert.ok(clientSource.includes("API surface is not verified yet"), "unknown handshake state must fail closed")
   })
 
   it("supports OpenCode agent selection on prompt bodies", () => {

@@ -41,6 +41,18 @@ describe("StreamCoordinator.ts", () => {
     assert.ok(source.includes("this.tabManager.setStreaming(tabId, true)"), "must set streaming state")
   })
 
+  it("does not reuse a tab server ID after its SessionStore binding is invalidated", () => {
+    const startIdx = source.indexOf("async startPrompt(")
+    assert.ok(startIdx >= 0, "startPrompt must exist")
+    const block = source.slice(startIdx, source.indexOf("private buildPromptFailureContext", startIdx))
+    assert.ok(block.includes("const storeSession = this.sessionStore.get(tabId)"), "must inspect the current SessionStore binding")
+    assert.ok(block.includes("hasCurrentServerBinding"), "must require a current server-session binding")
+    assert.ok(
+      block.includes("ensureSession(existingCliId, localTitle || undefined)"),
+      "must re-resolve a stale server ID through ensureSession",
+    )
+  })
+
   it("sends plain prompts as a single user text part without implicit context", () => {
     // Parts array is now built up; verify the user text is always the last part pushed
     // and that no invisible auto-context (contextText) is injected.

@@ -611,6 +611,20 @@ void it("sessions_recovered handler exists in serverEventHandlers", () => {
   assert.ok(source.includes('["sessions_recovered"'), "serverEventHandlers must have a sessions_recovered entry")
 })
 
+void it("server disconnect clears tab server links after capturing stream state", () => {
+  const handlerIdx = source.indexOf('["server_disconnected"')
+  assert.ok(handlerIdx >= 0, "server_disconnected handler must exist")
+  const handleServerIdx = source.indexOf("private handleServerEvent(", handlerIdx)
+  assert.ok(handleServerIdx > handlerIdx, "handleServerEvent must follow server_disconnected")
+  const block = source.slice(handlerIdx, handleServerIdx)
+  assert.ok(block.includes("captureStreamingSnapshot()"), "disconnect must preserve interrupted-stream state first")
+  assert.ok(block.includes("clearAllCliSessionIds()"), "disconnect must clear stale tab-to-server links")
+  assert.ok(
+    block.indexOf("captureStreamingSnapshot()") < block.indexOf("clearAllCliSessionIds()"),
+    "tab server links must be cleared after the interruption snapshot is captured",
+  )
+})
+
 void it("sessions_recovered resets restoredTabsHydrated and calls pushInitStateToWebview", () => {
   const handlerIdx = source.indexOf('["sessions_recovered"')
   assert.ok(handlerIdx >= 0, "sessions_recovered handler must exist")

@@ -34,6 +34,12 @@ describe("SessionStore.ts", () => {
     assert.ok(source.includes("get("))
   })
 
+  it("persists the API surface that owns each server-session link", () => {
+    assert.ok(source.includes("serverApiSurface"), "session rows must record their owning API surface")
+    assert.ok(source.includes("setServerApiSurface("), "the active verified API surface must be registered")
+    assert.ok(source.includes("invalidateAllCliSessionIds()"), "surface changes must invalidate stale links")
+  })
+
   it("has list method", () => {
     assert.ok(source.includes("list()"))
   })

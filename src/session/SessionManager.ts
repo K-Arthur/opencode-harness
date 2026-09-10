@@ -69,6 +69,7 @@ export class SessionManager {
   private compatibility: CompatibilityProbeResult | null = null
   private connectionGeneration = 0
   private disposed = false
+  private startPromise: Promise<void> | null = null
   private _onEvent = new vscode.EventEmitter<OpencodeEvent>()
   private readonly lifecycleDisposables: vscode.Disposable[] = []
 
@@ -126,7 +127,10 @@ export class SessionManager {
   }
 
   get isRunning(): boolean {
-    return this.v2Client !== null
+    // The SDK client is installed before the compatibility handshake runs.
+    // Treat that interval as not ready so callers wait for the verified API
+    // surface instead of sending a legacy request to an OpenCode 2 server.
+    return this.v2Client !== null && this.compatibility?.supported === true
   }
 
   getV2Client(): V2OpencodeClient | null {
@@ -187,26 +191,35 @@ export class SessionManager {
 
   async start(): Promise<void> {
     if (this.disposed) throw new Error("SessionManager has been disposed")
-    if (this.v2Client) return
+    if (this.v2Client && this.compatibility?.supported === true) return
+    if (this.startPromise) return this.startPromise
 
-    if (this.authProvider.isRemote) {
-      await this._startRemote()
-      return
-    }
-
-    await this.serverLifecycle.start(async (port) => {
-      this.v2Client = this.authProvider.makeV2Client(port, this.workspaceDirectory())
-      try {
-        await this.verifyCompatibility(`http://127.0.0.1:${port}`, false)
-        this._onEvent.fire({ type: "server_connected", data: this.connectionData(port, false) })
-        this.sseSubscriber.subscribe()
-        await this.recoverSessions()
-      } catch (error) {
-        this.v2Client = null
-        await this.serverLifecycle.stop()
-        throw error
+    const operation = (async () => {
+      if (this.authProvider.isRemote) {
+        await this._startRemote()
+        return
       }
-    })
+
+      await this.serverLifecycle.start(async (port) => {
+        this.v2Client = this.authProvider.makeV2Client(port, this.workspaceDirectory())
+        try {
+          await this.verifyCompatibility(`http://127.0.0.1:${port}`, false)
+          this._onEvent.fire({ type: "server_connected", data: this.connectionData(port, false) })
+          this.sseSubscriber.subscribe()
+          await this.recoverSessions()
+        } catch (error) {
+          this.v2Client = null
+          await this.serverLifecycle.stop()
+          throw error
+        }
+      })
+    })()
+    this.startPromise = operation
+    try {
+      await operation
+    } finally {
+      if (this.startPromise === operation) this.startPromise = null
+    }
   }
 
   private async _startRemote(): Promise<void> {

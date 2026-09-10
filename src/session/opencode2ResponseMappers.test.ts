@@ -19,6 +19,20 @@ describe("OpenCode 2 response mappers", () => {
     assert.equal(session.version, "opencode2")
   })
 
+  it("unwraps the generated SDK response envelope for sessions", () => {
+    const session = mapOpenCode2Session({
+      data: {
+        id: "ses_wrapped",
+        projectID: "project",
+        location: { directory: "/workspace/project" },
+        time: { created: 1, updated: 2 },
+        title: "Wrapped",
+      },
+    })
+    assert.equal(session.id, "ses_wrapped")
+    assert.equal(session.directory, "/workspace/project")
+  })
+
   it("maps user, assistant text, reasoning, and tool states", () => {
     const messages = mapOpenCode2MessagePage({ data: [
       { id: "u1", type: "user", time: { created: 1 }, text: "hello" },
@@ -48,5 +62,16 @@ describe("OpenCode 2 response mappers", () => {
     }, "ses_123")
     assert.equal(admitted.info.id, "u2")
     assert.equal((admitted.parts[0] as { text: string }).text, "queued input")
+  })
+
+  it("unwraps the generated SDK response envelope for pages and admissions", () => {
+    const messages = mapOpenCode2MessagePage({
+      data: { data: [{ id: "u1", type: "user", time: { created: 1 }, text: "wrapped" }], cursor: {} },
+    }, "ses_123")
+    const admitted = mapOpenCode2PromptAdmission({
+      data: { id: "u2", timeCreated: 2, prompt: { text: "wrapped prompt" } },
+    }, "ses_123")
+    assert.equal((messages[0]?.parts[0] as { text?: string } | undefined)?.text, "wrapped")
+    assert.equal((admitted.parts[0] as { text: string }).text, "wrapped prompt")
   })
 })

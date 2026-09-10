@@ -270,10 +270,19 @@ export class WebviewEventRouter {
    */
   private async resolveCliSessionId(tabId: string): Promise<string> {
     const tab = this.opts.tabManager.getTab(tabId)
-    // B10: Short-circuit when the tab already has a real server session ID.
-    // Local placeholder IDs (session-XXXXXXXX) still need resolution.
+    // B10: Short-circuit only when the tab and local store agree on a real
+    // server-side session ID owned by the currently verified API surface.
+    // Local placeholder IDs and links persisted by the other runtime need
+    // resolution through ensureSession.
     const existingCliId = tab?.cliSessionId
-    if (existingCliId && !isLocalPlaceholderSessionId(existingCliId)) {
+    const storeSession = this.opts.sessionStore.get(tabId)
+    const currentApiSurface = this.opts.sessionManager.apiSurface
+    if (
+      existingCliId &&
+      !isLocalPlaceholderSessionId(existingCliId) &&
+      storeSession?.cliSessionId === existingCliId &&
+      storeSession.serverApiSurface === currentApiSurface
+    ) {
       return existingCliId
     }
     const cliSessionId = await this.opts.sessionManager.ensureSession(existingCliId)

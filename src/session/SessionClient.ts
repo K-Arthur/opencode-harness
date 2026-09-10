@@ -90,6 +90,9 @@ export class SessionClient {
     if (this.disposed()) throw new Error("SessionManager has been disposed")
     const client = this.getV2Client()
     if (!client) throw new Error("Server not running")
+    if (this.getApiSurface() === "unknown") {
+      throw new Error("OpenCode server API surface is not verified yet; wait for the connection handshake to finish")
+    }
     return client
   }
 

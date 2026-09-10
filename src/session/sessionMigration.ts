@@ -13,6 +13,8 @@ export interface MigratableSession {
   model: string
   mode: string
   cliSessionId?: string
+  /** API surface that owns cliSessionId; absent for pre-marker persisted rows. */
+  serverApiSurface?: "legacy" | "opencode2"
   pendingServerLink?: boolean
   needsBackfill?: boolean
   archived?: boolean
@@ -49,6 +51,8 @@ export interface ServerSessionSnapshot {
   /** Working directory the session was created in (used for workspace scoping). */
   directory?: string
 }
+
+export type ServerApiSurface = "legacy" | "opencode2"
 
 /**
  * Auto-generated names like "Session abcd1" or "Session 3" should be
@@ -125,6 +129,7 @@ function mergeSessionIntoTarget(target: MigratableSession, source: MigratableSes
   target.createdAt = Math.min(target.createdAt || source.createdAt, source.createdAt || target.createdAt)
   target.lastActiveAt = Math.max(target.lastActiveAt || 0, source.lastActiveAt || 0)
   target.cliSessionId = target.cliSessionId || source.cliSessionId
+  target.serverApiSurface = target.serverApiSurface || source.serverApiSurface
   if (!source.needsBackfill && source.messages.length > 0) delete target.needsBackfill
 }
 
@@ -149,7 +154,8 @@ function syntheticName(id: string): string {
 export function mergeServerSessions(
   bySessionId: Map<string, MigratableSession>,
   serverSessions: readonly ServerSessionSnapshot[],
-  now: () => number = Date.now
+  now: () => number = Date.now,
+  apiSurface?: ServerApiSurface,
 ): ImportResult {
   let imported = 0
   let skipped = 0
@@ -174,6 +180,7 @@ export function mergeServerSessions(
       // here orphaned the live tab. Dedup is by `cliSessionId`, so no duplicate
       // row is created and no rekey is needed.
       if (!existing.cliSessionId) existing.cliSessionId = srv.id
+      if (apiSurface) existing.serverApiSurface = apiSurface
       // Sync server-driven fields. We trust the server's title (it auto-titles
       // after the first user message) but never clobber a name the user has
       // explicitly customized — the auto-name regex tells the two apart.
@@ -206,6 +213,7 @@ export function mergeServerSessions(
       model: "",
       mode: "build",
       cliSessionId: srv.id,
+      ...(apiSurface ? { serverApiSurface: apiSurface } : {}),
       needsBackfill: true,
       messages: [],
       cost: 0,

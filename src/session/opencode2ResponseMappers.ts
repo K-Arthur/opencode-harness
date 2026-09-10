@@ -7,6 +7,18 @@ function record(value: unknown): RawRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? value as RawRecord : {}
 }
 
+/**
+ * The generated v2 client returns the response body under `result.data`,
+ * while the OpenCode 2 response body itself also uses a `data` field for
+ * sessions, pages, and prompt admissions. Accept both the generated-client
+ * value and the raw body so adapters remain correct across SDK versions.
+ */
+function unwrapResponseData(value: unknown): unknown {
+  const outer = record(value)
+  const nested = outer.data
+  return nested && typeof nested === "object" && !Array.isArray(nested) ? nested : value
+}
+
 function stringValue(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback
 }
@@ -127,7 +139,7 @@ function mapMessage(sessionId: string, raw: RawRecord): { info: Message; parts: 
 
 /** Map an OpenCode 2 session info object into the legacy-compatible domain shape. */
 export function mapOpenCode2Session(raw: unknown): Session {
-  const value = record(raw)
+  const value = record(unwrapResponseData(raw))
   const location = record(value.location)
   const time = record(value.time)
   const model = record(value.model)
@@ -159,7 +171,7 @@ export function mapOpenCode2Session(raw: unknown): Session {
 
 /** Map an OpenCode 2 session message page into the existing chat history contract. */
 export function mapOpenCode2MessagePage(raw: unknown, sessionId: string): Array<{ info: Message; parts: Part[] }> {
-  const page = record(raw)
+  const page = record(unwrapResponseData(raw))
   const messages = Array.isArray(page.data) ? page.data : Array.isArray(raw) ? raw : []
   if (!Array.isArray(messages)) {
     log.warn(`OpenCode 2 session ${sessionId} returned a malformed message page`)
@@ -170,7 +182,7 @@ export function mapOpenCode2MessagePage(raw: unknown, sessionId: string): Array<
 
 /** Convert the OpenCode 2 prompt admission response into the existing user-message shape. */
 export function mapOpenCode2PromptAdmission(raw: unknown, sessionId: string): { info: Message; parts: Part[] } {
-  const value = record(raw)
+  const value = record(unwrapResponseData(raw))
   const prompt = record(value.prompt)
   const text = stringValue(prompt.text)
   const messageId = stringValue(value.id, `${sessionId}:prompt`)

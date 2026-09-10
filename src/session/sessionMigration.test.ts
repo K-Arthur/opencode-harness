@@ -102,6 +102,12 @@ describe("mergeServerSessions", () => {
     assert.equal(a.createdAt, 1000)
   })
 
+  it("records the API surface for imported server sessions", () => {
+    const map = new Map<string, MigratableSession>()
+    mergeServerSessions(map, [{ id: "srv-opencode2" }], Date.now, "opencode2")
+    assert.equal(map.get("srv-opencode2")!.serverApiSurface, "opencode2")
+  })
+
   it("skips server sessions that are already in the local map", () => {
     const map = new Map<string, MigratableSession>()
     map.set("srv-A", makeSession({ id: "srv-A", cliSessionId: "srv-A", name: "Local A" }))

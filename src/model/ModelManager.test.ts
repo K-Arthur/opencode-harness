@@ -40,6 +40,12 @@ describe("ModelManager.ts", () => {
     assert.ok(source.includes("private async fetchModelsFromServer("))
   })
 
+  it("uses the native OpenCode 2 model endpoint", () => {
+    assert.ok(source.includes('apiSurface === "opencode2"'), "model refresh must branch on the verified API surface")
+    assert.ok(source.includes("/api/model"), "OpenCode 2 must not query the legacy HTML route")
+    assert.ok(source.includes("location[directory]"), "OpenCode 2 model requests must preserve workspace location")
+  })
+
   it("has fetchModelsFromCli private method", () => {
     assert.ok(source.includes("private async fetchModelsFromCli("))
   })

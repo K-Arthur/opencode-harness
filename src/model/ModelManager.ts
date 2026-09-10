@@ -23,6 +23,8 @@ interface ServerModel {
   unavailableReason?: string
 }
 
+type ModelApiSurface = "legacy" | "opencode2" | "unknown"
+
 export interface ModelInfo {
   id: string
   provider: string
@@ -439,7 +441,7 @@ export class ModelManager {
    * The caller must provide the port (from SessionManager) or we fall back
    * to querying `opencode` CLI directly.
    */
-  async refreshModels(port?: number, authHeader?: string): Promise<ModelInfo[]> {
+  async refreshModels(port?: number, authHeader?: string, apiSurface: ModelApiSurface = "legacy"): Promise<ModelInfo[]> {
     try {
       // Kick off both context-window refreshes in parallel — models.dev
       // is the authoritative catalogue (covers opencode free SKUs that
@@ -454,7 +456,7 @@ export class ModelManager {
 
       let models: ModelInfo[]
       if (port) {
-        models = await this.fetchModelsFromServer(port, authHeader)
+        models = await this.fetchModelsFromServer(port, authHeader, apiSurface)
       } else {
         models = await this.fetchModelsFromCli()
       }
@@ -477,7 +479,9 @@ export class ModelManager {
     }
   }
 
-  private async fetchModelsFromServer(port: number, authHeader?: string): Promise<ModelInfo[]> {
+  private async fetchModelsFromServer(port: number, authHeader?: string, apiSurface: ModelApiSurface = "legacy"): Promise<ModelInfo[]> {
+    if (apiSurface === "opencode2") return this.fetchModelsFromOpenCode2Server(port, authHeader)
+
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 15_000)
 
@@ -557,20 +561,105 @@ export class ModelManager {
         }
       }
 
-      const prevCount = this._models.length
-      this._models = models
-      this.saveCachedModels()
-      this._onModelsRefreshed.fire()
-      if (models.length !== prevCount) {
-        log.info(`Refreshed models from server: ${models.length} models available`)
-      }
-      if (unresolvedContextWindowCount > 0) {
-        log.info(`Refreshed models: ${models.length} (${unresolvedContextWindowCount} without limit.context — server didn't report and no models.dev / OpenRouter match)`)
-      }
-      return models
+      return this.commitServerModels(models, unresolvedContextWindowCount)
     } finally {
       clearTimeout(timeout)
     }
+  }
+
+  private async fetchModelsFromOpenCode2Server(port: number, authHeader?: string): Promise<ModelInfo[]> {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 15_000)
+
+    try {
+      const url = new URL(`http://127.0.0.1:${port}/api/model`)
+      const directory = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+      if (directory) url.searchParams.set("location[directory]", directory)
+      const fetchHeaders: Record<string, string> = {}
+      if (authHeader) fetchHeaders["Authorization"] = authHeader
+      const resp = await fetch(url, { signal: controller.signal, headers: fetchHeaders })
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+
+      const text = await resp.text()
+      let raw: unknown
+      try {
+        raw = JSON.parse(text)
+      } catch {
+        throw new Error(`Malformed JSON response from OpenCode 2 model endpoint: ${text.slice(0, 100)}...`)
+      }
+      const envelope = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : undefined
+      const entries = Array.isArray(raw) ? raw : envelope?.data
+      if (!Array.isArray(entries)) {
+        throw new Error(`Unexpected OpenCode 2 model response shape: expected { data: [...] }, got ${typeof raw}`)
+      }
+
+      const models: ModelInfo[] = []
+      let unresolvedContextWindowCount = 0
+      for (const entry of entries) {
+        if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue
+        const value = entry as Record<string, unknown>
+        const id = typeof value.modelID === "string" && value.modelID ? value.modelID : typeof value.id === "string" ? value.id : ""
+        const provider = typeof value.providerID === "string" ? value.providerID : ""
+        if (!id || !provider) continue
+        const modelKey = `${provider}/${id}`
+        const limit = value.limit && typeof value.limit === "object" && !Array.isArray(value.limit)
+          ? value.limit as { context?: unknown; output?: unknown }
+          : undefined
+        const contextLimit = typeof limit?.context === "number" ? limit.context : undefined
+        const outputLimit = typeof limit?.output === "number" ? limit.output : undefined
+        const ctx = resolveContextWindow(modelKey, contextLimit, {
+          log: (msg) => log.debug(msg),
+          modelsDevCache: this._modelsDevCache,
+          openRouterCache: this._openRouterCache,
+        })
+        if (ctx === undefined) unresolvedContextWindowCount++
+
+        const variants = value.variants
+        const variantNames = Array.isArray(variants)
+          ? variants.flatMap((variant) => variant && typeof variant === "object" && typeof (variant as Record<string, unknown>).id === "string"
+            ? [(variant as Record<string, unknown>).id as string]
+            : [])
+          : variants && typeof variants === "object" && !Array.isArray(variants)
+            ? Object.keys(variants)
+            : undefined
+        const capabilities = value.capabilities && typeof value.capabilities === "object" && !Array.isArray(value.capabilities)
+          ? value.capabilities as Record<string, unknown>
+          : undefined
+        const reasoning = capabilities?.reasoning === true || (variantNames?.length ?? 0) > 0
+        const available = value.enabled !== false && value.status !== "disabled"
+        models.push({
+          id,
+          provider,
+          displayName: typeof value.name === "string" && value.name ? value.name : id,
+          contextWindow: ctx,
+          outputLimit,
+          supportsVariants: reasoning,
+          variantNames: variantNames && variantNames.length > 0 ? variantNames : undefined,
+          available,
+          unavailableReason: typeof value.unavailableReason === "string" ? value.unavailableReason : undefined,
+          favorite: this._favoriteModels.has(modelKey),
+          enabled: !this._disabledModels.has(modelKey),
+        })
+      }
+
+      return this.commitServerModels(models, unresolvedContextWindowCount)
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+
+  private commitServerModels(models: ModelInfo[], unresolvedContextWindowCount: number): ModelInfo[] {
+    const prevCount = this._models.length
+    this._models = models
+    this.saveCachedModels()
+    this._onModelsRefreshed.fire()
+    if (models.length !== prevCount) {
+      log.info(`Refreshed models from server: ${models.length} models available`)
+    }
+    if (unresolvedContextWindowCount > 0) {
+      log.info(`Refreshed models: ${models.length} (${unresolvedContextWindowCount} without limit.context — server didn't report and no models.dev / OpenRouter match)`)
+    }
+    return models
   }
 
   private async fetchModelsFromCli(): Promise<ModelInfo[]> {

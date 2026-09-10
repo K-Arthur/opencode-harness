@@ -302,7 +302,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       providerConfigManager: this.providerConfigManager,
       postMessage: (msg) => this.postMessage(msg),
       getV2Client: () => this.sessionManager.getV2Client(),
-      refreshModels: () => this.modelManager.refreshModels(this.sessionManager.currentPort, this.sessionManager.authHeader),
+      refreshModels: () => this.modelManager.refreshModels(this.sessionManager.currentPort, this.sessionManager.authHeader, this.sessionManager.apiSurface),
     })
     this.modelManager.setProviderConfigManager(this.providerConfigManager)
     this.hostQueue = new HostPromptQueue(this.context.workspaceState, false)
@@ -841,7 +841,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
     if (action === "Open Config") {
       await this.openOpenCodeConfigOrSettings()
     } else if (action === "Refresh Models") {
-      await this.modelManager.refreshModels(this.sessionManager.currentPort, this.sessionManager.authHeader)
+      await this.modelManager.refreshModels(this.sessionManager.currentPort, this.sessionManager.authHeader, this.sessionManager.apiSurface)
       this.pushModelListToWebview()
     } else if (action === "Provider Docs") {
       await vscode.env.openExternal(vscode.Uri.parse("https://opencode.ai/docs/providers/"))
@@ -1794,9 +1794,18 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
           this.tabManager.clearCompletionTimeout(t.id)
         }
       }
+      // SessionStore invalidates its server IDs from the extension-level
+      // connection listener. Clear the parallel tab index too, otherwise a
+      // runtime switch can reuse an ID from the previous API/server and skip
+      // ensureSession on the next prompt.
+      this.tabManager.clearAllCliSessionIds()
       this.postRequestError("OpenCode server connection lost. Attempting to reconnect...")
     }],
     ["server_connected", (event) => {
+      const apiSurface = this.sessionManager.apiSurface
+      if (apiSurface === "legacy" || apiSurface === "opencode2") {
+        this.sessionStore.setServerApiSurface(apiSurface)
+      }
       this.pushModelListToWebview()
       const data = event.data && typeof event.data === "object" ? event.data as Record<string, unknown> : {}
       this.pushRuntimeStatusToWebview(true, data)
@@ -2541,7 +2550,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     if (!this.modelManager.model) {
       try {
         await Promise.race([
-          this.modelManager.refreshModels(this.sessionManager.currentPort, this.sessionManager.authHeader),
+          this.modelManager.refreshModels(this.sessionManager.currentPort, this.sessionManager.authHeader, this.sessionManager.apiSurface),
           new Promise<void>((_, reject) => {
             const id = setTimeout(() => reject(new Error("timeout")), 2_000)
             if (typeof id === "object" && typeof id.unref === "function") id.unref()

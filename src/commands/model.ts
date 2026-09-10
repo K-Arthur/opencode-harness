@@ -15,7 +15,7 @@ export function registerSelectModelCommand(
       try {
         // Always try to refresh models — use server if running (with auth), otherwise CLI
         const port = sessionManager.isRunning ? sessionManager.currentPort : undefined
-        await modelManager.refreshModels(port, sessionManager.isRunning ? sessionManager.authHeader : undefined)
+        await modelManager.refreshModels(port, sessionManager.isRunning ? sessionManager.authHeader : undefined, sessionManager.apiSurface)
         const currentModel = modelManager.model
         const model = await modelManager.pickModel()
         if (model && model !== currentModel) {

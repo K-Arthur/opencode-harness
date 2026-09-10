@@ -447,7 +447,7 @@ function initConnectionStatusBar(
         connectionStatus.tooltip = "Synchronizing model list from opencode server..."
         void (async () => {
           try {
-            await modelManager.refreshModels(sessionManager.currentPort, sessionManager.authHeader)
+            await modelManager.refreshModels(sessionManager.currentPort, sessionManager.authHeader, sessionManager.apiSurface)
           } catch (err) {
             log.warn("Refresh models on connect failed", err)
           } finally {
@@ -487,7 +487,11 @@ function initConnectionStatusBar(
           }>
         } | undefined
         if (data?.sessions) {
-          const result = sessionStore.importServerSessions(data.sessions)
+          const apiSurface = sessionManager.apiSurface
+          const result = sessionStore.importServerSessions(
+            data.sessions,
+            apiSurface === "legacy" || apiSurface === "opencode2" ? apiSurface : undefined,
+          )
           log.info(`Session recovery: ${result.imported} imported, ${result.skipped} already known (total server: ${data.sessions.length})`)
         }
         break

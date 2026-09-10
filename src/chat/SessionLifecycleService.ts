@@ -76,10 +76,12 @@ export class SessionLifecycleService {
     if (this.opts.sessionManager.isRunning && session.cliSessionId) {
       try {
         // B10: Skip ensureSession HTTP roundtrip when tab already has a real
-        // server session ID. Only re-verify for local placeholder IDs.
+        // server session ID from the currently verified API surface. A link
+        // persisted by the other runtime must be re-attached or replaced.
         const existingCliId = session.cliSessionId
         let cliSessionId: string
-        if (!isLocalPlaceholderSessionId(existingCliId)) {
+        const sameApiSurface = session.serverApiSurface === this.opts.sessionManager.apiSurface
+        if (!isLocalPlaceholderSessionId(existingCliId) && sameApiSurface) {
           cliSessionId = existingCliId
         } else {
           cliSessionId = await this.opts.sessionManager.ensureSession(
