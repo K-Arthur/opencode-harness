@@ -1,11 +1,12 @@
-# OpenCode
+# OpenCode Harness
 
-> **⚠️ Independent, unofficial, beta project.** This extension is **not
-> developed by, affiliated with, or endorsed by the OpenCode team.** It is an
-> independent, community-built VS Code client for the [opencode](https://opencode.ai)
-> CLI agent. It is currently in **beta** — features are actively evolving, and
-> some functionality depends on OpenCode SDK/server limitations (see
-> [Limitations](#limitations) and [`docs/limitations.md`](docs/limitations.md)).
+A VS Code extension that gives the [opencode](https://opencode.ai) CLI agent a
+full GUI: multi-tab chat sessions, side-by-side diff review, checkpoint
+rollback, cost tracking, voice input, and theme parity — all connected to
+whatever AI provider you already use.
+
+> **Independent project.** Built and maintained by the community. Not
+> developed by, affiliated with, or endorsed by the OpenCode team.
 
 [![GitHub stars](https://img.shields.io/github/stars/K-Arthur/opencode-harness?style=social)](https://github.com/K-Arthur/opencode-harness/stargazers)
 [![CI](https://github.com/K-Arthur/opencode-harness/actions/workflows/ci.yml/badge.svg)](https://github.com/K-Arthur/opencode-harness/actions/workflows/ci.yml)
@@ -485,9 +486,8 @@ OpenCode uses AI models to assist with coding tasks. Please note:
 
 ### Project Status & SDK Constraints
 
-This is an **independent, unofficial, beta** VS Code client for the OpenCode
-agent runtimes. It is **not developed by, affiliated with, or endorsed by the
-OpenCode team.** Features are actively evolving. The extension is a client over
+This is an independent, community-built VS Code client for the OpenCode
+agent runtimes. Features are actively evolving. The extension is a client over
 the selected OpenCode HTTP server (via `@opencode-ai/sdk` v2) and can only do
 what the SDK and server expose. Known constraints:
 
