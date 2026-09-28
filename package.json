@@ -1344,7 +1344,7 @@
   "dependencies": {
     "@opencode-ai/sdk": "1.18.10",
     "diff-match-patch": "^1.0.5",
-    "dompurify": "^3.4.12",
+    "dompurify": "^3.4.16",
     "highlight.js": "^11.11.1",
     "jsonc-parser": "^3.3.1",
     "katex": "^0.18.1",
